@@ -124,3 +124,62 @@ class ViewOut(BaseModel):
 
 class PokeIn(BaseModel):
     to_user_id: str
+
+
+class ActivityOut(BaseModel):
+    activity: str
+    started_at: str
+
+
+class EquippedItemOut(BaseModel):
+    item_id: str
+    category: str
+    asset_url: str
+
+
+class PetDetailOut(BaseModel):
+    id: str
+    name: str
+    level: int
+    exp: int
+    coins: int
+    is_public: bool
+    # 펫이 아직 첫 활동을 못 받았으면 null
+    current_activity: ActivityOut | None
+    equipped_items: list[EquippedItemOut]
+
+
+class PatOut(BaseModel):
+    activity: str
+    utterance: str
+    exp_gained: int
+
+
+class StyleRef(BaseModel):
+    kind: str
+    version: int
+
+
+class DiaryOut(BaseModel):
+    id: str
+    entry_date: str
+    image_url: str
+    caption: str
+    # kind 가 default -> learned 로 바뀌는 날이 "펫이 우리 그림체를 배운 날"이다
+    style: StyleRef
+    activities: list[str]
+
+
+class DiaryListOut(BaseModel):
+    items: list[DiaryOut]
+    next_before: str | None = None
+
+
+class WidgetOut(BaseModel):
+    doodle_id: str | None
+    content_type: str | None = None
+    # 사라지기 낙서면 null. 위젯에 띄우는 순간을 "확인"으로 칠 수 없다.
+    thumb_url: str | None = None
+    sender_nickname: str | None = None
+    created_at: str | None = None
+    is_ephemeral: bool = False

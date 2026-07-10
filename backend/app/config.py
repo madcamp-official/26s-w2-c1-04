@@ -37,6 +37,12 @@ class Settings(BaseSettings):
     # --- 사라지기 모드 -------------------------------------------------------
     ephemeral_ttl_seconds: float = 5.0
 
+    # --- 스케줄러 ------------------------------------------------------------
+    # 테스트에서는 끈다. 배치가 테스트 도중 끼어들면 재현이 안 된다.
+    scheduler_enabled: bool = True
+    activity_interval_minutes: int = 180   # 펫이 하루 몇 번 활동을 바꾸나 (API.md 13절: 미확정)
+    diary_hour_utc: int = 15               # 자정 KST = 15시 UTC
+
     # --- 푸시 ---------------------------------------------------------------
     fcm_credentials_path: Path | None = None
 

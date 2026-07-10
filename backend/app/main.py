@@ -18,12 +18,12 @@ import socketio
 from fastapi import APIRouter, FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from . import db, gpu, realtime, services, state
+from . import db, gpu, realtime, scheduler, services, state
 from .config import get_settings
 from .ephemeral import ExpiryScheduler
 from .errors import install_error_handlers
 from .realtime import sio
-from .routers import auth, devices, doodles, groups, pokes
+from .routers import auth, devices, doodles, groups, pets, pokes, widget
 from .security import group_id_of, user_from_token
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -68,15 +68,16 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         # 부팅 스윕. 타이머는 프로세스 인메모리라 재기동하면 전부 사라진다.
         # 이미 만료 시각이 지난 낙서는 즉시 정리하고, 아직 안 지난 것은 재스케줄한다.
         try:
-            expired, rescheduled = await services.boot_sweep()
-            logger.info("부팅 스윕: 즉시 만료 %d건, 재스케줄 %d건", expired, rescheduled)
+            await services.boot_sweep()  # ExpiryScheduler.sweep 이 결과를 로깅한다
         except Exception:
             logger.warning("부팅 스윕 실패", exc_info=True)
+        scheduler.start()
 
     logger.info("기동 완료. gpu_enabled=%s db=%s", settings.gpu_enabled, db_ok)
 
     yield
 
+    scheduler.shutdown()
     await expiry.aclose()
     await db.dispose_engine()
 
@@ -101,7 +102,9 @@ async def health() -> dict[str, str]:
 v1.include_router(auth.router)
 v1.include_router(devices.router)
 v1.include_router(doodles.router)
+v1.include_router(pets.router)
 v1.include_router(pokes.router)
+v1.include_router(widget.router)
 v1.include_router(groups.router)
 
 app.include_router(v1)

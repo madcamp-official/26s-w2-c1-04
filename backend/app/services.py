@@ -7,16 +7,29 @@ REST 는 항상 되는 길이고 소켓은 빠른 길이다 (docs/API.md 9절).
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from . import media, realtime, state
+from . import gpu, media, realtime, state
 from .config import get_settings
 from .db import session_factory
 from .errors import ApiError
-from .models import Doodle, DoodleMode, DoodleReceipt, GroupMember, Poke
+from .models import (
+    ContentType,
+    Doodle,
+    DoodleMode,
+    DoodleReceipt,
+    GroupMember,
+    Pet,
+    PetActivity,
+    PetDiary,
+    Poke,
+    StyleKind,
+    StyleModel,
+    StyleStatus,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -175,6 +188,213 @@ async def send_poke(session: AsyncSession, user_id: int, to_user_id: int) -> Non
 
     await realtime.emit_poke(group_id, user_id, now.isoformat() + "Z")
     # TODO: FCM `poke` 푸시. Firebase 프로젝트가 생기면.
+
+
+# ---------------------------------------------------------------------------
+# 펫 (PT-1, PT-6a) — 과제 부 옵션(LLM)
+# ---------------------------------------------------------------------------
+
+# GPU 가 죽어도 펫은 말을 해야 한다.
+DEFAULT_UTTERANCE = "…아직 잠에서 덜 깼어."
+DEFAULT_ACTIVITY = "waiting"
+
+
+async def load_pet(session: AsyncSession, user_id: int, pet_id: int) -> Pet:
+    pet = await session.get(Pet, pet_id)
+    if pet is None:
+        raise ApiError(404, "not_found", "펫이 없습니다")
+    await require_member(session, user_id, pet.group_id)
+    return pet
+
+
+async def current_activity(session: AsyncSession, pet_id: int) -> PetActivity | None:
+    """`ended_at IS NULL` 인 행. 인덱스 `ix_activities_pet_ended` 가 이걸 태운다."""
+    return (
+        await session.execute(
+            select(PetActivity)
+            .where(PetActivity.pet_id == pet_id, PetActivity.ended_at.is_(None))
+            .order_by(PetActivity.id.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+
+
+async def pat_pet(session: AsyncSession, user_id: int, pet_id: int) -> dict:
+    """쓰다듬기 (PT-1). **LLM 을 부르지 않는다.**
+
+    사용자가 연타할 수 있는 인터랙션이라 매 탭마다 추론을 돌리면 GPU 가 버티지 못한다.
+    `pet_activities` 테이블 자체가 캐시다. 활동이 바뀔 때만 새 대사가 생긴다.
+
+    활동이 아직 없으면 기본 대사를 돌려준다. GPU 가 죽어도 펫은 말을 해야 한다.
+    """
+    pet = await load_pet(session, user_id, pet_id)
+    act = await current_activity(session, pet_id)
+
+    # exp 증가 규칙은 아직 미확정이다 (docs/API.md 13절). 일단 1.
+    pet.exp += 1
+    await session.commit()
+
+    return {
+        "activity": act.activity.value if act else DEFAULT_ACTIVITY,
+        "utterance": act.utterance if act else DEFAULT_UTTERANCE,
+        "exp_gained": 1,
+    }
+
+
+async def rotate_pet_activity(pet_id: int) -> None:
+    """스케줄러가 부른다. 이전 활동을 닫고 새 활동을 LLM 으로 만든다."""
+    async with session_factory()() as session:
+        pet = await session.get(Pet, pet_id)
+        if pet is None:
+            return
+        group_id = pet.group_id
+
+        since = _real_now() - timedelta(hours=24)
+        doodles_24h = (
+            await session.execute(
+                select(func.count(Doodle.id)).where(
+                    Doodle.group_id == group_id, Doodle.created_at >= since
+                )
+            )
+        ).scalar_one()
+        pokes_24h = (
+            await session.execute(
+                select(func.count(Poke.id)).where(
+                    Poke.group_id == group_id, Poke.created_at >= since
+                )
+            )
+        ).scalar_one()
+        last_type = (
+            await session.execute(
+                select(Doodle.content_type)
+                .where(Doodle.group_id == group_id)
+                .order_by(Doodle.id.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+
+        ctx = gpu.GroupContext(
+            pet_level=pet.level,
+            doodles_24h=int(doodles_24h),
+            pokes_24h=int(pokes_24h),
+            last_content_type=last_type.value if last_type else None,
+        )
+        result = await gpu.get_llm_client().pet_activity(ctx)
+
+        prev = await current_activity(session, pet_id)
+        now = _now()
+        if prev is not None:
+            prev.ended_at = now
+        session.add(
+            PetActivity(
+                pet_id=pet_id,
+                activity=result.activity,
+                utterance=result.utterance,
+                model=result.model,
+                started_at=now,
+            )
+        )
+        await session.commit()
+
+    await realtime.emit_pet_activity(group_id, pet_id, result.activity, result.utterance)
+    logger.info("펫 %s 활동 갱신: %s", pet_id, result.activity)
+
+
+async def _active_style(session: AsyncSession, group_id: int) -> StyleModel:
+    """학습된 그림체가 준비돼 있으면 그것, 아니면 기본 프리셋.
+
+    기본 그림체가 없으면 가입 첫날 일기장이 빈 화면이 된다 (SPEC 6.3절).
+    """
+    learned = (
+        await session.execute(
+            select(StyleModel)
+            .where(
+                StyleModel.group_id == group_id,
+                StyleModel.kind == StyleKind.LEARNED,
+                StyleModel.status == StyleStatus.READY,
+            )
+            .order_by(StyleModel.version.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if learned is not None:
+        return learned
+
+    default = (
+        await session.execute(
+            select(StyleModel).where(
+                StyleModel.group_id == group_id, StyleModel.kind == StyleKind.DEFAULT
+            )
+        )
+    ).scalar_one_or_none()
+    if default is None:
+        raise ApiError(500, "error", "기본 그림체가 없습니다")
+    return default
+
+
+async def generate_diary(pet_id: int, entry_date: date) -> int | None:
+    """하루치 활동을 그림 한 장 + 캡션으로 묶는다 (PT-6a).
+
+    `pet_diaries` 는 `image_url`·`caption` 이 NOT NULL 이라 **부분 저장이 불가능하다.**
+    GPU 가 죽어 그림을 못 만들면 그날 일기는 없다. 그게 정상 동작이다.
+    """
+    async with session_factory()() as session:
+        pet = await session.get(Pet, pet_id)
+        if pet is None:
+            return None
+        group_id = pet.group_id
+
+        exists = (
+            await session.execute(
+                select(PetDiary.id).where(
+                    PetDiary.pet_id == pet_id, PetDiary.entry_date == entry_date
+                )
+            )
+        ).scalar_one_or_none()
+        if exists:
+            return exists  # UNIQUE(pet_id, entry_date). 하루 한 장.
+
+        rows = (
+            await session.execute(
+                select(PetActivity)
+                .where(
+                    PetActivity.pet_id == pet_id,
+                    func.date(PetActivity.started_at) == entry_date,
+                )
+                .order_by(PetActivity.id)
+            )
+        ).scalars().all()
+        if not rows:
+            logger.info("펫 %s 의 %s 활동이 없어 일기를 만들지 않는다", pet_id, entry_date)
+            return None
+
+        activities = [a.activity.value for a in rows]
+        style = await _active_style(session, group_id)
+
+        caption = await gpu.get_llm_client().diary_caption(activities)
+        image = await gpu.get_image_client().diary_image(
+            activities=activities, caption=caption, weights_path=style.weights_path
+        )
+
+        diary = PetDiary(
+            pet_id=pet_id,
+            style_model_id=style.id,
+            entry_date=entry_date,
+            image_url="",  # 파일명에 id 가 필요해 flush 후 채운다
+            caption=caption,
+        )
+        session.add(diary)
+        await session.flush()
+        diary.image_url = media.save_bytes(group_id, f"diary_{diary.id}.png", image)
+
+        for a in rows:
+            a.diary_id = diary.id
+        await session.commit()
+        diary_id, style_kind = diary.id, style.kind.value
+
+    await realtime.emit_diary_new(group_id, diary_id, entry_date.isoformat(), style_kind)
+    logger.info("펫 %s 의 %s 일기 생성 (style=%s)", pet_id, entry_date, style_kind)
+    return diary_id
 
 
 # ---------------------------------------------------------------------------
