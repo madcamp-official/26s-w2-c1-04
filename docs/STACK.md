@@ -73,7 +73,7 @@ VLLM_SERVER_DEV_MODE=1 vllm serve LGAI-EXAONE/EXAONE-3.5-7.8B-Instruct-AWQ \
 
 | 구성요소 | 버전 | 등급 | 비고 |
 |---|---|---|---|
-| Python | 3.12 (시스템 기본) | ✅ | 24.04 기본. 스택 최저선은 3.10 |
+| Python | 3.10 이상 | ✅ | **스택 최저선이 3.10이다.** OS 템플릿은 `ubuntu-24-pw`(3.12)였으나 실제 VM은 22.04(3.10)일 수 있다 — `mysql --version`이 `0ubuntu0.22.04.x`면 22.04다. 둘 다 동작한다 |
 | FastAPI | 0.139.0 | ✅ | 2026-07-01 최신 |
 | uvicorn[standard] | 0.51.0 | ✅ | **`[standard]`가 아니면 WebSocket 업그레이드가 실패한다** |
 | python-socketio | 5.16.3 | ✅ | Socket.IO v5 / Engine.IO v4 |

@@ -12,39 +12,70 @@
 
 ---
 
-# ① 앱 VM (Ubuntu 24.04)
+# ① 앱 VM
 
-## 1. swap 추가 — 먼저 한다
-
-**RAM이 4GB뿐이다.** `pip install` 도중 OOM-killer에 맞는 걸 막는다.
+## 0. 먼저 확인 — OS와 사용자
 
 ```bash
-sudo fallocate -l 4G /swapfile
-sudo chmod 600 /swapfile
-sudo mkswap /swapfile
-sudo swapon /swapfile
-echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
-free -h        # Swap 4.0Gi 확인
+cat /etc/os-release | head -2
+python3 --version
+whoami
 ```
 
-## 2. 패키지
+**OS 템플릿은 `ubuntu-24-pw`였지만 실제로 22.04일 수 있다.** `mysql --version`이 `0ubuntu0.22.04.x`를 뱉으면 22.04다.
+
+| | Ubuntu 22.04 | Ubuntu 24.04 |
+|---|---|---|
+| 기본 Python | 3.10 | 3.12 |
+| 우리 스택 | ✅ 동작 (최저선이 3.10) | ✅ |
+| PEP 668 (시스템 pip 차단) | 없음 | 있음 |
+
+**22.04여도 그대로 간다.** `requirements.txt`의 최저 요구가 Python 3.10이라 딱 맞는다. 다만 여유가 없으니 시스템 Python을 건드리지 말고 venv를 쓴다.
+
+아래는 `$HOME`을 기준으로 쓴다. root로 작업하면 `/root`, `ubuntu` 유저면 `/home/ubuntu`다.
 
 ```bash
-sudo apt update
-sudo apt install -y mysql-server python3-venv python3-pip git curl
+export APP_HOME=$HOME/26s-w2-c1-04
+export VENV=$HOME/envs/api
+```
+
+## 1. 저장소 clone
+
+```bash
+apt update && apt install -y git curl python3-venv python3-pip
+cd $HOME
+git clone -b anjonghwa https://github.com/madcamp-official/26s-w2-c1-04.git
+cd $APP_HOME
+```
+
+저장소가 비공개면 GitHub 계정과 **Personal Access Token**을 물어본다(비밀번호가 아니다). 또는 `gh auth login`을 먼저 한다.
+
+## 2. swap 추가 — DB 설치 전에 한다
+
+**RAM이 4GB뿐이다.** `pip install` 도중 OOM-killer에 맞는 걸 막는다. 이미 잡혀 있는지 먼저 본다.
+
+```bash
+swapon --show          # 비어 있으면 아래를 실행
+fallocate -l 4G /swapfile
+chmod 600 /swapfile
+mkswap /swapfile
+swapon /swapfile
+echo '/swapfile none swap sw 0 0' >> /etc/fstab
+free -h                # Swap 4.0Gi 확인
 ```
 
 ## 3. MySQL
 
 ```bash
-mysql --version                       # 8.0.x 인지 확인 (24.04 기본)
-sudo systemctl enable --now mysql
+apt install -y mysql-server
+mysql --version                       # 8.0.x
+systemctl enable --now mysql
 ```
 
-Ubuntu의 MySQL은 root가 `auth_socket`이라 `sudo mysql`로 바로 들어간다. 앱 전용 유저를 만든다.
+Ubuntu의 MySQL은 root가 `auth_socket`이라 비밀번호 없이 들어간다. 앱 전용 유저를 만든다.
 
 ```bash
-sudo mysql <<'SQL'
+mysql <<'SQL'
 CREATE USER IF NOT EXISTS 'memory'@'localhost' IDENTIFIED BY 'pager';
 GRANT ALL PRIVILEGES ON memory_pager.* TO 'memory'@'localhost';
 FLUSH PRIVILEGES;
@@ -54,11 +85,11 @@ SQL
 스키마를 적용한다. **`schema.sql`은 맨 앞에서 기존 테이블을 전부 DROP한다. 개발 초기 전용이다.**
 
 ```bash
-cd ~/26s-w2-c1-04
-sudo mysql < backend/schema.sql
+cd $APP_HOME
+mysql < backend/schema.sql
 ```
 
-확인 — 16 테이블, 트리거 3개가 나와야 한다.
+확인 — 16과 3이 나와야 한다.
 
 ```bash
 mysql -u memory -ppager -N -e "
@@ -89,12 +120,12 @@ sudo systemctl restart mysql
 
 ## 4. Python
 
-**24.04는 PEP 668로 시스템 pip 설치를 막는다.** 반드시 venv 안에서.
+**24.04는 PEP 668로 시스템 pip 설치를 막는다.** 22.04에는 그 제약이 없지만, 어느 쪽이든 venv 안에서 설치한다.
 
 ```bash
-python3 --version                     # 3.12.x
-python3 -m venv ~/envs/api
-source ~/envs/api/bin/activate
+python3 --version                     # 3.10 이상이면 된다
+python3 -m venv $VENV
+source $VENV/bin/activate
 pip install -U pip
 pip install -r backend/requirements.txt
 ```
@@ -103,20 +134,15 @@ pip install -r backend/requirements.txt
 
 ```bash
 cp backend/.env.example backend/.env
+sed -i "s#MEDIA_ROOT=./media#MEDIA_ROOT=$HOME/media#" backend/.env
 ```
 
-`backend/.env`를 연다. GPU 서버가 아직 없으면 `GPU_ENABLED=false`로 둔다 — **스텁이 그럴듯한 값을 돌려주므로 앱 작업이 막히지 않는다.**
-
-```
-DATABASE_URL=mysql+asyncmy://memory:pager@127.0.0.1:3306/memory_pager?charset=utf8mb4
-MEDIA_ROOT=/home/ubuntu/media
-GPU_ENABLED=false
-```
+GPU 서버가 아직 없으면 `GPU_ENABLED=false`로 둔다 — **스텁이 그럴듯한 값을 돌려주므로 앱 작업이 막히지 않는다.** 나중에 `true`로 바꾸고 `GPU_LLM_URL`·`GPU_SD_URL`에 사설 IP를 넣는다.
 
 ## 6. 실행
 
 ```bash
-cd backend
+cd $APP_HOME/backend
 uvicorn app.main:asgi --host 127.0.0.1 --port 8000
 ```
 
@@ -132,28 +158,43 @@ curl -s localhost:8000/v1/health
 
 `db`가 `down`이면 `.env`의 `DATABASE_URL`이나 MySQL 유저 권한을 본다.
 
-### systemd로 상주시키기
+## 6-1. 라우터가 실제 DB 위에서 도는지 확인
 
 ```bash
-sudo tee /etc/systemd/system/memory-pager.service >/dev/null <<'UNIT'
+pip install pymysql          # 테스트가 테이블을 비우는 데만 쓴다
+export DATABASE_URL='mysql+asyncmy://memory:pager@127.0.0.1:3306/memory_pager?charset=utf8mb4'
+python backend/tests/test_groups_integration.py    # 28 passed
+python backend/tests/test_doodles_integration.py   # 31 passed
+```
+
+**테스트는 매번 테이블을 비운다. 개발용 DB 에만 돌릴 것.**
+
+### systemd로 상주시키기
+
+`$HOME`과 `$USER`를 실제 값으로 바꿔서 붙인다.
+
+```bash
+tee /etc/systemd/system/memory-pager.service >/dev/null <<UNIT
 [Unit]
 Description=Memory Pager API
 After=network.target mysql.service
 
 [Service]
-User=ubuntu
-WorkingDirectory=/home/ubuntu/26s-w2-c1-04/backend
-Environment="PATH=/home/ubuntu/envs/api/bin"
-ExecStart=/home/ubuntu/envs/api/bin/uvicorn app.main:asgi --host 127.0.0.1 --port 8000
+User=$(whoami)
+WorkingDirectory=$APP_HOME/backend
+Environment="PATH=$VENV/bin"
+ExecStart=$VENV/bin/uvicorn app.main:asgi --host 127.0.0.1 --port 8000
 Restart=always
 
 [Install]
 WantedBy=multi-user.target
 UNIT
-sudo systemctl daemon-reload
-sudo systemctl enable --now memory-pager
+systemctl daemon-reload
+systemctl enable --now memory-pager
 journalctl -u memory-pager -f
 ```
+
+`<<UNIT`에 따옴표를 붙이지 않았다. 셸이 `$APP_HOME` 같은 변수를 먼저 풀어야 하기 때문이다.
 
 ## 7. Cloudflare Tunnel
 
