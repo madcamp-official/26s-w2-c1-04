@@ -18,29 +18,16 @@ import socketio
 from fastapi import APIRouter, FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from . import db, gpu, realtime
+from . import db, gpu, realtime, services, state
 from .config import get_settings
 from .ephemeral import ExpiryScheduler
 from .errors import install_error_handlers
 from .realtime import sio
-from .routers import auth, devices, groups
+from .routers import auth, devices, doodles, groups, pokes
 from .security import group_id_of, user_from_token
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
-
-expiry: ExpiryScheduler | None = None
-
-
-async def _expire_doodle(doodle_id: int) -> None:
-    """만료 콜백. 지금은 로그만 남긴다.
-
-    TODO: doodles.deleted_at 을 채우고 미디어 파일을 지운 뒤
-          realtime.emit_doodle_expired(group_id, doodle_id) 를 쏜다.
-          낙서 서비스가 만들어지면 그쪽으로 옮긴다.
-    """
-    logger.info("낙서 %s 만료", doodle_id)
-
 
 async def _resolve_socket_token(token: str) -> tuple[int, int | None] | None:
     """Socket.IO 연결 인증. realtime 모듈은 DB 를 모르므로 여기서 주입한다."""
@@ -57,27 +44,40 @@ async def _resolve_socket_token(token: str) -> tuple[int, int | None] | None:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-    global expiry
     settings = get_settings()
+    settings.media_root.mkdir(parents=True, exist_ok=True)
 
+    expiry = ExpiryScheduler(services.expire_doodle)
+    state.set_expiry(expiry)
+
+    realtime.set_token_resolver(_resolve_socket_token)
+    realtime.set_service_handlers(
+        doodle_viewed=services.sock_doodle_viewed,
+        poke_send=services.sock_poke_send,
+    )
+
+    db_ok = False
     try:
         db.init_engine()
-        realtime.set_token_resolver(_resolve_socket_token)
+        db_ok = await db.ping()
     except Exception:
         # asyncmy 가 없거나 DB 가 죽어 있어도 서버는 뜬다. /health 가 db: down 을 보고한다.
         logger.warning("DB 엔진 초기화 실패. db 기능 없이 계속한다.", exc_info=True)
 
-    expiry = ExpiryScheduler(_expire_doodle)
-    # TODO: 부팅 스윕. doodles 에서 expires_at IS NOT NULL AND deleted_at IS NULL 을 읽어
-    #       expiry.sweep(rows) 를 부른다. 낙서 서비스가 만들어지면 연결한다.
+    if db_ok:
+        # 부팅 스윕. 타이머는 프로세스 인메모리라 재기동하면 전부 사라진다.
+        # 이미 만료 시각이 지난 낙서는 즉시 정리하고, 아직 안 지난 것은 재스케줄한다.
+        try:
+            expired, rescheduled = await services.boot_sweep()
+            logger.info("부팅 스윕: 즉시 만료 %d건, 재스케줄 %d건", expired, rescheduled)
+        except Exception:
+            logger.warning("부팅 스윕 실패", exc_info=True)
 
-    settings.media_root.mkdir(parents=True, exist_ok=True)
-    logger.info("기동 완료. gpu_enabled=%s", settings.gpu_enabled)
+    logger.info("기동 완료. gpu_enabled=%s db=%s", settings.gpu_enabled, db_ok)
 
     yield
 
-    if expiry is not None:
-        await expiry.aclose()
+    await expiry.aclose()
     await db.dispose_engine()
 
 
@@ -100,6 +100,8 @@ async def health() -> dict[str, str]:
 
 v1.include_router(auth.router)
 v1.include_router(devices.router)
+v1.include_router(doodles.router)
+v1.include_router(pokes.router)
 v1.include_router(groups.router)
 
 app.include_router(v1)

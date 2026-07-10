@@ -17,6 +17,5 @@ firebase-admin==7.5.0        # FCM data-only 메시지 (위젯 갱신, 찌르기
 httpx==0.28.1                # GPU 서버 호출 (LLM / SD). 로컬에서 설치·동작 확인함
 pydantic-settings==2.14.2    # .env 로드. 로컬에서 설치·동작 확인함
 
-# --- 아래 둘은 아직 검증하지 않았다. 핀 없이 설치한 뒤 pip freeze 로 고정할 것. ---
-python-multipart             # 낙서 전송이 multipart 업로드다
-pillow                       # 썸네일 정도만. 무거운 이미지 처리는 GPU 서버로 넘긴다 (앱 VM RAM 4GB)
+python-multipart==0.0.32     # 낙서 전송이 multipart 업로드다. 없으면 FastAPI 가 기동 시 터진다
+pillow==12.3.0               # 썸네일 512px 한 장까지만. 무거운 이미지 처리는 GPU 서버로 (앱 VM RAM 4GB)
