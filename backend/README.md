@@ -21,11 +21,26 @@ FastAPI + Socket.IO + MySQL 8. 설계 근거는 [../docs/SPEC.md](../docs/SPEC.m
 - **DDL을 실제 MySQL 서버에 걸어보지 못했다.** 파서 통과가 실행 성공을 뜻하지는 않는다.
 - **트리거 블록은 파서 검증에서 제외했다.** `DELIMITER`가 SQL이 아니라 `mysql` 클라이언트 명령이기 때문이다. 트리거는 서버에서 직접 확인해야 한다.
 
+## 어디서 도는가
+
+| | 앱 VM | GPU 서버 |
+|---|---|---|
+| OS | Ubuntu 24.04 (Python 3.12) | Ubuntu 20.04 (Python 3.8) |
+| 스펙 | 4 vCPU / **4GB RAM** / 100GB | 40 vCPU / 50GB RAM / 100GB / RTX 3090 20GB |
+| 이 디렉터리의 코드 | **여기서 돈다** | 돌지 않는다 |
+| 그 밖에 | MySQL 8, 미디어 파일 | LLM 서빙, SD 추론·학습 |
+
+**이 백엔드는 앱 VM에서만 돈다.** GPU 서버는 상태 없는 추론 워커이고, HTTP로만 부른다.
+
 ## Python 버전 — 함정
 
-**Python 3.9 이상이 필요하다.** `app/models.py`는 `Mapped[list[X]]` 형태의 PEP 585 제네릭을 쓰는데, SQLAlchemy가 이 어노테이션을 런타임에 평가한다. Python 3.8에서는 `list[X]`가 구독 불가라 `NameError`로 터진다. 실제로 3.8.6에서 재현했다.
+**Python 3.9 이상이 필요하다.** `app/models.py`는 `Mapped[list[X]]` 형태의 PEP 585 제네릭을 쓰는데, SQLAlchemy가 이 어노테이션을 런타임에 평가한다. Python 3.8에서는 `list[X]`가 구독 불가라 `NameError`로 터진다. 실제로 3.8.6에서 재현했고, 3.13에서 통과했다.
 
-**Ubuntu 20.04의 기본 Python이 3.8이다.** 서버에 그대로 깔면 모델이 임포트조차 되지 않는다. 반드시 새 인터프리터를 올려야 한다. 어떤 경로로 올릴지(deadsnakes PPA / conda / uv)는 환경 조사 결과를 반영해 정한다.
+**앱 VM은 Ubuntu 24.04라 기본 Python이 3.12다. 문제없다.** Python 3.8 문제는 **GPU 서버(Ubuntu 20.04) 쪽에만** 있고, 거기서는 PyTorch와 추론 스택이 어차피 3.9 이상을 요구하므로 인터프리터를 올려야 한다.
+
+## 앱 VM은 RAM이 4GB뿐이다
+
+MySQL 8과 FastAPI가 같은 4GB를 나눠 쓴다. 사용자가 둘이라 트래픽은 문제가 아니지만, `innodb_buffer_pool_size`를 함부로 키우지 말고 이미지 리사이즈처럼 메모리가 튀는 작업은 GPU 서버로 넘긴다.
 
 ## 스키마 적용
 
