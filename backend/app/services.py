@@ -10,6 +10,7 @@ import logging
 from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from . import gpu, media, realtime, state
@@ -17,11 +18,13 @@ from .config import get_settings
 from .db import session_factory
 from .errors import ApiError
 from .models import (
+    BestDoodleRule,
     ContentType,
     Doodle,
     DoodleMode,
     DoodleReceipt,
     GroupMember,
+    MonthlyReport,
     Pet,
     PetActivity,
     PetDiary,
@@ -395,6 +398,220 @@ async def generate_diary(pet_id: int, entry_date: date) -> int | None:
     await realtime.emit_diary_new(group_id, diary_id, entry_date.isoformat(), style_kind)
     logger.info("펫 %s 의 %s 일기 생성 (style=%s)", pet_id, entry_date, style_kind)
     return diary_id
+
+
+# ---------------------------------------------------------------------------
+# 월간 레포트 (MR-1 ~ MR-4) — docs/API.md 6절, SPEC 6.5
+# ---------------------------------------------------------------------------
+
+import re
+
+_MONTH_RE = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
+
+
+def validate_month(report_month: str) -> None:
+    if not _MONTH_RE.match(report_month):
+        raise ApiError(400, "invalid_request", "report_month 는 YYYY-MM 이어야 합니다")
+
+
+def _month_range(report_month: str) -> tuple[datetime, datetime]:
+    """'YYYY-MM' -> [해당 달 1일 00:00, 다음 달 1일 00:00). naive UTC."""
+    year, month = int(report_month[:4]), int(report_month[5:7])
+    start = datetime(year, month, 1)
+    end = datetime(year + 1, 1, 1) if month == 12 else datetime(year, month + 1, 1)
+    return start, end
+
+
+def _prev_month(report_month: str) -> str:
+    year, month = int(report_month[:4]), int(report_month[5:7])
+    return f"{year - 1}-12" if month == 1 else f"{year}-{month - 1:02d}"
+
+
+def _stroke_count(stroke_data: object) -> int:
+    """손그림만 stroke_data 를 갖는다. 다른 유형은 0."""
+    if isinstance(stroke_data, dict):
+        strokes = stroke_data.get("strokes")
+        if isinstance(strokes, list):
+            return len(strokes)
+    return 0
+
+
+async def generate_report(group_id: int, report_month: str) -> int:
+    """그 달의 활동을 집계해 monthly_reports 한 행으로 굳힌다 (MR-3).
+
+    데모용 수동 트리거와 월 1회 배치가 같은 이 함수를 부른다. 이미 있으면 덮어쓴다.
+
+    **집계(count)는 그 달에 만들어진 모든 낙서를 센다** — 사라지기 모드로 보냈다가
+    만료된 것(soft delete)도 그 달의 '활동'이므로 포함한다. 반면 **최고의 낙서는 살아있는
+    후보(deleted_at IS NULL)만** 대상으로 한다. 만료돼 파일이 지워진 낙서는 화면에 띄울 수
+    없기 때문이다. 이 비대칭은 의도된 것이다.
+    """
+    validate_month(report_month)
+    start, end = _month_range(report_month)
+
+    async with session_factory()() as session:
+        # --- 유형별 낙서 수 (만료분 포함) ---
+        type_rows = (
+            await session.execute(
+                select(Doodle.content_type, func.count(Doodle.id))
+                .where(
+                    Doodle.group_id == group_id,
+                    Doodle.created_at >= start,
+                    Doodle.created_at < end,
+                )
+                .group_by(Doodle.content_type)
+            )
+        ).all()
+        counts = {ct: n for ct, n in type_rows}
+        photo_count = counts.get(ContentType.PHOTO, 0)
+        drawing_count = counts.get(ContentType.DRAWING, 0)
+        text_count = counts.get(ContentType.TEXT, 0)
+
+        # 최다 유형. 동률이면 photo > drawing > text 순으로 고정(결정적). 없으면 null.
+        by_type = [
+            (ContentType.PHOTO, photo_count),
+            (ContentType.DRAWING, drawing_count),
+            (ContentType.TEXT, text_count),
+        ]
+        dominant = max(by_type, key=lambda kv: kv[1])
+        dominant_type = dominant[0] if dominant[1] > 0 else None
+
+        # --- 찌르기 수 ---
+        poke_count = (
+            await session.execute(
+                select(func.count(Poke.id)).where(
+                    Poke.group_id == group_id,
+                    Poke.created_at >= start,
+                    Poke.created_at < end,
+                )
+            )
+        ).scalar_one()
+
+        # --- 펫 레벨 변화. 이력 테이블이 없어 end 는 현재 레벨, start 는 지난 달 레포트의 end ---
+        pet = (
+            await session.execute(select(Pet).where(Pet.group_id == group_id))
+        ).scalar_one_or_none()
+        pet_level_end = pet.level if pet else 1
+        prev_end = (
+            await session.execute(
+                select(MonthlyReport.pet_level_end).where(
+                    MonthlyReport.group_id == group_id,
+                    MonthlyReport.report_month == _prev_month(report_month),
+                )
+            )
+        ).scalar_one_or_none()
+        pet_level_start = prev_end if prev_end is not None else pet_level_end
+
+        # --- 이번 달 최고의 낙서 (SPEC 6.5). 사라지기 모드는 후보에서 제외 ---
+        best_id, best_rule = await _pick_best_doodle(session, group_id, start, end)
+
+        values = dict(
+            photo_count=photo_count,
+            drawing_count=drawing_count,
+            text_count=text_count,
+            poke_count=poke_count,
+            dominant_type=dominant_type,
+            best_doodle_id=best_id,
+            best_doodle_rule=best_rule,
+            pet_level_start=pet_level_start,
+            pet_level_end=pet_level_end,
+        )
+        # upsert. UNIQUE(group_id, report_month). 월배치와 수동 트리거(또는 더블탭)가 겹치면
+        # 둘 다 INSERT 를 시도해 진 쪽이 1062 로 터진다. 잡아서 UPDATE 경로로 다시 쓴다.
+        # (groups.py 가입 경합과 같은 처리. 안 잡으면 껍데기 500 이 난다.)
+        try:
+            report_id = await _upsert_report(session, group_id, report_month, values)
+        except IntegrityError:
+            await session.rollback()
+            report_id = await _upsert_report(session, group_id, report_month, values)
+
+    logger.info(
+        "그룹 %s %s 레포트 생성: 사진 %d 그림 %d 글 %d 찌르기 %d 최고=%s(%s)",
+        group_id, report_month, photo_count, drawing_count, text_count,
+        poke_count, best_id, best_rule.value if best_rule else None,
+    )
+    return report_id
+
+
+async def _pick_best_doodle(
+    session: AsyncSession, group_id: int, start: datetime, end: datetime
+) -> tuple[int | None, BestDoodleRule | None]:
+    """답장 수 → 획 수 → 최신 순으로 그 달 최고의 낙서를 고른다.
+
+    반환한 rule 은 **승자를 실제로 결정지은 기준**이다. 답장 수 최댓값이 유일하면
+    most_replies, 답장이 동률이라 획 수가 갈랐으면 most_strokes, 그마저 동률이면 latest.
+
+    **사라지기 모드 낙서는 후보에서 뺀다 (SPEC 6.5).** 만료된 것은 deleted_at 으로 걸러지지만,
+    아직 안 열린 사라지기 낙서는 만료 타이머가 안 걸려 deleted_at 이 NULL 이다. 이걸 후보에
+    두면 최고의 낙서로 뽑혀 '확인 전 노출 금지' 불변식을 깬다. mode 로 명시적으로 제외한다.
+    """
+    candidates = (
+        await session.execute(
+            select(Doodle).where(
+                Doodle.group_id == group_id,
+                Doodle.created_at >= start,
+                Doodle.created_at < end,
+                Doodle.deleted_at.is_(None),
+                Doodle.mode != DoodleMode.EPHEMERAL,
+            )
+        )
+    ).scalars().all()
+    if not candidates:
+        return None, None
+
+    cand_ids = [d.id for d in candidates]
+    # 답장 수는 앱의 reply_count 와 같은 정의(삭제되지 않은 답장만).
+    reply_counts = dict(
+        (
+            await session.execute(
+                select(Doodle.parent_id, func.count(Doodle.id))
+                .where(Doodle.parent_id.in_(cand_ids), Doodle.deleted_at.is_(None))
+                .group_by(Doodle.parent_id)
+            )
+        ).all()
+    )
+
+    def replies(d: Doodle) -> int:
+        return reply_counts.get(d.id, 0)
+
+    # 정렬 키: 답장 수, 획 수, 생성시각, id. 마지막 두 개가 결정적 tie-break.
+    best = max(candidates, key=lambda d: (replies(d), _stroke_count(d.stroke_data), d.created_at, d.id))
+
+    top_replies = replies(best)
+    if top_replies > 0 and sum(1 for d in candidates if replies(d) == top_replies) == 1:
+        return best.id, BestDoodleRule.MOST_REPLIES
+
+    tied = [d for d in candidates if replies(d) == top_replies]
+    top_strokes = _stroke_count(best.stroke_data)
+    if top_strokes > 0 and sum(1 for d in tied if _stroke_count(d.stroke_data) == top_strokes) == 1:
+        return best.id, BestDoodleRule.MOST_STROKES
+
+    return best.id, BestDoodleRule.LATEST
+
+
+async def _upsert_report(
+    session: AsyncSession, group_id: int, report_month: str, values: dict
+) -> int:
+    """(group_id, report_month) 행을 있으면 UPDATE, 없으면 INSERT 하고 commit 한다.
+
+    동시성은 부르는 쪽이 IntegrityError 로 처리한다. 여기선 순수 upsert 만 한다.
+    """
+    report = (
+        await session.execute(
+            select(MonthlyReport).where(
+                MonthlyReport.group_id == group_id,
+                MonthlyReport.report_month == report_month,
+            )
+        )
+    ).scalar_one_or_none()
+    if report is None:
+        report = MonthlyReport(group_id=group_id, report_month=report_month)
+        session.add(report)
+    for key, val in values.items():
+        setattr(report, key, val)
+    report.generated_at = _now()
+    await session.commit()
+    return report.id
 
 
 # ---------------------------------------------------------------------------

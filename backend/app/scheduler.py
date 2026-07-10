@@ -23,7 +23,7 @@ from sqlalchemy import select
 from . import services
 from .config import get_settings
 from .db import session_factory
-from .models import Pet
+from .models import Group, Pet
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +53,22 @@ async def generate_yesterday_diaries() -> None:
             logger.exception("펫 %s 일기 생성 실패 (%s)", pet_id, yesterday)
 
 
+async def _all_group_ids() -> list[int]:
+    async with session_factory()() as session:
+        return list((await session.execute(select(Group.id))).scalars())
+
+
+async def generate_last_month_reports() -> None:
+    """매월 1일에 지난 달 레포트를 굳힌다 (MR-3). 데모에선 수동 트리거를 주로 쓴다."""
+    today = date.today()
+    last_month = (today.replace(day=1) - timedelta(days=1)).strftime("%Y-%m")
+    for group_id in await _all_group_ids():
+        try:
+            await services.generate_report(group_id, last_month)
+        except Exception:
+            logger.exception("그룹 %s 레포트 생성 실패 (%s)", group_id, last_month)
+
+
 def start() -> None:
     global _scheduler
     settings = get_settings()
@@ -76,9 +92,17 @@ def start() -> None:
         coalesce=True,
         max_instances=1,
     )
+    _scheduler.add_job(
+        generate_last_month_reports,
+        # 매월 1일 00:10 UTC. 자정 배치들과 겹치지 않게 조금 뒤로 민다.
+        CronTrigger(day=1, hour=0, minute=10),
+        id="generate_reports",
+        coalesce=True,
+        max_instances=1,
+    )
     _scheduler.start()
     logger.info(
-        "스케줄러 시작: 활동 %d분마다, 일기 %02d:05 UTC",
+        "스케줄러 시작: 활동 %d분마다, 일기 %02d:05 UTC, 레포트 매월 1일 00:10 UTC",
         settings.activity_interval_minutes,
         settings.diary_hour_utc,
     )

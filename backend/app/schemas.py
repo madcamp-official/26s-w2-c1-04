@@ -183,3 +183,42 @@ class WidgetOut(BaseModel):
     sender_nickname: str | None = None
     created_at: str | None = None
     is_ephemeral: bool = False
+
+
+# --- 월간 레포트 (MR-1 ~ MR-4). docs/API.md 6절 ---
+
+
+class ReportBrief(BaseModel):
+    report_month: str  # 'YYYY-MM'
+    generated_at: str
+
+
+class ReportListOut(BaseModel):
+    items: list[ReportBrief]
+
+
+class BestDoodleOut(BaseModel):
+    id: str
+    # most_replies -> most_strokes -> latest. 나중에 vision 도입 시 값이 는다.
+    rule: str
+    content_type: str
+    # 승자 유형에 따라 셋 중 하나만 채워진다. 앱은 content_type 으로 분기한다.
+    photo_url: str | None
+    drawing_url: str | None
+    thumb_url: str
+    text_body: str | None
+    created_at: str
+
+
+class ReportOut(BaseModel):
+    report_month: str
+    photo_count: int
+    drawing_count: int
+    text_count: int
+    poke_count: int
+    # 낙서가 한 장도 없던 달이면 null
+    dominant_type: str | None
+    pet_level_start: int
+    pet_level_end: int
+    # 낙서가 없거나 남은 후보가 없으면 null
+    best_doodle: BestDoodleOut | None

@@ -174,7 +174,10 @@ async def run() -> None:
             check("가입 첫날 일기장은 빈 목록", d["items"] == [] and d["next_before"] is None, str(d))
             check("없는 날짜 일기는 404", (await c.get(f"/v1/pets/{pet_id}/diaries/2020-01-01", headers=A)).status_code == 404)
 
-            today = date.today()
+            # 활동의 started_at 은 _now()(UTC)로 찍힌다. 로컬이 UTC 보다 앞선 시간대(KST 등)면
+            # 자정~오전 사이 date.today()(로컬)가 UTC 날짜보다 하루 앞서 일기 대상 날짜가 어긋난다.
+            # 데이터가 쓰는 UTC 날짜로 생성해 시각 의존성을 없앤다.
+            today = services._real_now().date()
             diary_id = await services.generate_diary(int(pet_id), today)
             check("일기 생성됨", diary_id is not None, str(diary_id))
             check("일기 이미지 파일이 실제로 저장됨", (MEDIA / f"g{gid}" / f"diary_{diary_id}.png").exists())

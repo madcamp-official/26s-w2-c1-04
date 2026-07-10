@@ -15,7 +15,11 @@ FastAPI + Socket.IO + MySQL 8. 설계 근거는 [../docs/SPEC.md](../docs/SPEC.m
 | `app/gpu.py` | 작성 완료. 스텁 ↔ 실물을 같은 인터페이스 뒤에 둠 |
 | `app/realtime.py` | 작성 완료. Socket.IO 서버, ack 포함 |
 | `app/main.py` | 작성 완료. `/v1/health` 동작 확인 |
-| 라우터 (auth, groups, doodles, pets, reports) | 미작성 |
+| `app/scheduler.py` | 작성 완료. 활동 갱신·자정 일기·**월간 레포트** 배치 |
+| 라우터 `auth`·`groups`·`devices` | 작성 완료. 온보딩·그룹·기기 등록 |
+| 라우터 `doodles`·`pokes`·`widget` | 작성 완료. 낙서·사라지기·찌르기·위젯 |
+| 라우터 `pets` | 작성 완료. 쓰다듬기·그림 일기 |
+| 라우터 `reports` | 작성 완료. 월간 레포트(MR-1~4). **테스트 39/39 통과** |
 
 ## 실행
 
@@ -53,11 +57,14 @@ python tests/test_security.py     # 의존성 없이 돈다
 
 # 실제 MySQL 이 필요하다. schema.sql 을 먼저 적용할 것.
 bash tests/test_schema_mysql.sh                    # 트리거·CHECK·에러 우선순위
-DATABASE_URL='mysql+asyncmy://root:root@127.0.0.1:3306/memory_pager?charset=utf8mb4' \
-  python tests/test_groups_integration.py          # 온보딩~정원 초과 전체 흐름
+export DATABASE_URL='mysql+asyncmy://root:root@127.0.0.1:3306/memory_pager?charset=utf8mb4'
+python tests/test_groups_integration.py            # 온보딩~정원 초과 전체 흐름 (28)
+python tests/test_doodles_integration.py           # 낙서·사라지기·찌르기 (31)
+python tests/test_pets_integration.py              # 펫·그림 일기·위젯 (33)
+python tests/test_reports_integration.py           # 월간 레포트·최고의 낙서 (39)
 ```
 
-**MySQL 8.0.40에서 실제로 확인했다.** `schema.sql`이 그대로 걸리고(16 테이블, 트리거 3개), 트리거가 3번째 가입을 거부하며, `UNIQUE(user_id)`가 유저의 두 번째 그룹 가입을 막고, `AFTER INSERT/DELETE`가 `member_count`를 유지한다. 라우터 통합 테스트 28항목도 전부 통과한다.
+**MySQL 8.0.40에서 실제로 확인했다.** `schema.sql`이 그대로 걸리고(16 테이블, 트리거 3개), 트리거가 3번째 가입을 거부하며, `UNIQUE(user_id)`가 유저의 두 번째 그룹 가입을 막고, `AFTER INSERT/DELETE`가 `member_count`를 유지한다. 라우터 통합 테스트 **131항목**(그룹 28 · 낙서 31 · 펫 33 · 레포트 39)이 전부 통과한다.
 
 ### 실측으로 알아낸 것 — 에러 우선순위
 
