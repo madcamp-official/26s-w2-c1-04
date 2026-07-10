@@ -1,7 +1,6 @@
 # Memory Pager — GPU 서버, Stable Diffusion 전용 venv
 #
-#   uv venv --python 3.11 ~/envs/sd
-#   source ~/envs/sd/bin/activate && pip install -r gpu/requirements-sd.txt
+#   python3 -m venv ~/envs/sd && source ~/envs/sd/bin/activate && pip install -r gpu/requirements-sd.txt
 #
 # vLLM 환경(gpu/requirements-vllm.txt)과 torch 핀이 충돌하므로 venv 를 반드시 나눈다.
 # 호스트에 CUDA 툴킷을 깔지 마라. torch 가 CUDA 런타임을 wheel 에 번들한다.

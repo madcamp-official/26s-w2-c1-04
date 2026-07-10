@@ -5,11 +5,14 @@
 
 | | ① 앱 VM | ② GPU 서버 |
 |---|---|---|
-| OS | Ubuntu **22.04** (Python 3.10) — 템플릿은 `ubuntu-24-pw`였지만 실측은 22.04 | Ubuntu **20.04** (Python 3.8) |
+| IP | 172.10.7.229 | 192.168.0.20 (사설망) |
+| OS | Ubuntu **22.04** (Python 3.10) | Ubuntu **22.04** (Python 3.10) |
 | 스펙 | 4 vCPU / **4GB RAM** / 100GB | 40 vCPU / 50GB RAM / 100GB / RTX 3090 **20GB** |
 | 개방 포트 | 22 · 80 · 443 | (외부 노출 안 함) |
 | 공개 주소 | **`https://anjonghwa.madcamp-kaist.org`** (Cloudflare Tunnel) | 없음 |
 | 도는 것 | FastAPI, Socket.IO, MySQL 8, 미디어 | vLLM, SD 1.5 |
+
+> **VM이 셋인데 하나(172.10.8.83)는 안 쓴다.** 원래 여기에 도메인이 붙어 다른 서비스를 내려주고 있었다. 터널을 앱 VM으로 옮기는 순서는 7-7.
 
 ---
 
@@ -18,20 +21,12 @@
 ## 0. 먼저 확인 — OS와 사용자
 
 ```bash
-cat /etc/os-release | head -2
-python3 --version
+cat /etc/os-release | head -2     # Ubuntu 22.04.x 확인
+python3 --version                 # 3.10.x
 whoami
 ```
 
-**OS 템플릿은 `ubuntu-24-pw`였지만 실제로 22.04일 수 있다.** `mysql --version`이 `0ubuntu0.22.04.x`를 뱉으면 22.04다.
-
-| | Ubuntu 22.04 | Ubuntu 24.04 |
-|---|---|---|
-| 기본 Python | 3.10 | 3.12 |
-| 우리 스택 | ✅ 동작 (최저선이 3.10) | ✅ |
-| PEP 668 (시스템 pip 차단) | 없음 | 있음 |
-
-**22.04여도 그대로 간다.** `requirements.txt`의 최저 요구가 Python 3.10이라 딱 맞는다. 다만 여유가 없으니 시스템 Python을 건드리지 말고 venv를 쓴다.
+**앱 VM은 172.10.7.229, Ubuntu 22.04(Python 3.10)다.** 우리 스택 최저선이 3.10이라 시스템 Python으로 충분하다. 다만 RAM이 4GB뿐이니 시스템 Python을 건드리지 말고 venv를 쓴다.
 
 아래는 `$HOME`을 기준으로 쓴다. root로 작업하면 `/root`, `ubuntu` 유저면 `/home/ubuntu`다.
 
@@ -292,36 +287,68 @@ curl -s https://$SUB.madcamp-kaist.org/v1/health      # 밖에서
 
 > **레코드 한도는 DNS 레코드와 터널 호스트네임을 합산한다.** `GET /v1/me`의 `recordLimit`으로 확인한다.
 
----
+### 7-7. 터널을 다른 VM으로 옮기기
 
-# ② GPU 서버 (Ubuntu 20.04) — 접속되면
-
-## 0. 두 서버가 서로 보이는지부터 — 최우선
-
-**이게 안 되면 Day 5를 통째로 날린다.** GPU 서버에서 아무 포트나 띄우고 앱 VM에서 부른다.
+이미 다른 VM에 터널을 설치해 뒀다면(예: 이전에 1번 VM에서 다른 서비스를 띄웠던 경우), **터널은 계정당 하나**라 같은 터널을 두 곳에서 돌릴 수 없다. 앱 VM으로 옮긴다.
 
 ```bash
-# GPU 서버에서
-python3 -m http.server 8100
+# 1) 지금 뭘 어디로 보내는지 본다
+curl -s -H "Authorization: Bearer $API_KEY" $BASE_URL/v1/tunnels
 
-# 앱 VM에서
-curl -m 5 http://<GPU_사설IP>:8100/
+# 2) 엉뚱한 데를 가리키는 호스트네임을 지운다 (위 응답의 hostnames[].id)
+curl -s -X DELETE -H "Authorization: Bearer $API_KEY" \
+  $BASE_URL/v1/tunnels/hostnames/<th_...>
+
+# 3) 앱 VM 에서 설치 명령을 다시 받아 실행한다. 터널 자체는 그대로, 실행 위치만 옮긴다.
+curl -s -H "Authorization: Bearer $API_KEY" $BASE_URL/v1/tunnels/token
+#   → 나온 installCommand 를 앱 VM 에서 실행
+cloudflared service install eyJhIjoi...
+
+# 4) 8000 으로 호스트네임을 새로 건다 (7-4)
 ```
 
-- **되면:** 앱 VM이 GPU 서버를 직접 HTTP로 부른다. `.env`의 `GPU_LLM_URL`·`GPU_SD_URL`에 사설 IP를 넣는다.
-- **안 되면:** GPU 서버가 앱 VM의 잡 큐를 폴링하는 아웃바운드 전용 구조로 바꾼다. 구현이 하루 더 든다. 바로 알려달라.
+**이전 VM의 cloudflared 는 죽는다.** 같은 터널을 두 곳에서 못 돌리기 때문이다. 이전 VM을 안 쓴다면 문제없다.
+
+---
+
+# ② GPU 서버 (Ubuntu 22.04, `192.168.0.20`)
+
+> **GPU 서버도 22.04(Python 3.10)로 확인됐다.** 초기 문서는 20.04를 가정했으나 실제는 22.04다. RTX 3090이 물리적으로 달려 있다(`lspci`에 `GA102 [GeForce RTX 3090]`). **Python 3.8 격리 절차가 필요 없어졌다.**
+
+## 0. 두 서버 연결 — 확인됨
+
+앱 VM(`172.10.7.229`)에서 `curl http://192.168.0.20:8100`이 200을 돌려준다. 같은 사설망이다. **앱 VM이 GPU를 직접 HTTP로 부른다.** `.env`에 `GPU_LLM_URL=http://192.168.0.20:8100`, `GPU_SD_URL=http://192.168.0.20:8200`.
 
 ## 1. 드라이버 — 여기서 막히면 위가 다 무의미하다
 
+GPU 하드웨어는 있는데 드라이버가 없는 상태에서 시작한다.
+
 ```bash
-nvidia-smi
+nvidia-smi                       # "command not found" 면 아래로
+lspci | grep -i nvidia           # GA102 [GeForce RTX 3090] 확인
 ```
 
-없거나 570 미만이면:
+`ubuntu-drivers` 명령 자체가 없을 수 있으니 패키지부터 깐다.
 
 ```bash
-sudo ubuntu-drivers autoinstall
-sudo reboot
+apt update
+apt install -y ubuntu-drivers-common
+ubuntu-drivers devices           # 권장 드라이버 확인
+ubuntu-drivers autoinstall
+reboot
+```
+
+`ubuntu-drivers`가 계속 말썽이면 직접 지정한다 (22.04에 `nvidia-driver-570`이 있다):
+
+```bash
+apt install -y nvidia-driver-570
+reboot
+```
+
+재부팅 후:
+
+```bash
+nvidia-smi                       # 드라이버 버전과 3090이 떠야 한다
 ```
 
 **CUDA 툴킷은 설치하지 않는다.** torch가 CUDA 런타임을 wheel에 번들한다.
@@ -329,34 +356,39 @@ sudo reboot
 ## 2. 시스템 준비
 
 ```bash
-sudo fallocate -l 16G /swapfile && sudo chmod 600 /swapfile
-sudo mkswap /swapfile && sudo swapon /swapfile
-echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+fallocate -l 16G /swapfile && chmod 600 /swapfile
+mkswap /swapfile && swapon /swapfile
+echo '/swapfile none swap sw 0 0' >> /etc/fstab
 
 # 작은 /tmp 가 pip 빌드·triton 캐시로 차서 실패하는 것을 막는다
-sudo mkdir -p /data/hf /data/tmp && sudo chown -R $USER /data
+mkdir -p /data/hf /data/tmp
 echo 'export HF_HOME=/data/hf'  >> ~/.bashrc
 echo 'export TMPDIR=/data/tmp'  >> ~/.bashrc
 source ~/.bashrc
 ```
 
-## 3. Python 3.11 — 시스템 3.8은 **절대 건드리지 않는다**
+## 3. venv 두 개 — 시스템 Python 3.10으로 충분
 
-apt 유틸들이 3.8에 묶여 있어 업그레이드하면 OS가 깨진다. `uv`로 격리 설치한다.
+**22.04라 시스템 Python 3.10이 스택 최저선을 만족한다.** uv도 3.8 격리도 필요 없다. venv만 만든다.
 
 ```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-source ~/.bashrc
-
-uv venv --python 3.11 ~/envs/vllm
-uv venv --python 3.11 ~/envs/sd
+apt install -y python3-venv python3-pip git
+python3 -m venv ~/envs/vllm
+python3 -m venv ~/envs/sd
 ```
 
 **venv를 둘로 나누는 이유는 vLLM과 SD의 torch 핀이 충돌하기 때문이다.** `HF_HOME`은 공유해 같은 가중치를 두 번 받지 않게 한다.
 
+레포를 클론하거나(requirements 파일 때문에) 필요한 파일만 받는다.
+
+```bash
+cd ~ && git clone -b anjonghwa https://github.com/madcamp-official/26s-w2-c1-04.git
+```
+
 ## 4. vLLM
 
 ```bash
+cd ~/26s-w2-c1-04
 source ~/envs/vllm/bin/activate
 pip install -r gpu/requirements-vllm.txt
 
@@ -396,13 +428,15 @@ curl -X POST localhost:8100/wake_up         # 3~6초
 
 # 확인 체크리스트
 
-| | 확인 방법 | 통과 기준 |
-|---|---|---|
-| MySQL 스키마 | `bash backend/tests/test_schema_mysql.sh` | 17 passed |
-| 라우터 | `DATABASE_URL=... python backend/tests/test_groups_integration.py` | 28 passed |
-| API 로컬 | `curl localhost:8000/v1/health` | `db: ok` |
-| API 외부 | `curl https://anjonghwa.madcamp-kaist.org/v1/health` | 같은 응답 |
-| **두 서버 연결** | 앱 VM에서 `curl http://<GPU_IP>:8100/health` | 200 |
-| GPU 드라이버 | `nvidia-smi` | 570 이상 |
-| vLLM 점유 | `nvidia-smi` | **약 8GB** (18GB면 실패) |
-| vLLM sleep | `curl localhost:8100/is_sleeping` | 404 아님 |
+| | 확인 방법 | 통과 기준 | 상태 |
+|---|---|---|---|
+| 두 서버 연결 | 앱 VM에서 `curl http://192.168.0.20:8100/` | 200 | ✅ 확인됨 |
+| MySQL 스키마 | `bash backend/tests/test_schema_mysql.sh` | 17 passed | ✅ |
+| 라우터 | `DATABASE_URL=... python backend/tests/test_groups_integration.py` | 28 passed | ✅ |
+| API 로컬 | `curl localhost:8000/v1/health` | `db: ok` | ✅ |
+| **API 외부** | 노트북에서 `curl.exe https://anjonghwa.madcamp-kaist.org/v1/health` | 우리 JSON | ⬜ 터널을 앱 VM으로 옮겨야 함 (7-7) |
+| GPU 드라이버 | `nvidia-smi` | 뜨면 OK (570+ 권장) | ⬜ 설치 중 |
+| vLLM 점유 | `nvidia-smi` | **약 8GB** (18GB면 실패) | ⬜ |
+| vLLM sleep | `curl localhost:8100/is_sleeping` | 404 아님 | ⬜ |
+
+> **PowerShell에서는 `curl`이 `Invoke-WebRequest`의 별칭이다.** 진짜 curl은 `curl.exe`로 부른다. VM 안(리눅스 셸)에서는 그냥 `curl`이 맞다.

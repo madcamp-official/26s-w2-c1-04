@@ -1,8 +1,7 @@
 # Memory Pager — GPU 서버, LLM 서빙 전용 venv
 #
-# Ubuntu 20.04 의 시스템 Python 3.8 로는 아무것도 깔리지 않는다. 절대 건드리지 말고 uv 로 3.11 을 격리 설치할 것.
-#   uv venv --python 3.11 ~/envs/vllm
-#   source ~/envs/vllm/bin/activate && pip install -r gpu/requirements-vllm.txt
+# Ubuntu 22.04 (Python 3.10). 시스템 Python 으로 충분하다. venv 만 만든다.
+#   python3 -m venv ~/envs/vllm && source ~/envs/vllm/bin/activate && pip install -r gpu/requirements-vllm.txt
 #
 # SD 환경(gpu/requirements-sd.txt)과 torch 핀이 충돌하므로 venv 를 반드시 나눈다.
 # HF_HOME 은 두 venv 가 공유해 같은 가중치를 두 번 받지 않게 한다.

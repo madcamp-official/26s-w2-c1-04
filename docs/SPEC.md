@@ -8,8 +8,8 @@
 | 대상 플랫폼 | **Android (갤럭시)** 단일 |
 | 과제 옵션 | **주: 실시간 인터랙션** / 부: LLM Wrapper |
 | 인프라 예산 | **0원** — 외부 유료 API 미사용 |
-| 서버 ① 앱 VM | **Ubuntu 24.04** / vCPU 4 / **RAM 4GB** / DISK 100GB / 개방 포트 22·80·443 |
-| 서버 ② GPU | **Ubuntu 20.04** / vCPU 40 / RAM 50GB / DISK 100GB / **RTX 3090 (VRAM 20GB) ×1** |
+| 서버 ① 앱 VM | **Ubuntu 22.04** (172.10.7.229) / vCPU 4 / **RAM 4GB** / DISK 100GB / 개방 포트 22·80·443 |
+| 서버 ② GPU | **Ubuntu 22.04** (192.168.0.20) / vCPU 40 / RAM 50GB / DISK 100GB / **RTX 3090 (VRAM 20GB) ×1** |
 | 성격 | 포트폴리오용 사이드 프로젝트. **보안 하드닝은 범위 밖**(1.2절) |
 | 원본 | `기능정의서 2조.xlsx` (**우선**), `몰입캠프 2주차 Team 4.docx` (보조) |
 | 관련 문서 | [API.md](API.md) · [ERD.md](ERD.md) · [STACK.md](STACK.md) · [BACKLOG.md](BACKLOG.md) |
@@ -171,8 +171,8 @@
          │ WSS (Socket.IO)     · 찌르기, 신규 낙서, 사라지기 만료
          ▼
 ╔═══════════════════════════════╗       ╔══════════════════════════════════╗
-║  ① 앱 VM                      ║       ║  ② GPU 서버                      ║
-║  Ubuntu 24.04                 ║       ║  Ubuntu 20.04                    ║
+║  ① 앱 VM (172.10.7.229)       ║       ║  ② GPU 서버 (192.168.0.20)       ║
+║  Ubuntu 22.04                 ║       ║  Ubuntu 22.04                    ║
 ║  4 vCPU · 4GB RAM · 100GB     ║       ║  40 vCPU · 50GB RAM · 100GB      ║
 ║  개방 포트 22 · 80 · 443      ║       ║  RTX 3090 (VRAM 20GB) ×1         ║
 ╟───────────────────────────────╢       ╟──────────────────────────────────╢
@@ -213,7 +213,7 @@ KCLOUD VM + Cloudflare Tunnel 환경에서:
 
 | 계층 | 기술 | 선택 근거 |
 |---|---|---|
-| OS | 앱 VM은 **Ubuntu 24.04**(Python 3.12), GPU 서버는 **Ubuntu 20.04**(Python 3.8) | 7절 ③ — Python 버전 함정은 GPU 서버 쪽에만 있다 |
+| OS | 두 VM 다 **Ubuntu 22.04**(Python 3.10) | 스택 최저선이 3.10이라 그대로 맞는다 |
 | 앱 | **Flutter (Android only)** | 크로스플랫폼을 포기했으므로 원래 명분은 사라졌다. 그럼에도 유지하는 이유는 ① `CustomPainter` 캔버스와 펫 애니메이션 구현이 빠르고 ② 팀이 이미 정한 스택이며 ③ **홈 위젯은 어느 쪽을 골라도 네이티브 Kotlin AppWidget을 직접 짜야 하므로**(`home_widget` 플러그인) Kotlin 전환의 이득이 작기 때문이다. |
 | API | Python FastAPI | 비동기, GPU 서버 연동 용이 |
 | 실시간 | Socket.IO (`python-socketio`) | Tunnel에서 유일하게 안전한 양방향 채널 |
@@ -343,7 +343,7 @@ auth_identities(user_id, provider, provider_uid, secret_hash)
 
 ③ **LLM 모델 선정이 아직 열려 있다.** 3090 **20GB**에 4-bit 양자화로 올릴 7~8B급 한국어 모델을 골라야 한다. 후보를 벤치마크한 뒤 정한다. 캠프에서 API 크레딧을 지원받을 수 있다면 외부 LLM API로 되돌리는 편이 품질·구현 난이도 모두 유리하다.
 
-**GPU 서버가 Ubuntu 20.04라는 점이 변수다.** 기본 Python이 3.8이라 최신 추론 스택이 그대로 깔리지 않는다. 앱 VM은 Ubuntu 24.04(Python 3.12)라 이 문제가 없다. 환경 구성 경로는 별도 조사 중이며 결과가 나오면 반영한다.
+~~GPU 서버가 Ubuntu 20.04라는 점이 변수다.~~ **해결됐다 (2026-07-10).** 두 VM 다 Ubuntu 22.04(Python 3.10)로 확인됐다. 스택 최저선이 3.10이라 시스템 Python으로 충분하고, GPU 서버에서 uv로 3.11을 격리해야 하던 문제가 사라졌다. 설치 순서는 [SETUP.md](SETUP.md).
 
 ④ **LoRA 학습 임계값 20장은 근거가 약하다.** 실제로 몇 장부터 그림체가 잡히는지 시험해 보고 조정한다.
 

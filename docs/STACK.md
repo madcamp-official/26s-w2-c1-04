@@ -11,16 +11,18 @@
 
 ## 1. 두 머신의 분담
 
-| | ① 앱 VM | ② GPU 서버 |
+| | ① 앱 VM (172.10.7.229) | ② GPU 서버 (192.168.0.20) |
 |---|---|---|
-| OS | Ubuntu **24.04** (기본 Python 3.12) | Ubuntu **20.04** (기본 Python 3.8) |
+| OS | Ubuntu **22.04** (기본 Python 3.10) | Ubuntu **22.04** (기본 Python 3.10) |
 | 스펙 | 4 vCPU / **4GB RAM** / 100GB | 40 vCPU / 50GB RAM / 100GB / RTX 3090 **20GB** |
 | 도는 것 | FastAPI, Socket.IO, MySQL 8, 미디어 서빙, 스케줄러 | vLLM(LLM 서빙), SD 1.5 추론·학습 |
-| Python | **시스템 3.12로 충분.** venv만 만든다 | **3.8로는 아무것도 안 깔린다.** uv로 3.11 격리 설치 |
+| Python | **시스템 3.10으로 충분.** venv만 만든다 | **시스템 3.10으로 충분.** venv만 만든다 |
 
-> **Python 3.8이 진짜 걸림돌이다. glibc는 아니다.** 20.04의 glibc 2.31은 현재 wheel 요건(`manylinux_2_28`, glibc ≥ 2.28)을 충족한다. 반면 최신 torch·vLLM·SQLAlchemy는 Python ≥ 3.10을, asyncmy·firebase-admin은 ≥ 3.9를 요구한다. 3.8에서는 **전부 설치 불가**다.
+> **두 VM 다 Ubuntu 22.04(Python 3.10)로 확인됐다 (2026-07-10).** 초기 문서는 앱 VM 24.04 / GPU 20.04로 가정했으나 실제로는 둘 다 22.04다. 우리 스택의 최저선이 Python 3.10이라 딱 맞고, **GPU 서버에서 20.04·Python 3.8 때문에 uv로 3.11을 격리해야 하던 문제가 사라졌다.**
 >
-> **시스템 Python 3.8을 업그레이드하지 마라.** apt 유틸들이 3.8에 묶여 있어 OS가 깨진다. `uv`로 3.11을 따로 받아 쓴다.
+> torch·vLLM·SQLAlchemy는 Python ≥ 3.10, asyncmy·firebase-admin은 ≥ 3.9를 요구한다. 22.04의 3.10이 이를 전부 충족한다. venv만 만들면 된다.
+>
+> 다만 GPU 서버도 RAM 여유가 있어도 vLLM·SD의 torch 핀이 충돌하므로 **venv는 여전히 둘로 나눈다**(vllm / sd). uv를 꼭 쓸 필요는 없고 `python3 -m venv`로 충분하다.
 
 ---
 
@@ -118,25 +120,24 @@ VLLM_SERVER_DEV_MODE=1 vllm serve LGAI-EXAONE/EXAONE-3.5-7.8B-Instruct-AWQ \
 
 ## 4. 설치 순서
 
-### 앱 VM (Ubuntu 24.04)
+### 앱 VM (Ubuntu 22.04)
 
 1. swap 4~8GB 추가. **RAM이 4GB뿐이라 빌드 중 OOM-killer에 맞기 쉽다.**
 2. `sudo apt install mysql-server` → `SELECT VERSION();`으로 8.0.x 확인 → DB·유저 생성 → `mysql < backend/schema.sql`
 3. **트리거가 실제로 3번째 가입을 거부하는지 확인한다.** 파서 검증으로는 못 잡는다.
-4. `python3 -m venv ~/envs/api` → `pip install -r backend/requirements.txt`
-   - 24.04는 PEP 668로 시스템 pip 설치가 막혀 있다. 반드시 venv 안에서.
+4. `python3 -m venv ~/envs/api` → `pip install -r backend/requirements.txt`. **venv 안에서.**
 5. `innodb_buffer_pool_size`를 키우지 않는다. 기본값 근처로 둔다.
 6. cloudflared 설치 → ingress에 `http://localhost:8000`만 등록하면 WebSocket이 자동 프록시된다
 
-### GPU 서버 (Ubuntu 20.04)
+### GPU 서버 (Ubuntu 22.04)
 
-1. `nvidia-smi`로 드라이버 확인. 570 미만이면 `sudo ubuntu-drivers autoinstall` 후 재부팅.
+1. `nvidia-smi`로 드라이버 확인. 없으면 `apt install ubuntu-drivers-common && ubuntu-drivers autoinstall` 후 재부팅(또는 `nvidia-driver-570` 직접 설치).
    **여기서 GPU가 안 잡히면 상위 스택 전부가 무의미하다. 이 단계부터 통과시킨다.**
 2. **CUDA 툴킷은 설치하지 않는다.**
 3. swap 8~16GB 추가. `HF_HOME`을 100GB 파티션(`/data/hf`)으로, `TMPDIR`도 큰 파티션으로 export한다.
    작은 `/tmp`가 pip 빌드·triton 캐시로 차서 실패하는 것을 막는다.
-4. `uv` 설치 → venv 두 개를 3.11로 만든다. **vLLM과 SD는 torch 핀이 충돌하므로 분리한다.**
-   `HF_HOME`은 공유해 같은 가중치를 두 번 받지 않게 한다.
+4. `python3 -m venv`로 venv 두 개를 만든다. **vLLM과 SD는 torch 핀이 충돌하므로 분리한다.**
+   `HF_HOME`은 공유해 같은 가중치를 두 번 받지 않게 한다. (22.04라 uv·3.8 격리가 필요 없다.)
    - `~/envs/vllm` ← `gpu/requirements-vllm.txt`
    - `~/envs/sd` ← `gpu/requirements-sd.txt`
 5. vLLM 기동 후 `nvidia-smi`로 점유가 **약 8GB**인지 확인한다. 18GB가 잡히면 `--gpu-memory-utilization` 인자가 안 먹은 것이다.
@@ -144,7 +145,7 @@ VLLM_SERVER_DEV_MODE=1 vllm serve LGAI-EXAONE/EXAONE-3.5-7.8B-Instruct-AWQ \
 
 ### Docker는 쓰지 않는다
 
-glibc가 걸림돌이 아니고 Python 3.8은 uv로 2분이면 해결된다. 7일·2인에서 가장 비싼 자원은 팀의 시간인데, Docker의 GPU 공유·`/dev/shm` 64MB 함정·볼륨·8~15GB 이미지가 100GB 디스크를 잠식하는 문제를 새로 배우는 비용이 이득보다 크다.
+두 VM 다 22.04(Python 3.10)라 추론 스택이 시스템 Python + venv로 그냥 깔린다. 7일·2인에서 가장 비싼 자원은 팀의 시간인데, Docker의 GPU 공유·`/dev/shm` 64MB 함정·볼륨·8~15GB 이미지가 100GB 디스크를 잠식하는 문제를 새로 배우는 비용이 이득보다 크다.
 
 **예외는 vLLM 하나.** 네이티브 설치가 끝내 막히면 공식 `vllm/vllm-openai` 컨테이너로 그 컴포넌트만 폴백하되 `--ipc=host`(또는 `--shm-size=8g`)를 반드시 붙인다.
 

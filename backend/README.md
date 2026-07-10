@@ -33,7 +33,7 @@ python tests/test_ephemeral.py   # 의존성 없이 돈다
 
 ## 설치
 
-24.04는 PEP 668로 시스템 pip 설치를 막는다. **반드시 venv 안에서.**
+**반드시 venv 안에서.**
 
 ```bash
 python3 -m venv ~/envs/api
@@ -67,20 +67,20 @@ DATABASE_URL='mysql+asyncmy://root:root@127.0.0.1:3306/memory_pager?charset=utf8
 
 ## 어디서 도는가
 
-| | 앱 VM | GPU 서버 |
+| | 앱 VM (172.10.7.229) | GPU 서버 (192.168.0.20) |
 |---|---|---|
-| OS | Ubuntu 24.04 (Python 3.12) | Ubuntu 20.04 (Python 3.8) |
+| OS | Ubuntu 22.04 (Python 3.10) | Ubuntu 22.04 (Python 3.10) |
 | 스펙 | 4 vCPU / **4GB RAM** / 100GB | 40 vCPU / 50GB RAM / 100GB / RTX 3090 20GB |
 | 이 디렉터리의 코드 | **여기서 돈다** | 돌지 않는다 |
 | 그 밖에 | MySQL 8, 미디어 파일 | LLM 서빙, SD 추론·학습 |
 
-**이 백엔드는 앱 VM에서만 돈다.** GPU 서버는 상태 없는 추론 워커이고, HTTP로만 부른다.
+**이 백엔드는 앱 VM에서만 돈다.** GPU 서버는 상태 없는 추론 워커이고, HTTP로만 부른다(사설망 `192.168.0.20`).
 
 ## Python 버전 — 함정
 
 **Python 3.9 이상이 필요하다.** `app/models.py`는 `Mapped[list[X]]` 형태의 PEP 585 제네릭을 쓰는데, SQLAlchemy가 이 어노테이션을 런타임에 평가한다. Python 3.8에서는 `list[X]`가 구독 불가라 `NameError`로 터진다. 실제로 3.8.6에서 재현했고, 3.13에서 통과했다.
 
-**앱 VM은 Ubuntu 24.04라 기본 Python이 3.12다. 문제없다.** Python 3.8 문제는 **GPU 서버(Ubuntu 20.04) 쪽에만** 있고, 거기서는 PyTorch와 추론 스택이 어차피 3.9 이상을 요구하므로 인터프리터를 올려야 한다.
+**두 VM 다 Ubuntu 22.04라 기본 Python이 3.10이다. 문제없다.** 스택 최저선이 3.10이라 시스템 Python으로 충분하고, 초기에 걱정했던 GPU 서버의 3.8 문제는 실제 OS가 22.04로 확인되면서 사라졌다.
 
 ## 앱 VM은 RAM이 4GB뿐이다
 

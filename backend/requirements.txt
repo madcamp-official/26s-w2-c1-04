@@ -1,11 +1,11 @@
-# Memory Pager — 앱 VM 백엔드 (Ubuntu 24.04, Python 3.12)
+# Memory Pager — 앱 VM 백엔드 (Ubuntu 22.04, Python 3.10)
 #
-# 24.04 는 PEP 668 로 시스템 pip 설치를 막는다. 반드시 venv 안에서 설치할 것.
+# venv 안에서 설치할 것.
 #   python3 -m venv ~/envs/api && source ~/envs/api/bin/activate
 #   pip install -r backend/requirements.txt
 #
 # 버전 근거와 검증 등급은 docs/STACK.md 3절 참조.
-# GPU 서버(Ubuntu 20.04)의 의존성은 gpu/ 아래에 따로 있다. 이 파일과 섞지 말 것.
+# GPU 서버(Ubuntu 22.04)의 의존성은 gpu/ 아래에 따로 있다. 이 파일과 섞지 말 것.
 
 fastapi==0.139.0             # 2026-07-01 최신 안정. requires Python>=3.10
 uvicorn[standard]==0.51.0    # [standard] 가 아니면 websockets 구현이 빠져 Socket.IO WS 업그레이드가 실패한다

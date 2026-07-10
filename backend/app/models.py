@@ -8,7 +8,7 @@ backend/schema.sql 과 1:1로 대응한다. 스키마를 바꾸면 양쪽을 같
 
 **Python 3.9 이상이 필요하다.** `Mapped[list[X]]` 같은 PEP 585 제네릭을
 SQLAlchemy 가 런타임에 평가하는데, Python 3.8 에서는 `list[X]` 가 구독 불가라
-NameError 로 터진다. Ubuntu 20.04 의 기본 Python 이 3.8 이므로 반드시 올려야 한다.
+NameError 로 터진다. 배포 VM 은 둘 다 Ubuntu 22.04(Python 3.10)라 문제없다.
 
 이 프로젝트는 포트폴리오용이라 보안 하드닝을 하지 않는다.
 AuthIdentity.secret_hash 도 형식만 갖춘 것이다.
