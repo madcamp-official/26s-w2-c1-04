@@ -231,8 +231,9 @@ class GroupMember(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     group_id: Mapped[int] = mapped_column(ForeignKey("groups.id", ondelete="CASCADE"))
+    # UNIQUE: 유저당 최대 1그룹. 커플 앱이라 사람은 공간 하나에만 속한다.
     user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), index=True
+        ForeignKey("users.id", ondelete="CASCADE"), unique=True
     )
     nickname: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
     role: Mapped[MemberRole] = mapped_column(_enum(MemberRole), default=MemberRole.MEMBER)

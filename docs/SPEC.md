@@ -233,7 +233,7 @@ KCLOUD VM + Cloudflare Tunnel 환경에서:
 
 | 방향 | 이벤트 | 페이로드 | 대응 기능 |
 |---|---|---|---|
-| S→C | `doodle:new` | `{doodle_id, sender_id, mode, content_type, thumb_url}` | SD-5, SD-6 |
+| S→C | `doodle:new` | `{doodle_id, sender_id, mode, content_type}` — `thumb_url`은 `mode=normal`일 때만 | SD-5, SD-6 |
 | S→C | `doodle:expired` | `{doodle_id}` | SD-6 |
 | S→C | `poke` | `{from_user_id, at}` | SD-7 |
 | S→C | `pet:levelup` | `{pet_id, level}` | PT-1 |

@@ -113,7 +113,11 @@ CREATE TABLE group_members (
     joined_at  DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
     UNIQUE KEY uq_group_members (group_id, user_id),
-    KEY ix_group_members_user (user_id),
+    -- 유저당 최대 1그룹. 커플 앱이라 사람은 공간 하나에만 속한다.
+    -- 이게 없으면 A그룹 owner 가 B그룹을 새로 만들 수 있고, 그 순간
+    -- GET /me 가 어느 그룹을 돌려줄지, 소켓이 어느 룸에 조인할지 정할 수 없다.
+    -- 트리거는 group_id 기준으로만 세므로 이걸 막지 못한다.
+    UNIQUE KEY uq_group_members_user (user_id),
     CONSTRAINT fk_gm_group FOREIGN KEY (group_id)
         REFERENCES `groups` (id) ON DELETE CASCADE,
     CONSTRAINT fk_gm_user FOREIGN KEY (user_id)

@@ -10,7 +10,7 @@
 erDiagram
     users ||--o{ auth_identities : "인증 수단"
     users ||--o{ devices : "기기 등록"
-    users ||--o{ group_members : "소속"
+    users ||--o| group_members : "소속 (유저당 1그룹)"
     groups ||--o{ group_members : "구성원 (정원 2)"
     groups ||--|| pets : "그룹당 1마리"
     groups ||--o{ doodles : "그룹 낙서"
@@ -192,6 +192,13 @@ erDiagram
 
 ## 2. 설계 결정
 
+**불변식이 둘이다. 방향이 다르다.**
+
+- **그룹당 최대 2명** — 트리거가 막는다.
+- **유저당 최대 1그룹** — `UNIQUE(user_id)`가 막는다.
+
+트리거는 `group_id`로만 세므로 두 번째를 막지 못한다. 이게 없으면 A그룹 owner가 B그룹을 새로 만들 수 있고, 그 순간 `GET /me`가 어느 그룹을 돌려줄지, 소켓이 어느 룸에 조인할지 결정할 수 없게 된다. DB 에러도 안 나고 조용히 비결정적이 된다.
+
 **그룹 정원은 2명이다.** 커플이 메인 타깃이므로 `group_members`는 그룹당 최대 2행이다. MySQL은 "자식 행 2개 이하"를 선언적으로 막지 못하므로 ① `groups.member_count`를 두고 ② 가입 트랜잭션을 `SELECT ... FOR UPDATE`로 잠그고 ③ `group_members`에 `BEFORE INSERT` 트리거를 걸어 3번째 행을 거부한다. 세 겹을 다 두는 이유는 초대 코드를 두 사람이 동시에 입력하는 경합이 실제로 발생하기 때문이다.
 
 **별명은 `group_members.nickname` 한 컬럼이면 충분하다.** 2인 그룹에서 "내가 상대에게 지어준 별명"과 "그룹 내 이 사람의 별명"은 같은 값이다. 정원이 2로 고정되었으므로 (그룹, 부르는이, 불리는이) 3중키 테이블의 복잡도를 지불하지 않는다.
@@ -228,7 +235,7 @@ erDiagram
 |---|---|
 | `auth_identities` | `UNIQUE(provider, provider_uid)`, `UNIQUE(user_id, provider)` |
 | `groups` | `UNIQUE(invite_code)`, `CHECK(member_count <= 2)` |
-| `group_members` | `UNIQUE(group_id, user_id)`, `INDEX(user_id)`, 정원 트리거 |
+| `group_members` | `UNIQUE(group_id, user_id)`<br>**`UNIQUE(user_id)` — 유저당 최대 1그룹**<br>정원 트리거 (그룹당 최대 2명) |
 | `pets` | `UNIQUE(group_id)` — 그룹당 1마리 |
 | `doodles` | `INDEX(group_id, created_at DESC)` — 사진첩 날짜 정렬<br>`INDEX(group_id, content_type)` — 유형 필터·LoRA 학습 대상 조회<br>`INDEX(parent_id)` — 최고의 낙서 선정(답장 수)<br>`INDEX(expires_at)` — 만료 스윕 |
 | `doodle_receipts` | `UNIQUE(doodle_id, user_id)` — 최초 확인 1회만 |

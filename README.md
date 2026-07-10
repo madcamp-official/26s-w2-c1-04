@@ -22,8 +22,8 @@
 
 | 이름 | 학교 | GitHub | 역할 |
 |---|---|---|---|
-| 이종혁 | DGIST |  |  |
-| 안종화 | KAIST |  |  |
+| 이종혁 | DGIST |  | 앱 (Flutter, 캔버스, 홈 위젯, FCM) |
+| 안종화 | KAIST |  | 서버 · GPU (FastAPI, Socket.IO, MySQL, vLLM, SD) |
 
 ---
 
@@ -49,15 +49,17 @@
 
 ### 개발 일정
 
+> 상세 계획과 완료 기준은 [docs/PLAN.md](docs/PLAN.md)
+
 | 날짜 | 목표 |
 |---|---|
-| Day 1 |  |
-| Day 2 |  |
-| Day 3 |  |
-| Day 4 |  |
-| Day 5 |  |
-| Day 6 |  |
-| Day 7 |  |
+| Day 1 | 관통(앱 → Tunnel → FastAPI → MySQL) + 두 서버 환경 구성 |
+| Day 2 | 온보딩·그룹 (P0). 정원 2명 강제 |
+| Day 3 | 낙서 왕복 (P0). 캔버스·사진첩·앱 뷰어 |
+| Day 4 | **실시간 증명** — 사라지기 모드, 찌르기, 홈 위젯, 푸시 |
+| Day 5 | **LLM 증명** — 펫 활동·대사, 그림 일기 |
+| Day 6 | 월간 레포트 + QA |
+| Day 7 | 데모·문서·버퍼 |
 
 ---
 

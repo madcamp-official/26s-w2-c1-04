@@ -18,10 +18,13 @@ import socketio
 from fastapi import APIRouter, FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from . import db, gpu
+from . import db, gpu, realtime
 from .config import get_settings
 from .ephemeral import ExpiryScheduler
+from .errors import install_error_handlers
 from .realtime import sio
+from .routers import auth, devices, groups
+from .security import group_id_of, user_from_token
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -39,6 +42,19 @@ async def _expire_doodle(doodle_id: int) -> None:
     logger.info("낙서 %s 만료", doodle_id)
 
 
+async def _resolve_socket_token(token: str) -> tuple[int, int | None] | None:
+    """Socket.IO 연결 인증. realtime 모듈은 DB 를 모르므로 여기서 주입한다."""
+    try:
+        async with db.session_factory()() as session:
+            user = await user_from_token(session, token)
+            if user is None:
+                return None
+            return user.id, await group_id_of(session, user.id)
+    except Exception:
+        logger.warning("소켓 토큰 검증 실패", exc_info=True)
+        return None
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     global expiry
@@ -46,6 +62,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
     try:
         db.init_engine()
+        realtime.set_token_resolver(_resolve_socket_token)
     except Exception:
         # asyncmy 가 없거나 DB 가 죽어 있어도 서버는 뜬다. /health 가 db: down 을 보고한다.
         logger.warning("DB 엔진 초기화 실패. db 기능 없이 계속한다.", exc_info=True)
@@ -65,6 +82,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="Memory Pager", version="0.1.0", lifespan=lifespan)
+install_error_handlers(app)
 
 v1 = APIRouter(prefix="/v1")
 
@@ -79,6 +97,10 @@ async def health() -> dict[str, str]:
         "time": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     }
 
+
+v1.include_router(auth.router)
+v1.include_router(devices.router)
+v1.include_router(groups.router)
 
 app.include_router(v1)
 
