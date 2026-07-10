@@ -239,4 +239,4 @@ erDiagram
 
 ## 4. 다음 단계
 
-`backend/schema.sql`(DDL)과 SQLAlchemy 모델을 생성한다. SPEC 7절의 미해결 사항 중 ①(정원 강제 방식)과 ⑤(LoRA 학습 임계값)만 이 ERD에 닿으며, 나머지는 스키마를 바꾸지 않는다.
+`backend/schema.sql`(DDL)과 SQLAlchemy 모델을 생성한다. SPEC 7절의 미해결 사항 중 ①(정원 강제 방식)과 ④(LoRA 학습 임계값)만 이 ERD에 닿으며, 나머지는 스키마를 바꾸지 않는다.
