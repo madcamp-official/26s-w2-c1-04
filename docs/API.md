@@ -13,7 +13,8 @@
 
 | 항목 | 규약 |
 |---|---|
-| Base URL | `https://<tunnel-domain>/v1` |
+| Base URL | **`https://anjonghwa.madcamp-kaist.org/v1`** |
+| Socket.IO | **`wss://anjonghwa.madcamp-kaist.org/socket.io/`**, 네임스페이스 `/rt` |
 | 인증 | `Authorization: Bearer <token>` — `/auth/register`와 `/health` 제외 전부 필요 |
 | 시각 | UTC, ISO 8601 (`2026-07-10T14:03:00Z`). 앱이 로컬 타임존으로 변환한다 |
 | 날짜 | `YYYY-MM-DD` |

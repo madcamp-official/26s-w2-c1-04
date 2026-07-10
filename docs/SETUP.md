@@ -5,9 +5,10 @@
 
 | | ① 앱 VM | ② GPU 서버 |
 |---|---|---|
-| OS | Ubuntu **24.04** (Python 3.12) | Ubuntu **20.04** (Python 3.8) |
+| OS | Ubuntu **22.04** (Python 3.10) — 템플릿은 `ubuntu-24-pw`였지만 실측은 22.04 | Ubuntu **20.04** (Python 3.8) |
 | 스펙 | 4 vCPU / **4GB RAM** / 100GB | 40 vCPU / 50GB RAM / 100GB / RTX 3090 **20GB** |
 | 개방 포트 | 22 · 80 · 443 | (외부 노출 안 함) |
+| 공개 주소 | **`https://anjonghwa.madcamp-kaist.org`** (Cloudflare Tunnel) | 없음 |
 | 도는 것 | FastAPI, Socket.IO, MySQL 8, 미디어 | vLLM, SD 1.5 |
 
 ---
@@ -165,7 +166,10 @@ pip install pymysql          # 테스트가 테이블을 비우는 데만 쓴다
 export DATABASE_URL='mysql+asyncmy://memory:pager@127.0.0.1:3306/memory_pager?charset=utf8mb4'
 python backend/tests/test_groups_integration.py    # 28 passed
 python backend/tests/test_doodles_integration.py   # 31 passed
+python backend/tests/test_pets_integration.py      # 33 passed
 ```
+
+**레포 루트에서 돌린다.** `backend/` 안에서 `backend/tests/...`를 부르면 경로가 겹친다.
 
 **테스트는 매번 테이블을 비운다. 개발용 DB 에만 돌릴 것.**
 
@@ -202,16 +206,19 @@ journalctl -u memory-pager -f
 
 ### 7-1. API 키를 셸에 둔다
 
+**우리 도메인은 `anjonghwa.madcamp-kaist.org`다.**
+
 ```bash
-export API_KEY="dns_발급받은키"     # 절대 커밋하지 마라
+export API_KEY="sk_dns_..."          # 셸에만. 절대 커밋하지 마라
 export BASE_URL="https://dns.madcamp-kaist.org"
+export SUB="anjonghwa"
 
 curl -s -H "Authorization: Bearer $API_KEY" $BASE_URL/v1/me
 ```
 
-응답의 `subdomain`(예: `team04.madcamp-kaist.org`)이 우리 몫이다. 아래에서 `SUB`로 쓴다.
-
-> **쓰기 요청은 1분에 10회 제한**이다. 실패해도 연타하지 마라.
+> **DNS API 키를 레포에 넣지 마라.** 셸 환경변수나 gitignore된 `.env`에만 둔다. 실수로 커밋했거나 어딘가에 붙여넣었다면 운영진에게 폐기·재발급을 요청하는 편이 싸다.
+>
+> **쓰기 요청은 1분에 10회 제한**이다. 실패해도 연타하지 마라. 429가 나면 `Retry-After`만큼 기다린다.
 
 ### 7-2. cloudflared 설치 (VM당 딱 한 번)
 
@@ -241,15 +248,13 @@ systemctl status cloudflared          # active (running) 이어야 한다
 ### 7-4. 호스트네임을 8000번 포트에 연결
 
 ```bash
-export SUB="team04"                   # /v1/me 의 subdomain 앞부분
-
 curl -s -X POST \
   -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" \
   -d "{\"subdomain\": \"$SUB\", \"localPort\": 8000}" \
   $BASE_URL/v1/tunnels/hostnames
 ```
 
-`name`을 생략하면 `@`, 즉 **서브도메인 자체**(`$SUB.madcamp-kaist.org`)가 `localhost:8000`으로 연결된다. 앱 하나뿐이니 이걸로 충분하다. 나중에 프론트를 따로 띄우려면 `"name": "api"`처럼 이름을 줘서 하나 더 만들면 된다.
+`name`을 생략하면 `@`, 즉 **서브도메인 자체**(`anjonghwa.madcamp-kaist.org`)가 `localhost:8000`으로 연결된다. 앱 하나뿐이니 이걸로 충분하다. 나중에 프론트를 따로 띄우려면 `"name": "api"`처럼 이름을 줘서 하나 더 만들면 된다.
 
 **포트 제약이 우리 구성과 맞물린다.**
 
@@ -279,7 +284,7 @@ curl -s https://$SUB.madcamp-kaist.org/v1/health      # 밖에서
 
 이 터널은 **HTTP ingress**다. WebSocket은 HTTP Upgrade로 시작하므로 그대로 지나간다. Socket.IO도 마찬가지다. 별도 설정이 없다.
 
-앱은 `wss://$SUB.madcamp-kaist.org/socket.io/`에 붙고, 네임스페이스는 `/rt`다. Socket.IO 기본 하트비트(25초)가 유휴 종료를 막는다.
+앱은 `wss://anjonghwa.madcamp-kaist.org/socket.io/`에 붙고, 네임스페이스는 `/rt`다. Socket.IO 기본 하트비트(25초)가 유휴 종료를 막는다.
 
 다만 **순수 TCP·UDP·WebRTC 미디어는 이 터널로 나가지 못한다.** 우리가 실시간 계층을 Socket.IO로 고른 이유가 이것이다([STACK.md](STACK.md), [SPEC.md](SPEC.md) 5.1절).
 
@@ -396,7 +401,7 @@ curl -X POST localhost:8100/wake_up         # 3~6초
 | MySQL 스키마 | `bash backend/tests/test_schema_mysql.sh` | 17 passed |
 | 라우터 | `DATABASE_URL=... python backend/tests/test_groups_integration.py` | 28 passed |
 | API 로컬 | `curl localhost:8000/v1/health` | `db: ok` |
-| API 외부 | `curl https://<도메인>/v1/health` | 같은 응답 |
+| API 외부 | `curl https://anjonghwa.madcamp-kaist.org/v1/health` | 같은 응답 |
 | **두 서버 연결** | 앱 VM에서 `curl http://<GPU_IP>:8100/health` | 200 |
 | GPU 드라이버 | `nvidia-smi` | 570 이상 |
 | vLLM 점유 | `nvidia-smi` | **약 8GB** (18GB면 실패) |
