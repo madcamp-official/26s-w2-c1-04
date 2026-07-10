@@ -94,7 +94,7 @@ erDiagram
         enum content_type "photo, drawing, text"
         varchar photo_url "nullable"
         varchar drawing_url "nullable"
-        json stroke_data "펜 종류 색상 좌표"
+        json stroke_data "펜 종류 색상 좌표 획별 타임스탬프"
         text text_body "nullable"
         datetime expires_at "ephemeral 전용"
         datetime created_at
@@ -213,6 +213,10 @@ erDiagram
 **사라지기 모드는 `doodle_receipts` + `doodles.expires_at` 조합이다.** 수신자가 처음 확인하면 `viewed_at`이 찍히고 서버가 `expires_at = viewed_at + 5s`를 세팅한다. 만료 시 `deleted_at`을 채우고 미디어 파일을 실제 삭제한 뒤 `doodle:expired`를 브로드캐스트한다. 앱이 중간에 죽어도 스케줄러의 만료 스윕이 정리한다.
 
 **낙서 유형은 저장 시점에 확정한다.** `content_type`은 전송 시 앱이 무엇을 담았는지 알고 있으므로 그때 판정해 컬럼에 박는다. 유형 표시(RV-3)와 월간 유형 분포(MR-4)가 이 컬럼 하나로 해결된다.
+
+**`stroke_data`에 획별 타임스탬프를 함께 저장한다.** 원래는 펜 종류·색상·좌표만 담을 계획이었으나, "이번 달 최고의 낙서"(MR-3)를 규칙 기반으로 고를 때 쓸 신호가 너무 빈약하다는 것이 드러났다. 2인 그룹에서 스키마가 주는 견고한 행동 신호는 **답장 수 하나뿐**이다 — `doodle_receipts`는 최초 확인만 기록하므로 체류 시간이 없고, 낙서에 다는 하트도 없다. 타임스탬프가 있으면 **그리기 소요 시간**이라는 훨씬 나은 대리 지표가 생기는데, 캔버스가 이미 좌표를 찍고 있으므로 비용이 사실상 없다.
+
+> 주의할 것 두 가지. 첫째, `stroke_data`에서 뽑은 지표(획 수, 색 수, 소요 시간)는 전부 **정성이 아니라 활동량**을 재며 왕복 낙서나 색 순환으로 조작할 수 있다. 결정론적 보조 신호로만 쓴다. 둘째, 커버리지를 잰다면 **bounding box 면적비를 쓰면 안 된다** — 대각선 획 하나로 100%가 나온다. 점유 그리드셀 비율이나 convex hull 면적을 써야 한다.
 
 **월간 레포트는 스냅샷 테이블이다.** ① 사라지기 모드 낙서는 삭제되어 사후 집계가 불가능하고 ② 월말 푸시 시점에 값이 고정되어야 하므로 계산 결과를 저장한다. `best_doodle_rule`은 최고의 낙서를 어떤 규칙으로 골랐는지 남긴다 — 나중에 vision 모델을 도입하면 규칙이 바뀌므로, 과거 레포트가 어떤 기준이었는지 알 수 있어야 한다.
 
