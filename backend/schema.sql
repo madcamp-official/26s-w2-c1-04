@@ -367,6 +367,12 @@ CREATE TABLE monthly_reports (
 --    CHECK만으로는 "자식 행 2개 이하"를 막을 수 없다. member_count를 트리거로
 --    관리하고, BEFORE INSERT에서 3번째 행을 거부한다.
 --    동시 가입 경합은 애플리케이션이 groups 행을 FOR UPDATE로 잠가서 막는다.
+--
+--    ★ 에러 우선순위 (실측: backend/tests/test_schema_mysql.sh)
+--      그룹이 이미 꽉 찬 상태에서 기존 멤버가 재가입을 시도하면,
+--      BEFORE INSERT 트리거가 UNIQUE(1062)보다 먼저 터져 1644가 난다.
+--      즉 DB 에러만 보고 코드를 정하면 already_member 가 group_full 로 둔갑한다.
+--      서버가 가입 전에 선검사를 해야 하는 이유다. (app/routers/groups.py)
 -- ----------------------------------------------------------------------------
 
 DELIMITER $$

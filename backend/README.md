@@ -45,15 +45,25 @@ pip install -r backend/requirements.txt
 
 **uvicorn을 단일 프로세스로 돌린다.** 사라지기 모드의 5초 타이머가 프로세스 인메모리라 워커를 늘리면 공유되지 않는다.
 
-## 검증한 것
+## 테스트
 
-- `app/models.py`가 임포트되고 `configure_mappers()`가 통과한다 (SQLAlchemy 2.0.51, Python 3.13).
-- `schema.sql`이 MySQL 방언으로 파싱되며(16 테이블), 테이블·컬럼·ENUM 값이 모델과 정확히 일치한다.
+```bash
+python tests/test_ephemeral.py    # 의존성 없이 돈다
+python tests/test_security.py     # 의존성 없이 돈다
 
-## 검증하지 못한 것
+# 실제 MySQL 이 필요하다. schema.sql 을 먼저 적용할 것.
+bash tests/test_schema_mysql.sh                    # 트리거·CHECK·에러 우선순위
+DATABASE_URL='mysql+asyncmy://root:root@127.0.0.1:3306/memory_pager?charset=utf8mb4' \
+  python tests/test_groups_integration.py          # 온보딩~정원 초과 전체 흐름
+```
 
-- **DDL을 실제 MySQL 서버에 걸어보지 못했다.** 파서 통과가 실행 성공을 뜻하지는 않는다.
-- **트리거 블록은 파서 검증에서 제외했다.** `DELIMITER`가 SQL이 아니라 `mysql` 클라이언트 명령이기 때문이다. 트리거는 서버에서 직접 확인해야 한다.
+**MySQL 8.0.40에서 실제로 확인했다.** `schema.sql`이 그대로 걸리고(16 테이블, 트리거 3개), 트리거가 3번째 가입을 거부하며, `UNIQUE(user_id)`가 유저의 두 번째 그룹 가입을 막고, `AFTER INSERT/DELETE`가 `member_count`를 유지한다. 라우터 통합 테스트 28항목도 전부 통과한다.
+
+### 실측으로 알아낸 것 — 에러 우선순위
+
+**그룹이 꽉 찬 상태에서 기존 멤버가 재가입하면, `BEFORE INSERT` 트리거가 `UNIQUE`보다 먼저 터진다.** MySQL 에러가 `1062`(중복)가 아니라 `1644`(SIGNAL)로 온다. DB 에러만 보고 코드를 정하면 `already_member`가 `group_full`로 둔갑한다. 그래서 `groups.py`는 insert 전에 선검사를 해서 정확한 에러 코드를 고른다.
+
+파서 검증으로는 이런 걸 절대 못 잡는다. `DELIMITER`가 SQL이 아니라 `mysql` 클라이언트 명령이라 트리거 블록은 애초에 파서를 타지도 않는다.
 
 ## 어디서 도는가
 

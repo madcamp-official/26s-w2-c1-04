@@ -7,8 +7,12 @@
 3. 여기서 가입 트랜잭션이 `groups` 행을 `FOR UPDATE` 로 잠근다
 
 세 겹인 이유는 초대 코드를 두 사람이 동시에 입력하는 경합이 실제로 나기 때문이다.
-잠금이 없으면 둘 다 `member_count == 1` 을 읽고 둘 다 통과한다. 그때 트리거가 하나를
-막아주지만, 트리거만 믿으면 에러 메시지가 사용자에게 그대로 새어 나간다.
+잠금이 없으면 둘 다 `member_count == 1` 을 읽고 둘 다 통과한다.
+
+**그리고 DB 에러만 믿으면 안 되는 이유가 하나 더 있다.** 실측(backend/tests/test_schema_mysql.sh)
+해보니 그룹이 꽉 찬 상태에서 기존 멤버가 재가입하면 BEFORE INSERT 트리거가 UNIQUE(1062)보다
+먼저 터진다. 즉 `already_member` 가 `group_full` 로 둔갑한다. 그래서 아래 핸들러들은
+insert 하기 전에 선검사를 해서 정확한 에러 코드를 고른다.
 """
 
 from __future__ import annotations
