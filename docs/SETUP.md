@@ -196,42 +196,96 @@ journalctl -u memory-pager -f
 
 `<<UNIT`에 따옴표를 붙이지 않았다. 셸이 `$APP_HOME` 같은 변수를 먼저 풀어야 하기 때문이다.
 
-## 7. Cloudflare Tunnel
+## 7. Cloudflare Tunnel — 캠프 DNS 셀프서비스 API로
+
+> **`cloudflared tunnel login`을 하지 마라.** 그건 본인 Cloudflare 계정으로 도메인을 소유할 때의 흐름이다. `madcamp-kaist.org`는 운영진 소유이고, 우리는 API로 **이미 만들어진 터널의 토큰**을 받는다. `tunnel create`, `route dns`, `config.yml` 전부 필요 없다. ingress는 API가 관리한다.
+
+### 7-1. API 키를 셸에 둔다
 
 ```bash
-curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -o cloudflared.deb
-sudo dpkg -i cloudflared.deb
-cloudflared tunnel login          # 브라우저에서 도메인 인증
-cloudflared tunnel create memory-pager
-cloudflared tunnel route dns memory-pager <서브도메인>.<도메인>
+export API_KEY="dns_발급받은키"     # 절대 커밋하지 마라
+export BASE_URL="https://dns.madcamp-kaist.org"
+
+curl -s -H "Authorization: Bearer $API_KEY" $BASE_URL/v1/me
 ```
 
-`~/.cloudflared/config.yml`:
+응답의 `subdomain`(예: `team04.madcamp-kaist.org`)이 우리 몫이다. 아래에서 `SUB`로 쓴다.
 
-```yaml
-tunnel: memory-pager
-credentials-file: /home/ubuntu/.cloudflared/<UUID>.json
+> **쓰기 요청은 1분에 10회 제한**이다. 실패해도 연타하지 마라.
 
-ingress:
-  - hostname: <서브도메인>.<도메인>
-    service: http://localhost:8000
-  - service: http_status:404
-```
+### 7-2. cloudflared 설치 (VM당 딱 한 번)
 
 ```bash
-cloudflared tunnel run memory-pager
-# 또는: sudo cloudflared service install
+uname -m                                  # x86_64 → amd64
+curl -L --output cloudflared.deb \
+  https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+dpkg -i cloudflared.deb
+cloudflared --version
 ```
 
-**WebSocket은 별도 설정이 필요 없다.** ingress에 `http://localhost:8000`만 등록하면 Tunnel이 자동으로 프록시한다. Socket.IO의 기본 하트비트(25초)가 유휴 종료를 막는다.
-
-밖에서 확인:
+### 7-3. 터널 등록 → 설치 명령어 받기
 
 ```bash
-curl -s https://<서브도메인>.<도메인>/v1/health
+curl -s -X POST -H "Authorization: Bearer $API_KEY" $BASE_URL/v1/tunnels
 ```
+
+응답의 `installCommand`를 **그대로 복사해서 실행**한다. 토큰이 그 안에 들어 있다.
+
+```bash
+sudo cloudflared service install eyJhIjoi...
+systemctl status cloudflared          # active (running) 이어야 한다
+```
+
+**`installCommand`는 이 POST 응답에서만 보여준다.** 나중에 다시 필요하면 `GET /v1/tunnels/token`.
+
+### 7-4. 호스트네임을 8000번 포트에 연결
+
+```bash
+export SUB="team04"                   # /v1/me 의 subdomain 앞부분
+
+curl -s -X POST \
+  -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" \
+  -d "{\"subdomain\": \"$SUB\", \"localPort\": 8000}" \
+  $BASE_URL/v1/tunnels/hostnames
+```
+
+`name`을 생략하면 `@`, 즉 **서브도메인 자체**(`$SUB.madcamp-kaist.org`)가 `localhost:8000`으로 연결된다. 앱 하나뿐이니 이걸로 충분하다. 나중에 프론트를 따로 띄우려면 `"name": "api"`처럼 이름을 줘서 하나 더 만들면 된다.
+
+**포트 제약이 우리 구성과 맞물린다.**
+
+| 규칙 | 우리 상황 |
+|---|---|
+| `localPort`는 1024~65535 | 8000 ✅ |
+| 3306(MySQL)·22(SSH) 등은 차단 | MySQL을 노출할 일이 없다 ✅ |
+| 연결 대상은 항상 VM의 `127.0.0.1` | uvicorn을 `--host 127.0.0.1`로 띄운 이유다 ✅ |
+| 프로토콜은 `http`만 | uvicorn이 평문 HTTP다. TLS는 Cloudflare가 붙인다 ✅ |
+
+### 7-5. 확인
+
+**서버가 떠 있어야 한다.** 터널만 붙여봐야 502다.
+
+```bash
+curl -s localhost:8000/v1/health                      # VM 안에서
+curl -s https://$SUB.madcamp-kaist.org/v1/health      # 밖에서
+```
+
+안 되면 순서대로 본다.
+
+1. `systemctl status cloudflared` — 연결됐나
+2. `curl localhost:8000/v1/health` — 서버가 떠 있나
+3. `curl -s -H "Authorization: Bearer $API_KEY" $BASE_URL/v1/tunnels` — 호스트네임이 등록됐나
+
+### 7-6. Socket.IO는 그냥 통과한다
+
+이 터널은 **HTTP ingress**다. WebSocket은 HTTP Upgrade로 시작하므로 그대로 지나간다. Socket.IO도 마찬가지다. 별도 설정이 없다.
+
+앱은 `wss://$SUB.madcamp-kaist.org/socket.io/`에 붙고, 네임스페이스는 `/rt`다. Socket.IO 기본 하트비트(25초)가 유휴 종료를 막는다.
+
+다만 **순수 TCP·UDP·WebRTC 미디어는 이 터널로 나가지 못한다.** 우리가 실시간 계층을 Socket.IO로 고른 이유가 이것이다([STACK.md](STACK.md), [SPEC.md](SPEC.md) 5.1절).
 
 여기까지 초록불이면 **Day 1의 관통 절반이 끝난 것**이다. 나머지 절반은 폰에서 소켓이 붙는 것.
+
+> **레코드 한도는 DNS 레코드와 터널 호스트네임을 합산한다.** `GET /v1/me`의 `recordLimit`으로 확인한다.
 
 ---
 
