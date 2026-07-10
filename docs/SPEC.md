@@ -12,7 +12,7 @@
 | 서버 ② GPU | **Ubuntu 20.04** / vCPU 40 / RAM 50GB / DISK 100GB / **RTX 3090 (VRAM 20GB) ×1** |
 | 성격 | 포트폴리오용 사이드 프로젝트. **보안 하드닝은 범위 밖**(1.2절) |
 | 원본 | `기능정의서 2조.xlsx` (**우선**), `몰입캠프 2주차 Team 4.docx` (보조) |
-| 관련 문서 | [ERD.md](ERD.md) · [BACKLOG.md](BACKLOG.md) |
+| 관련 문서 | [API.md](API.md) · [ERD.md](ERD.md) · [STACK.md](STACK.md) · [BACKLOG.md](BACKLOG.md) |
 
 > **문서 우선순위 원칙.** 두 원본이 충돌하면 **기능정의서를 따른다.** 기획 문서에만 있고 기능정의서에 없는 기능은 구현 범위에서 빼고 [BACKLOG.md](BACKLOG.md)에 기능 후보로 분리했다.
 
@@ -179,9 +179,9 @@
 ║  FastAPI (:8000)              ║       ║  LLM 서빙 (상주, :8100)          ║
 ║  ├─ REST Router               ║──────▶║   펫 활동·대사·일기 캡션         ║
 ║  ├─ Socket.IO Server          ║  HTTP ║                                  ║
-║  ├─ Media Server (/media/*)   ║◀──────║  SD 1.5 추론 (자정 배치)         ║
-║  └─ Scheduler                 ║ 이미지 ║   일기 그림 생성                 ║
-║                               ║  업로드║                                  ║
+║  ├─ Media Server (/media/*)   ║◀──────║  SD 1.5 추론 (자정 배치, :8200)  ║
+║  └─ Scheduler                 ║  PNG  ║   일기 그림 생성                 ║
+║                               ║  응답  ║                                  ║
 ║  MySQL 8                      ║       ║  SD LoRA 학습 (새벽 배치, P2)    ║
 ║  파일시스템 (미디어)          ║       ║  파일시스템 (모델 가중치)        ║
 ╚═══════════════════════════════╝       ╚══════════════════════════════════╝
@@ -191,7 +191,7 @@
    Flutter App (Android)
 ```
 
-> **두 대다.** 앱 VM이 상태(DB·미디어)를 전부 쥐고, GPU 서버는 **상태 없는 추론 워커**다. GPU 서버가 만든 이미지는 앱 VM의 미디어 엔드포인트로 올려 보낸다. 이렇게 하면 GPU 서버가 죽어도 앱은 계속 돌고, 펫 대사는 `pet_activities` 캐시로 버틴다.
+> **두 대다.** 앱 VM이 상태(DB·미디어)를 전부 쥐고, GPU 서버는 **상태 없는 추론 워커**다. 앱 VM이 GPU 서버를 동기 HTTP로 부르고 PNG 바이트를 받아 저장한다. 이렇게 하면 GPU 서버가 죽어도 앱은 계속 돌고, 펫 대사는 `pet_activities` 캐시로 버틴다. 내부 API는 [API.md](API.md) 11절.
 >
 > **앱 VM의 RAM이 4GB뿐이다.** MySQL 8의 `innodb_buffer_pool_size` 기본값(128MB)을 크게 올리지 마라. 이미지 리사이즈 같은 무거운 작업도 앱 VM에서 하지 않는다.
 >
