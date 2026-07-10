@@ -1,0 +1,20 @@
+# Memory Pager — GPU 서버, LLM 서빙 전용 venv
+#
+# Ubuntu 20.04 의 시스템 Python 3.8 로는 아무것도 깔리지 않는다. 절대 건드리지 말고 uv 로 3.11 을 격리 설치할 것.
+#   uv venv --python 3.11 ~/envs/vllm
+#   source ~/envs/vllm/bin/activate && pip install -r gpu/requirements-vllm.txt
+#
+# SD 환경(gpu/requirements-sd.txt)과 torch 핀이 충돌하므로 venv 를 반드시 나눈다.
+# HF_HOME 은 두 venv 가 공유해 같은 가중치를 두 번 받지 않게 한다.
+#
+# torch 를 여기서 직접 핀하지 마라. vLLM 이 호환 버전을 끌어온다.
+
+vllm==0.24.0    # requires Python>=3.10,<3.15. CUDA 12.9 wheel 기본. --enable-sleep-mode 지원
+
+# 기동 (docs/STACK.md 2절):
+#   VLLM_SERVER_DEV_MODE=1 vllm serve LGAI-EXAONE/EXAONE-3.5-7.8B-Instruct-AWQ \
+#     --gpu-memory-utilization 0.4 --max-model-len 8192 --max-num-seqs 16 \
+#     --enable-sleep-mode --port 8100
+#
+# VLLM_SERVER_DEV_MODE=1 이 없으면 /sleep 엔드포인트가 404 다.
+# 기동 후 nvidia-smi 로 점유가 약 8GB 인지 확인할 것. 18GB 면 --gpu-memory-utilization 이 안 먹은 것이다.

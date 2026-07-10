@@ -241,7 +241,9 @@ KCLOUD VM + Cloudflare Tunnel 환경에서:
 | C→S | `doodle:viewed` | `{doodle_id}` | SD-6 |
 | C→S | `poke:send` | `{to_user_id}` | SD-7 |
 
-**사라지기 모드 흐름.** 수신자가 뷰어에서 낙서를 열면 `doodle:viewed`를 보낸다. 서버는 `doodle_receipts`에 최초 확인 시각을 기록하고(중복 확인은 무시) `expires_at = now + 5s`를 세팅한 뒤, 5초 후 `deleted_at`을 채우고 미디어 파일을 실제로 지운 다음 `doodle:expired`를 룸에 브로드캐스트한다. 앱이 그 사이에 종료되어도 스케줄러의 만료 스윕이 정리한다.
+**사라지기 모드 흐름.** 수신자가 뷰어에서 낙서를 열면 `doodle:viewed`를 보낸다. 서버는 `doodle_receipts`에 최초 확인 시각을 기록하고(`UNIQUE` 제약이 중복 확인을 막는다) `expires_at = now + 5s`를 세팅한 뒤, 5초 후 `deleted_at`을 채우고 미디어 파일을 실제로 지운 다음 `doodle:expired`를 룸에 브로드캐스트한다.
+
+> **이 5초를 스케줄러 폴링으로 구현하면 안 된다.** 1초마다 DB를 스캔하면 최악 5초 지연에 매초 부하가 얹힌다. 확인 시점에 `loop.call_later(5, ...)`로 지연 태스크 하나를 걸고, `doodle_id → TimerHandle`을 들고 있다가 조기 삭제 시 취소한다. 타이머는 프로세스 인메모리이므로 **서버 재기동 시 부팅 스윕**으로 보강한다 — `expires_at`이 지난 건 즉시 정리하고, 아직 안 지난 건 남은 시간으로 재스케줄한다. 이 때문에 uvicorn은 **단일 프로세스**로 돌린다. 구현 상세는 [STACK.md](STACK.md) 6절.
 
 **소켓과 푸시의 역할 분담.** 앱이 켜져 있으면 Socket.IO가, 백그라운드면 FCM 푸시(SD-7, SD-8, MR-1)가 알린다. 위젯 갱신은 FCM data 메시지로 트리거한다.
 
@@ -280,19 +282,23 @@ KCLOUD VM + Cloudflare Tunnel 환경에서:
 
 ### 6.4 GPU 자원 경합
 
-3090 한 대가 LLM 서빙과 SD를 겸한다. **VRAM은 24GB가 아니라 20GB다.** 이 절의 수치는 아직 실측이 아니라 추정이며, 환경 구성 후 반드시 재야 한다.
+3090 한 대가 LLM 서빙과 SD를 겸한다. **VRAM은 24GB가 아니라 20GB다.** 상세 예산표와 근거는 [STACK.md](STACK.md) 2절에 있다. 여기서는 결론만 옮긴다.
 
-| 워크로드 | 성격 | VRAM (추정) |
+| 워크로드 | 성격 | VRAM |
 |---|---|---|
-| LLM 서빙 (4-bit 7~8B) | **상주** | 5~8GB |
+| LLM 서빙 — EXAONE 3.5 7.8B AWQ, `--gpu-memory-utilization 0.4` | **상주** | **8GB (상한 고정)** |
 | SD 1.5 추론 (일기 그림 1장) | 자정 배치 | 4~6GB |
-| SD 1.5 LoRA 학습 (512px, batch 1) | 새벽 배치 (P2) | 8~12GB |
-| Qwen3-VL 4B 4-bit (최고의 낙서) | 월말 배치 (P2, 미도입) | 6~8GB |
+| SD 1.5 LoRA 학습 (512px, batch 1, 8-bit Adam) | 새벽 배치 (P2) | 6~8GB |
+| Qwen3-VL 4B AWQ (최고의 낙서) | 월말 배치 (P2, 미도입) | 6~9GB |
 
-- **상주 LLM + SD 추론**은 합 9~14GB로 20GB 안에 들어간다. 자정 일기 배치는 LLM을 내리지 않아도 된다.
-- **상주 LLM + LoRA 학습**은 합 13~20GB로 상한이 딱 20GB에 닿는다. **학습 중에는 LLM을 내린다.** 펫 대사가 `pet_activities`에 캐싱되어 있어 앱은 정상 동작하고, 활동 생성만 잠시 멈춘다.
-- **SDXL은 쓰지 않는다.** SDXL LoRA 학습은 20GB에서 사실상 불가능하다. SD 1.5로 간다.
-- vLLM 계열 서버는 기본적으로 카드 메모리를 크게 선점하므로, 다른 프로세스와 공존하려면 점유율을 명시적으로 낮춰야 한다.
+- **상주 LLM + SD 추론** = 12~14GB. 자정 일기 배치는 LLM을 내리지 않아도 된다.
+- **상주 LLM + LoRA 학습** = 14~16GB. 헤드룸이 4~6GB 남아 **동시 실행이 가능하다.** 다만 안전하게 가려면 학습 동안 LLM을 sleep 시킨다.
+- **셋 동시(LLM + SD + VL)는 20~23GB로 불가능하다.** 반드시 시간대를 가른다.
+- **SDXL은 쓰지 않는다.** 단독 학습은 20GB에 들어가지만(피크 13~15GB) 상주 LLM과는 21~23GB로 공존하지 못한다. SD 1.5로 간다.
+
+**교대는 프로세스를 죽여서 하지 않는다.** vLLM을 `--enable-sleep-mode`로 띄우면 `POST /sleep`으로 가중치를 CPU RAM에 오프로드하고 GPU를 비웠다가, `POST /wake_up`으로 3~6초 만에 되살릴 수 있다. `--gpu-memory-utilization 0.4`가 상주 상한을 8GB로 못박고, sleep이 그 8GB마저 비운다. 이 둘이 20GB 공존의 축이다.
+
+> **이전 버전의 수치 두 개가 틀렸다.** SD 1.5 LoRA 학습을 8~12GB로, Qwen3-VL 4B를 6~8GB로 적었는데, 앞의 것은 SDXL 수치였고 뒤의 것은 AWQ가 비전 인코더를 고정밀로 유지한다는 사실을 놓쳤다. 정정 내역은 [STACK.md](STACK.md) 8절.
 
 ### 6.5 이번 달 최고의 낙서 (MR-3)
 

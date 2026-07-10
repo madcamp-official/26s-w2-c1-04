@@ -8,8 +8,22 @@ FastAPI + Socket.IO + MySQL 8. 설계 근거는 [../docs/SPEC.md](../docs/SPEC.m
 |---|---|
 | `schema.sql` | 작성 완료. **DDL의 원본이다.** |
 | `app/models.py` | 작성 완료. SQLAlchemy 2.0. schema.sql과 1:1 대응 |
-| `requirements.txt` | 미작성 — 환경 조사 결과 대기 중 |
+| `requirements.txt` | 작성 완료. 버전 근거는 [../docs/STACK.md](../docs/STACK.md) 3절 |
 | `app/db.py`, 라우터, Socket.IO 서버 | 미작성 |
+
+## 설치
+
+24.04는 PEP 668로 시스템 pip 설치를 막는다. **반드시 venv 안에서.**
+
+```bash
+python3 -m venv ~/envs/api
+source ~/envs/api/bin/activate
+pip install -r backend/requirements.txt
+```
+
+`uvicorn`은 반드시 `[standard]` 옵션으로 깔린다. 순정 uvicorn은 websockets 구현이 없어 Socket.IO의 WS 업그레이드가 실패한다. Socket.IO는 `app.mount()`가 아니라 `socketio.ASGIApp(sio, other_asgi_app=fastapi_app)`으로 감싼다. 함정 네 가지는 [STACK.md](../docs/STACK.md) 5절.
+
+**uvicorn을 단일 프로세스로 돌린다.** 사라지기 모드의 5초 타이머가 프로세스 인메모리라 워커를 늘리면 공유되지 않는다.
 
 ## 검증한 것
 
