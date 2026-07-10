@@ -7,7 +7,7 @@
 |---|---|---|
 | IP | 172.10.7.229 | 192.168.0.20 (사설망) |
 | OS | Ubuntu **22.04** (Python 3.10) | Ubuntu **22.04** (Python 3.10) |
-| 스펙 | 4 vCPU / **4GB RAM** / 100GB | 40 vCPU / 50GB RAM / 100GB / RTX 3090 **20GB** |
+| 스펙 | 4 vCPU / **4GB RAM** / 100GB | 40 vCPU / 50GB RAM / 100GB / RTX 3090 **24GB** |
 | 개방 포트 | 22 · 80 · 443 | (외부 노출 안 함) |
 | 공개 주소 | **`https://anjonghwa.madcamp-kaist.org`** (Cloudflare Tunnel) | 없음 |
 | 도는 것 | FastAPI, Socket.IO, MySQL 8, 미디어 | vLLM, SD 1.5 |
@@ -393,19 +393,21 @@ source ~/envs/vllm/bin/activate
 pip install -r gpu/requirements-vllm.txt
 
 VLLM_SERVER_DEV_MODE=1 vllm serve LGAI-EXAONE/EXAONE-3.5-7.8B-Instruct-AWQ \
-  --gpu-memory-utilization 0.4 \
+  --gpu-memory-utilization 0.35 \
   --max-model-len 8192 --max-num-seqs 16 \
   --enable-sleep-mode --port 8100
 ```
 
+`--gpu-memory-utilization`은 24GB의 비율이다. `0.35`면 약 8.4GB로 상한이 고정된다.
+
 **두 가지를 반드시 확인한다.**
 
 ```bash
-nvidia-smi                              # 점유가 약 8GB 여야 한다
+nvidia-smi                              # 점유가 약 8GB대 여야 한다
 curl -s localhost:8100/is_sleeping      # 404 가 나오면 VLLM_SERVER_DEV_MODE 가 안 먹은 것
 ```
 
-18GB가 잡히면 `--gpu-memory-utilization` 인자가 안 들어간 것이다. 그러면 SD가 못 올라온다.
+기본값(0.9)으로 뜨면 약 22GB를 선점해 SD가 못 올라온다. 반드시 `0.35`가 들어갔는지 확인한다.
 
 ## 5. Stable Diffusion 1.5
 
@@ -414,7 +416,7 @@ source ~/envs/sd/bin/activate
 pip install -r gpu/requirements-sd.txt
 ```
 
-**SDXL은 쓰지 않는다.** 단독 학습은 20GB에 들어가지만(피크 13~15GB) 상주 LLM과는 21~23GB로 공존하지 못한다. SD 1.5는 추론 4~6GB, LoRA 학습 6~8GB라 LLM을 켠 채로 돌아간다.
+**SDXL은 쓰지 않는다.** 24GB에서 상주 LLM과 겨우 공존은 하나(합 21~23GB) 헤드룸이 없어 OOM 위험이 있다. SD 1.5는 추론 4~6GB, LoRA 학습 6~8GB라 여유 있게 LLM을 켠 채로 돌아간다.
 
 무거운 배치(LoRA 학습) 직전에는 vLLM을 재운다:
 

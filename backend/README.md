@@ -70,7 +70,7 @@ DATABASE_URL='mysql+asyncmy://root:root@127.0.0.1:3306/memory_pager?charset=utf8
 | | 앱 VM (172.10.7.229) | GPU 서버 (192.168.0.20) |
 |---|---|---|
 | OS | Ubuntu 22.04 (Python 3.10) | Ubuntu 22.04 (Python 3.10) |
-| 스펙 | 4 vCPU / **4GB RAM** / 100GB | 40 vCPU / 50GB RAM / 100GB / RTX 3090 20GB |
+| 스펙 | 4 vCPU / **4GB RAM** / 100GB | 40 vCPU / 50GB RAM / 100GB / RTX 3090 24GB |
 | 이 디렉터리의 코드 | **여기서 돈다** | 돌지 않는다 |
 | 그 밖에 | MySQL 8, 미디어 파일 | LLM 서빙, SD 추론·학습 |
 

@@ -14,8 +14,8 @@ accelerate          # 학습/추론 런처
 peft                # LoRA 학습·로딩
 bitsandbytes        # 8-bit Adam. LoRA 학습에서 VRAM 을 아낀다
 
-# VRAM (docs/STACK.md 2절, 검증됨):
+# VRAM (docs/STACK.md 2절, 검증됨. 카드는 실측 24GB):
 #   SD 1.5 추론 (512px, fp16, 1장)              4~6GB   -> 상주 LLM 켠 채로 가능
-#   SD 1.5 LoRA 학습 (512px, batch1, 8bit Adam) 6~8GB   -> 상주 LLM 켠 채로 가능 (헤드룸 4~6GB)
+#   SD 1.5 LoRA 학습 (512px, batch1, 8bit Adam) 6~8GB   -> 상주 LLM 켠 채로 가능 (24GB 에서 헤드룸 8~10GB)
 #
-# SDXL 은 쓰지 않는다. 단독 학습은 20GB 에 들어가지만(피크 13~15GB) 상주 LLM 과 공존이 불가능하다.
+# SDXL 은 쓰지 않는다. 24GB 에서 상주 LLM 과 겨우 공존은 하나(합 21~23GB) 헤드룸이 없어 OOM 위험이 있다.

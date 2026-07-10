@@ -14,7 +14,7 @@
 | | ① 앱 VM (172.10.7.229) | ② GPU 서버 (192.168.0.20) |
 |---|---|---|
 | OS | Ubuntu **22.04** (기본 Python 3.10) | Ubuntu **22.04** (기본 Python 3.10) |
-| 스펙 | 4 vCPU / **4GB RAM** / 100GB | 40 vCPU / 50GB RAM / 100GB / RTX 3090 **20GB** |
+| 스펙 | 4 vCPU / **4GB RAM** / 100GB | 40 vCPU / 50GB RAM / 100GB / RTX 3090 **24GB** |
 | 도는 것 | FastAPI, Socket.IO, MySQL 8, 미디어 서빙, 스케줄러 | vLLM(LLM 서빙), SD 1.5 추론·학습 |
 | Python | **시스템 3.10으로 충분.** venv만 만든다 | **시스템 3.10으로 충분.** venv만 만든다 |
 
@@ -26,37 +26,39 @@
 
 ---
 
-## 2. VRAM 예산 (20GB) — 검증된 수치
+## 2. VRAM 예산 (24GB) — 검증된 수치
+
+> **실측 결과 VRAM은 24GB다** (`nvidia-smi`: `24576MiB`). RTX 3090의 표준 용량이다. 초기 문서가 20GB로 가정했으나 실물이 24GB라, 아래 판정이 여럿 좋아진다 — 헤드룸이 4GB 더 있다.
 
 | 워크로드 | 실제 VRAM | 등급 |
 |---|---|---|
-| 상주 LLM (EXAONE 3.5 7.8B AWQ), `--gpu-memory-utilization 0.4` | **약 8GB (상한이 물리적으로 고정됨)** | ✅ |
-| 상주 LLM, 위 인자 **없이** (기본 0.9) | 약 18GB를 즉시 선점 | ✅ |
+| 상주 LLM (EXAONE 3.5 7.8B AWQ), `--gpu-memory-utilization 0.35` | **약 8.4GB (상한이 물리적으로 고정됨)** | ✅ |
+| 상주 LLM, 위 인자 **없이** (기본 0.9) | 약 22GB를 즉시 선점 | ✅ |
 | SD 1.5 추론 (512px, fp16, 1장) | 4~6GB | ✅ |
 | SD 1.5 **LoRA 학습** (512px, batch 1, 8-bit Adam) | **6~8GB** (저rank·텍스트인코더 미학습 시 4~6GB) | ✅ |
 | SDXL LoRA 학습 (batch 1 + grad ckpt + AdamW8bit) | 13~15GB (피크) | ✅ |
 | Qwen3-VL 4B AWQ (이미지 처리 총량) | **6~9GB** (가중치만 4.43GB) | ✅ / 🔬 |
 
-### 동시 실행 판정
+### 동시 실행 판정 (24GB 기준)
 
 | 조합 | 합산 | 판정 |
 |---|---|---|
-| 상주 LLM + SD 1.5 **추론** | 12~14GB | ✅ **동시 가능** (헤드룸 ~6GB). 자정 일기 배치에 LLM을 안 내려도 된다 |
-| 상주 LLM + SD 1.5 **LoRA 학습** | 14~16GB | ✅ **동시 가능** (헤드룸 4~6GB). 다만 안전하게 가려면 학습 동안 LLM을 sleep |
-| 상주 LLM + Qwen3-VL 4B | 14~17GB | ⚠️ 가능하지만 **헤드룸이 얇다**(3~6GB). 큰 이미지면 실측 필요 |
-| 셋 동시 | 20~23GB | ❌ **불가.** 반드시 시간대 분리 |
-| 상주 LLM + **SDXL** LoRA 학습 | 21~23GB | ❌ **불가** |
+| 상주 LLM + SD 1.5 **추론** | 12~14GB | ✅ **동시 가능** (헤드룸 ~10GB). 자정 일기 배치에 LLM을 안 내려도 된다 |
+| 상주 LLM + SD 1.5 **LoRA 학습** | 14~16GB | ✅ **동시 가능** (헤드룸 8~10GB). **sleep 없이도 여유가 있다** |
+| 상주 LLM + Qwen3-VL 4B | 14~17GB | ✅ **동시 가능** (헤드룸 7~10GB). 20GB 때는 얇았으나 24GB에서 편해졌다 |
+| 셋 동시 (LLM + SD + VL) | 20~23GB | ⚠️ 24GB에 아슬아슬. 시간대를 가르는 편이 안전하다 |
+| 상주 LLM + **SDXL** LoRA 학습 | 21~23GB | ⚠️ 24GB에 겨우 들어가나 헤드룸이 거의 없다. sleep 권장 |
 
-**SDXL은 단독으로는 20GB에 들어간다.** 다만 상주 LLM과 절대 공존하지 못해 매번 sleep을 강제하고 헤드룸도 얇다. 일기 그림에 SDXL 품질이 꼭 필요한 게 아니므로 **SD 1.5를 쓴다.**
+**SD 1.5를 쓴다.** 24GB에서 SDXL도 상주 LLM과 겨우 공존은 하지만 헤드룸이 없어 OOM 위험이 있다. 일기 그림에 SDXL 품질이 꼭 필요한 게 아니므로 여유 있는 SD 1.5로 간다.
 
 ### 교대 방법 — 프로세스를 죽이지 않는다
 
-vLLM **Sleep Mode**를 쓴다. ✅
+24GB에서는 대부분의 조합이 sleep 없이 공존한다. 그래도 **셋 동시**나 **SDXL 학습**을 돌릴 때는 vLLM **Sleep Mode**로 GPU를 비운다. ✅
 
 ```bash
 # 기동 시
 VLLM_SERVER_DEV_MODE=1 vllm serve LGAI-EXAONE/EXAONE-3.5-7.8B-Instruct-AWQ \
-  --gpu-memory-utilization 0.4 --max-model-len 8192 --max-num-seqs 16 \
+  --gpu-memory-utilization 0.35 --max-model-len 8192 --max-num-seqs 16 \
   --enable-sleep-mode --port 8100
 ```
 
@@ -65,7 +67,7 @@ VLLM_SERVER_DEV_MODE=1 vllm serve LGAI-EXAONE/EXAONE-3.5-7.8B-Instruct-AWQ \
 - 상태 확인: `GET /is_sleeping`
 - **`VLLM_SERVER_DEV_MODE=1`이 없으면 sleep 엔드포인트가 404다.** 이 함정을 기억할 것
 
-`--gpu-memory-utilization 0.4`가 상주 상한을 8GB로 못박고, sleep이 필요할 때 그 8GB마저 비운다. 이 둘이 단일 20GB에서 모든 워크로드를 공존시키는 축이다.
+**`--gpu-memory-utilization`은 24GB의 비율이다.** `0.35`면 약 8.4GB로 상한이 고정된다. 24GB에서 `0.4`를 주면 9.6GB가 되니, 상주 LLM을 8GB대로 유지하려면 `0.35`가 맞다. 이 캡과 sleep이 24GB에서 모든 워크로드를 공존시키는 축이다.
 
 ---
 
@@ -75,7 +77,7 @@ VLLM_SERVER_DEV_MODE=1 vllm serve LGAI-EXAONE/EXAONE-3.5-7.8B-Instruct-AWQ \
 
 | 구성요소 | 버전 | 등급 | 비고 |
 |---|---|---|---|
-| Python | 3.10 이상 | ✅ | **스택 최저선이 3.10이다.** OS 템플릿은 `ubuntu-24-pw`(3.12)였으나 실제 VM은 22.04(3.10)일 수 있다 — `mysql --version`이 `0ubuntu0.22.04.x`면 22.04다. 둘 다 동작한다 |
+| Python | 3.10 (시스템) | ✅ | 앱 VM은 Ubuntu 22.04. 스택 최저선이 3.10이라 시스템 Python 그대로 |
 | FastAPI | 0.139.0 | ✅ | 2026-07-01 최신 |
 | uvicorn[standard] | 0.51.0 | ✅ | **`[standard]`가 아니면 WebSocket 업그레이드가 실패한다** |
 | python-socketio | 5.16.3 | ✅ | Socket.IO v5 / Engine.IO v4 |
@@ -83,15 +85,15 @@ VLLM_SERVER_DEV_MODE=1 vllm serve LGAI-EXAONE/EXAONE-3.5-7.8B-Instruct-AWQ \
 | asyncmy | 0.2.11 | ✅ | cp39~cp313 prebuilt wheel (무컴파일) |
 | APScheduler | 3.11.3 | ✅ | 4.x는 alpha |
 | firebase-admin | 7.5.0 | ✅ | FCM data-only 메시지 |
-| MySQL | 8.0.x | ⚠️ | 20.04 apt는 검증됨. **24.04는 설치 후 `SELECT VERSION()`으로 확인할 것** |
+| MySQL | 8.0.x | ✅ | 22.04 apt 기본. 실측: `8.0.46-0ubuntu0.22.04.3` |
 
 ### GPU 서버
 
 | 구성요소 | 버전 | 등급 | 비고 |
 |---|---|---|---|
-| NVIDIA 드라이버 | 570 이상 | ✅ | CUDA 12.8 런타임 최소 570.26 |
+| NVIDIA 드라이버 | **595.71.05** | ✅ | 실측. CUDA 13.2 런타임. 3090에 이미 설치돼 있었다 |
 | CUDA 툴킷 | **설치하지 않음** | ✅ | torch가 CUDA 런타임을 wheel에 번들 |
-| Python | 3.11 (uv로 격리) | ✅ | 시스템 3.8은 건드리지 않는다 |
+| Python | 3.10 (시스템) | ✅ | GPU 서버도 22.04. uv·3.8 격리 불필요 |
 | vLLM | 0.24.0 | ✅ | `--enable-sleep-mode` 지원 |
 | torch | vLLM env에서는 **핀하지 말 것** / SD env는 2.9.0 | ✅ / ⚠️ | vLLM이 호환 torch를 끌어온다 |
 | diffusers | 0.39.0 | ✅ | 2026-07-03 최신 |
@@ -179,7 +181,7 @@ Cloudflare Tunnel의 유휴 종료는 Socket.IO 기본 하트비트(pingInterval
 
 | 갈림길 | 결정 | 이유 |
 |---|---|---|
-| vLLM vs Ollama | **vLLM** | Sleep Mode와 `--gpu-memory-utilization` 캡. 단일 20GB 교대의 핵심이며 Ollama에 동등한 것이 없다 |
+| vLLM vs Ollama | **vLLM** | Sleep Mode와 `--gpu-memory-utilization` 캡. 단일 카드 교대의 핵심이며 Ollama에 동등한 것이 없다 |
 | asyncmy vs aiomysql | **asyncmy** | Cython 성능 + prebuilt wheel(무컴파일). *"aiomysql은 죽었다"는 근거는 틀렸다 — 8절 참조* |
 | Alembic | **미도입** | 7일간 스키마가 계속 흔들린다. `schema.sql` 하나로 DROP/CREATE 하는 게 빠르다 |
 | Docker | **미사용** | 4절 참조. vLLM만 예외적 폴백 |
