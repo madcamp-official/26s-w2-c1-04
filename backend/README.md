@@ -9,7 +9,27 @@ FastAPI + Socket.IO + MySQL 8. 설계 근거는 [../docs/SPEC.md](../docs/SPEC.m
 | `schema.sql` | 작성 완료. **DDL의 원본이다.** |
 | `app/models.py` | 작성 완료. SQLAlchemy 2.0. schema.sql과 1:1 대응 |
 | `requirements.txt` | 작성 완료. 버전 근거는 [../docs/STACK.md](../docs/STACK.md) 3절 |
-| `app/db.py`, 라우터, Socket.IO 서버 | 미작성 |
+| `app/config.py` | 작성 완료. `.env` 로드 |
+| `app/db.py` | 작성 완료. 엔진은 lifespan에서 지연 생성한다 |
+| `app/ephemeral.py` | 작성 완료. 사라지기 모드 타이머. **테스트 7/7 통과** |
+| `app/gpu.py` | 작성 완료. 스텁 ↔ 실물을 같은 인터페이스 뒤에 둠 |
+| `app/realtime.py` | 작성 완료. Socket.IO 서버, ack 포함 |
+| `app/main.py` | 작성 완료. `/v1/health` 동작 확인 |
+| 라우터 (auth, groups, doodles, pets, reports) | 미작성 |
+
+## 실행
+
+```bash
+uvicorn app.main:asgi --host 0.0.0.0 --port 8000
+```
+
+**`--workers`를 주지 마라.** 사라지기 모드의 5초 타이머가 프로세스 인메모리다. 워커를 늘리면 타이머가 공유되지 않아 낙서가 사라지지 않는다.
+
+DB와 GPU가 없어도 서버는 뜬다. `GET /v1/health`가 `{"db":"down","gpu":"stub"}`을 돌려준다. **앱 개발이 인프라에 막히지 않게 하려는 것이다.** `GPU_ENABLED=true`로 바꾸면 실제 추론을 부른다.
+
+```bash
+python tests/test_ephemeral.py   # 의존성 없이 돈다
+```
 
 ## 설치
 

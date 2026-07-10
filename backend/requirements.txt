@@ -14,8 +14,9 @@ sqlalchemy[asyncio]==2.0.51  # 2.1 은 아직 beta 라 2.0.x 고정. requires Py
 asyncmy==0.2.11              # MySQL async 드라이버. cp39~cp313 prebuilt wheel 이라 컴파일 불필요
 apscheduler==3.11.3          # AsyncIOScheduler. 4.x 는 alpha
 firebase-admin==7.5.0        # FCM data-only 메시지 (위젯 갱신, 찌르기, 낙서 수신, 월간 알람)
-# --- 아래 넷은 조사에서 버전을 검증하지 않았다. 핀 없이 설치한 뒤 pip freeze 로 고정할 것. ---
+httpx==0.28.1                # GPU 서버 호출 (LLM / SD). 로컬에서 설치·동작 확인함
+pydantic-settings==2.14.2    # .env 로드. 로컬에서 설치·동작 확인함
+
+# --- 아래 둘은 아직 검증하지 않았다. 핀 없이 설치한 뒤 pip freeze 로 고정할 것. ---
 python-multipart             # 낙서 전송이 multipart 업로드다
 pillow                       # 썸네일 정도만. 무거운 이미지 처리는 GPU 서버로 넘긴다 (앱 VM RAM 4GB)
-httpx                        # GPU 서버 호출 (LLM / SD)
-pydantic-settings            # .env 로드
