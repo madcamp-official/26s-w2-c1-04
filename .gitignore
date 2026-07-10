@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# 환경 변수 / 로컬 설정
+.env
+.env.*
+!.env.example
+
+# 미디어 · 모델 가중치 (VM 파일시스템에 둔다. 레포에 넣지 않는다)
+media/
+models/
+*.safetensors
+*.ckpt
+*.bin
+*.pt
+
+# Flutter / Dart
+app/build/
+app/.dart_tool/
+app/.flutter-plugins
+app/.flutter-plugins-dependencies
+app/android/local.properties
+app/android/key.properties
+*.jks
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
