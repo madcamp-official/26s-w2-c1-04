@@ -1,13 +1,9 @@
-// Memory Pager — Flutter app (Android). Real screens are built per docs/API.md.
+// Memory Pager — Flutter app (Android). Entry point.
 import 'package:flutter/material.dart';
 
-void main() => runApp(const MemoryPagerApp());
+import 'app.dart';
 
-class MemoryPagerApp extends StatelessWidget {
-  const MemoryPagerApp({super.key});
-  @override
-  Widget build(BuildContext context) => const MaterialApp(
-        title: 'Memory Pager',
-        home: Scaffold(body: Center(child: Text('Memory Pager'))),
-      );
+void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(const MemoryPagerApp());
 }
