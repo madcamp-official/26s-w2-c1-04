@@ -155,9 +155,29 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                CpEyebrow('MEMORY PAGER'),
-                const SizedBox(height: 10),
-                Text(_title(), style: cpSans(size: 26, weight: FontWeight.w600)),
+                Row(
+                  children: [
+                    const Icon(Icons.favorite, size: 15, color: cpEuc),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Memory Pager',
+                      style: cpSerif(
+                        size: 15,
+                        color: cpInkA(0.6),
+                        weight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  _title(),
+                  style: cpSerif(
+                    size: 26,
+                    weight: FontWeight.w600,
+                    style: FontStyle.normal,
+                  ),
+                ),
                 const SizedBox(height: 8),
                 Text(_subtitle(),
                     style: cpSans(size: 13, color: cpInkA(0.5), height: 1.5)),
@@ -172,8 +192,17 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 },
                 if (_error != null) ...[
                   const SizedBox(height: 18),
-                  Text(_error!,
-                      style: cpSans(size: 12, color: const Color(0xFFB5654A))),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.error_outline, size: 15, color: cpEuc),
+                      const SizedBox(width: 7),
+                      Expanded(
+                        child: Text(_error!,
+                            style: cpSans(size: 12, color: cpEuc)),
+                      ),
+                    ],
+                  ),
                 ],
               ],
             ),
@@ -274,16 +303,20 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         if (g != null) _InviteCard(code: g.inviteCode, groupName: g.name),
         const SizedBox(height: 24),
         if (partner == null)
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: cpPrint,
-              borderRadius: BorderRadius.circular(2),
-              border: Border.all(color: cpInkA(0.10), width: 0.5),
-            ),
-            child: Text(
-              '아직 상대가 들어오지 않았어요.\n상대가 코드로 들어오면 설정에서 별명을 지어줄 수 있어요.',
-              style: cpSans(size: 13, color: cpInkA(0.6), height: 1.5),
+          CpMatted(
+            mat: 18,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.hourglass_empty, size: 20, color: cpInkA(0.4)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    '아직 상대가 들어오지 않았어요.\n상대가 코드로 들어오면 설정에서 별명을 지어줄 수 있어요.',
+                    style: cpSans(size: 13, color: cpInkA(0.6), height: 1.5),
+                  ),
+                ),
+              ],
             ),
           )
         else ...[
@@ -317,11 +350,18 @@ class _InviteCard extends StatelessWidget {
       inset: 12,
       child: Column(
         children: [
+          Icon(Icons.mail_outline, size: 22, color: cpEucA(0.7)),
+          const SizedBox(height: 12),
           CpEyebrow('$groupName · 초대 코드', size: 9),
           const SizedBox(height: 12),
           SelectableText(
             code.isEmpty ? '—' : code,
-            style: cpSans(size: 24, weight: FontWeight.w600, spacing: 3),
+            style: cpSerif(
+              size: 24,
+              weight: FontWeight.w600,
+              style: FontStyle.normal,
+              spacing: 3,
+            ),
           ),
           const SizedBox(height: 10),
           Text('이 코드를 상대에게 보내주세요',
@@ -342,12 +382,16 @@ class _StepDots extends StatelessWidget {
     return Row(
       children: [
         for (int i = 0; i < 4; i++) ...[
-          Container(
-            width: 22,
-            height: 2,
-            color: i <= step ? cpEuc : cpInkA(0.12),
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            width: i == step ? 24 : 18,
+            height: 5,
+            decoration: BoxDecoration(
+              color: i <= step ? cpEuc : cpInkA(0.12),
+              borderRadius: BorderRadius.circular(cpRadiusPill),
+            ),
           ),
-          if (i != 3) const SizedBox(width: 6),
+          if (i != 3) const SizedBox(width: 7),
         ],
       ],
     );

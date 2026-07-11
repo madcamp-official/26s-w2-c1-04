@@ -1,11 +1,13 @@
-// Cold Press — reusable widgets for the Memory Pager app.
+// Sumone — reusable widgets for the Memory Pager app.
 //
-// The signature ornament is a hairline passe-partout ([CpMatted]): content
-// floats in a wide off-white mat, framed by a single 0.5px inset keyline.
-// Everything else is quiet — tracked-caps eyebrows, hairline rules, one accent.
+// A warm cream ground, soft rounded cards, one gentle heart-pink accent, and
+// generous whitespace. Chrome is drawn with Material OUTLINED line icons — never
+// emoji. Pet CHARACTERS stay hand-drawn (PetView); only glyphs/chrome are icons.
 //
 // All names are PUBLIC (no underscores). Widgets are built against the real app
-// domain models in `../core/models.dart`, not the design-lab mock data.
+// domain models in `../core/models.dart`, not the design-lab mock data. Token
+// NAMES (cpMist/cpInk/cpEuc/…) are kept from the previous system so screens keep
+// importing them; only their VALUES and this styling changed.
 
 import 'package:flutter/material.dart';
 
@@ -16,7 +18,7 @@ import 'theme.dart';
 // Send-mode labels
 // ===========================================================================
 // The real [SendMode] enum ({normal, ephemeral}) is a wire contract and carries
-// no display copy, so the Cold Press label/description live here.
+// no display copy, so the label/description live here.
 
 /// Korean label for a [SendMode] tab ('일반' / '사라지기').
 String cpSendModeLabel(SendMode mode) => switch (mode) {
@@ -30,11 +32,12 @@ String cpSendModeDescription(SendMode mode) => switch (mode) {
       SendMode.ephemeral => '확인 후 사라짐 · 레포트 미반영',
     };
 
-/// Glyph standing in for a doodle's content when no thumbnail/strokes exist.
-String cpContentGlyph(ContentType type) => switch (type) {
-      ContentType.photo => '📷',
-      ContentType.drawing => '✏️',
-      ContentType.text => '✍️',
+/// The line icon standing in for a doodle's content when no thumbnail/strokes
+/// exist. A vector Material outlined icon — NOT an emoji.
+IconData cpContentIcon(ContentType type) => switch (type) {
+      ContentType.photo => Icons.image_outlined,
+      ContentType.drawing => Icons.brush_outlined,
+      ContentType.text => Icons.notes_outlined,
     };
 
 // ===========================================================================
@@ -75,25 +78,29 @@ class CpScaffold extends StatelessWidget {
           children: [
             if (_hasHeader)
               Padding(
-                padding: const EdgeInsets.fromLTRB(28, 14, 28, 0),
+                padding: const EdgeInsets.fromLTRB(24, 16, 24, 4),
                 child: Row(
                   children: [
                     if (leading != null) ...[
                       leading!,
-                      const SizedBox(width: 10),
+                      const SizedBox(width: 12),
                     ],
                     if (title != null)
                       Expanded(
                         child: Text(
                           title!,
-                          style: cpSans(size: 20, weight: FontWeight.w600),
+                          style: cpSerif(
+                            size: 22,
+                            weight: FontWeight.w600,
+                            style: FontStyle.normal,
+                          ),
                         ),
                       )
                     else
                       const Spacer(),
                     if (actions != null)
                       for (final a in actions!) ...[
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 10),
                         a,
                       ],
                   ],
@@ -109,11 +116,12 @@ class CpScaffold extends StatelessWidget {
 }
 
 // ===========================================================================
-// Passe-partout — THE signature
+// Card — THE surface
 // ===========================================================================
 
-/// The hairline passe-partout: [child] floats inside a [mat] of [matColor],
-/// framed by a single 0.5px inset [keyline]. The one ornament of Cold Press.
+/// A soft rounded card ([cpRadiusCard]) on warm white [matColor], framed by a
+/// subtle warm border and a gentle shadow. Replaces the old hairline mat: the
+/// signature surface is now soft and pastel, not a boxy 0.5px keyline.
 class CpMatted extends StatelessWidget {
   const CpMatted({
     super.key,
@@ -121,36 +129,43 @@ class CpMatted extends StatelessWidget {
     this.mat = 18,
     this.inset = 0,
     this.matColor = cpPrint,
-    this.radius = 2,
-    this.keyline = 0.30,
+    this.radius = cpRadiusCard,
+    this.keyline = 0, // retained for source compatibility; no longer drawn.
   });
 
   final Widget child;
+
+  /// Inner padding of the card.
   final double mat;
+
+  /// Extra padding inside the card, around [child].
   final double inset;
   final double radius;
 
-  /// Ink opacity (0..1) of the inset keyline.
+  /// Retained so existing callers compile; the soft card no longer draws an
+  /// inset keyline.
   final double keyline;
   final Color matColor;
 
   @override
   Widget build(BuildContext context) {
     return Container(
+      padding: EdgeInsets.all(mat),
       decoration: BoxDecoration(
         color: matColor,
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: cpInkA(0.07)),
+        border: Border.all(color: cpInkA(0.06)),
+        boxShadow: [
+          BoxShadow(
+            color: cpInkA(0.05),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
-      padding: EdgeInsets.all(mat),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(radius),
-          border: Border.all(color: cpInkA(keyline), width: 0.5),
-        ),
-        padding: EdgeInsets.all(inset),
-        child: child,
-      ),
+      child: inset > 0
+          ? Padding(padding: EdgeInsets.all(inset), child: child)
+          : child,
     );
   }
 }
@@ -159,9 +174,10 @@ class CpMatted extends StatelessWidget {
 // Small quiet primitives
 // ===========================================================================
 
-/// Tracked-caps eyebrow label. Uppercases [text] and dims [color] to 0.55.
+/// A soft label voice (the eyebrow). Gentle, small, slightly muted — no longer
+/// tracked all-caps. Dims [color] for a calm secondary read.
 class CpEyebrow extends StatelessWidget {
-  const CpEyebrow(this.text, {super.key, this.color = cpInk, this.size = 10});
+  const CpEyebrow(this.text, {super.key, this.color = cpInk, this.size = 11});
 
   final String text;
   final Color color;
@@ -170,15 +186,15 @@ class CpEyebrow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Text(
-      text.toUpperCase(),
-      style: cpEyebrowStyle(color: color.withOpacity(0.55), size: size),
+      text,
+      style: cpEyebrowStyle(color: color.withValues(alpha: 0.6), size: size),
     );
   }
 }
 
 /// A 1px hairline rule at ink opacity [opacity].
 class CpHair extends StatelessWidget {
-  const CpHair({super.key, this.opacity = 0.10});
+  const CpHair({super.key, this.opacity = 0.08});
 
   final double opacity;
 
@@ -187,7 +203,8 @@ class CpHair extends StatelessWidget {
       Container(height: 1, color: cpInkA(opacity));
 }
 
-/// A quiet, chromeless icon tap target (20px glyph at 0.7 ink).
+/// A soft circular icon button — a warm-white disc with a subtle border and a
+/// line icon in muted ink. Used for back/leading and top-bar actions.
 class CpIconButton extends StatelessWidget {
   const CpIconButton({super.key, required this.icon, required this.onTap});
 
@@ -199,16 +216,23 @@ class CpIconButton extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.all(4),
+      child: Container(
+        width: 40,
+        height: 40,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: cpPrint,
+          shape: BoxShape.circle,
+          border: Border.all(color: cpInkA(0.07)),
+        ),
         child: Icon(icon, size: 20, color: cpInkA(0.7)),
       ),
     );
   }
 }
 
-/// A primary action button. [filled] (default) is ink on ground; unfilled is a
-/// hairline outline with ink text. Tracked caps, radius 2 — no Material chrome.
+/// A primary, pill-shaped action button. [filled] (default) is a soft pink pill
+/// with warm-white text; unfilled is a pink outline with pink text.
 class CpPrimaryButton extends StatelessWidget {
   const CpPrimaryButton({
     super.key,
@@ -227,21 +251,28 @@ class CpPrimaryButton extends StatelessWidget {
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 13),
         decoration: BoxDecoration(
-          color: filled ? cpInk : Colors.transparent,
-          borderRadius: BorderRadius.circular(2),
-          border: filled
-              ? null
-              : Border.all(color: cpInkA(0.45), width: 0.5),
+          color: filled ? cpEuc : Colors.transparent,
+          borderRadius: BorderRadius.circular(cpRadiusPill),
+          border: filled ? null : Border.all(color: cpEucA(0.5)),
+          boxShadow: filled
+              ? [
+                  BoxShadow(
+                    color: cpEucA(0.28),
+                    blurRadius: 14,
+                    offset: const Offset(0, 6),
+                  ),
+                ]
+              : null,
         ),
         child: Text(
           label,
           style: cpSans(
-            size: 12,
-            color: filled ? cpMist : cpInk,
+            size: 14,
+            color: filled ? cpPrint : cpEuc,
             weight: FontWeight.w600,
-            spacing: 1.6,
+            spacing: 0.3,
           ),
         ),
       ),
@@ -249,8 +280,8 @@ class CpPrimaryButton extends StatelessWidget {
   }
 }
 
-/// A Cold Press text field: optional eyebrow [label], hairline underline that
-/// warms to [cpEuc] on focus, and a quiet [hint].
+/// A rounded text field: an optional soft eyebrow [label] over a warm-white
+/// filled box that warms its border to [cpEuc] on focus, with a quiet [hint].
 class CpTextField extends StatelessWidget {
   const CpTextField({
     super.key,
@@ -282,14 +313,19 @@ class CpTextField extends StatelessWidget {
           style: cpSans(size: 16),
           decoration: InputDecoration(
             isDense: true,
+            filled: true,
+            fillColor: cpPrint,
             hintText: hint,
             hintStyle: cpSans(size: 16, color: cpInkA(0.35)),
-            contentPadding: const EdgeInsets.symmetric(vertical: 8),
-            enabledBorder: UnderlineInputBorder(
-              borderSide: BorderSide(color: cpInkA(0.18), width: 0.5),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(cpRadiusSmall),
+              borderSide: BorderSide(color: cpInkA(0.10)),
             ),
-            focusedBorder: const UnderlineInputBorder(
-              borderSide: BorderSide(color: cpEuc, width: 1),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(cpRadiusSmall),
+              borderSide: const BorderSide(color: cpEuc, width: 1.4),
             ),
           ),
         ),
@@ -302,8 +338,8 @@ class CpTextField extends StatelessWidget {
 // Send controls
 // ===========================================================================
 
-/// The send-mode toggle: one underlined tab per [SendMode], the selected one
-/// inked and warmed with a [cpEuc] underline. Labels come from
+/// The send-mode toggle: a soft pill segmented control on [cpDim]. The selected
+/// segment lifts to a warm-white pill with pink text. Labels come from
 /// [cpSendModeLabel]; pair with [cpSendModeDescription] for the caption line.
 class CpModeToggle extends StatelessWidget {
   const CpModeToggle(this.value, this.onChanged, {super.key});
@@ -313,13 +349,18 @@ class CpModeToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        for (final m in SendMode.values) ...[
-          _tab(m),
-          if (m != SendMode.values.last) const SizedBox(width: 12),
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: cpDim,
+        borderRadius: BorderRadius.circular(cpRadiusPill),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final m in SendMode.values) _tab(m),
         ],
-      ],
+      ),
     );
   }
 
@@ -328,33 +369,39 @@ class CpModeToggle extends StatelessWidget {
     return GestureDetector(
       onTap: () => onChanged(m),
       behavior: HitTestBehavior.opaque,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            cpSendModeLabel(m),
-            style: cpSans(
-              size: 14,
-              color: selected ? cpInk : cpInkA(0.4),
-              weight: selected ? FontWeight.w600 : FontWeight.w400,
-              spacing: 0.6,
-            ),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 9),
+        decoration: BoxDecoration(
+          color: selected ? cpPrint : Colors.transparent,
+          borderRadius: BorderRadius.circular(cpRadiusPill),
+          boxShadow: selected
+              ? [
+                  BoxShadow(
+                    color: cpInkA(0.06),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
+        ),
+        child: Text(
+          cpSendModeLabel(m),
+          style: cpSans(
+            size: 14,
+            color: selected ? cpEuc : cpInkA(0.45),
+            weight: selected ? FontWeight.w600 : FontWeight.w500,
+            spacing: 0.3,
           ),
-          const SizedBox(height: 7),
-          Container(
-            height: 1.5,
-            width: 48,
-            color: selected ? cpEuc : cpInkA(0.08),
-          ),
-        ],
+        ),
       ),
     );
   }
 }
 
-/// Minimal stroke-thickness control (no Material Slider chrome): a hairline
-/// track, a small square stone thumb, and a live preview dot of the ink
-/// [color]. [value] and the [onChanged] output range over 1..20.
+/// A soft stroke-thickness control: a rounded track, a pink circular thumb ringed
+/// in warm white, and a live preview dot in the ink [color]. [value] and the
+/// [onChanged] output range over 1..20.
 class CpThickness extends StatelessWidget {
   const CpThickness({
     super.key,
@@ -387,16 +434,38 @@ class CpThickness extends StatelessWidget {
             child: Stack(
               alignment: Alignment.centerLeft,
               children: [
-                Container(width: w, height: 1, color: cpInkA(0.14)),
-                Container(width: t * w, height: 1.5, color: cpEucA(0.8)),
+                Container(
+                  width: w,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: cpInkA(0.12),
+                    borderRadius: BorderRadius.circular(cpRadiusPill),
+                  ),
+                ),
+                Container(
+                  width: t * w,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: cpEucA(0.75),
+                    borderRadius: BorderRadius.circular(cpRadiusPill),
+                  ),
+                ),
                 Align(
                   alignment: Alignment(-1 + 2 * t, 0),
                   child: Container(
-                    width: 4,
-                    height: 22,
+                    width: 18,
+                    height: 18,
                     decoration: BoxDecoration(
-                      color: cpInk,
-                      borderRadius: BorderRadius.circular(1),
+                      color: cpEuc,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: cpPrint, width: 2.5),
+                      boxShadow: [
+                        BoxShadow(
+                          color: cpInkA(0.10),
+                          blurRadius: 5,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -420,17 +489,18 @@ class CpThickness extends StatelessWidget {
   }
 }
 
-/// A quiet square action (glyph tile + label). [accent] warms it to eucalyptus.
+/// A rounded action tile: a line [icon] over a [label]. [accent] warms the tile
+/// and icon to the pink accent.
 class CpAction extends StatelessWidget {
   const CpAction({
     super.key,
-    required this.glyph,
+    required this.icon,
     required this.label,
     required this.onTap,
     this.accent = false,
   });
 
-  final String glyph;
+  final IconData icon;
   final String label;
   final VoidCallback onTap;
   final bool accent;
@@ -444,18 +514,21 @@ class CpAction extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 52,
-            height: 52,
+            width: 54,
+            height: 54,
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: accent ? cpEucA(0.12) : cpPrint,
-              borderRadius: BorderRadius.circular(2),
+              borderRadius: BorderRadius.circular(cpRadiusSmall),
               border: Border.all(
-                color: accent ? cpEucA(0.5) : cpInkA(0.12),
-                width: 0.5,
+                color: accent ? cpEucA(0.4) : cpInkA(0.08),
               ),
             ),
-            child: Text(glyph, style: const TextStyle(fontSize: 20)),
+            child: Icon(
+              icon,
+              size: 24,
+              color: accent ? cpEuc : cpInkA(0.7),
+            ),
           ),
           const SizedBox(height: 8),
           Text(
@@ -463,7 +536,7 @@ class CpAction extends StatelessWidget {
             style: cpSans(
               size: 11,
               color: accent ? cpEuc : cpInkA(0.6),
-              spacing: 0.6,
+              spacing: 0.3,
             ),
           ),
         ],
@@ -476,7 +549,7 @@ class CpAction extends StatelessWidget {
 // Pet pieces
 // ===========================================================================
 
-/// A coin count pill on [cpDim] with a 🪙 glyph.
+/// A coin-count pill on [cpDim] with a small PAINTED gold coin (no emoji).
 class CpCoins extends StatelessWidget {
   const CpCoins(this.coins, {super.key});
 
@@ -485,20 +558,24 @@ class CpCoins extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
       decoration: BoxDecoration(
         color: cpDim,
-        borderRadius: BorderRadius.circular(2),
-        border: Border.all(color: cpInkA(0.10), width: 0.5),
+        borderRadius: BorderRadius.circular(cpRadiusPill),
+        border: Border.all(color: cpInkA(0.06)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text('🪙', style: TextStyle(fontSize: 13)),
+          const SizedBox(
+            width: 14,
+            height: 14,
+            child: CustomPaint(painter: _CoinPainter()),
+          ),
           const SizedBox(width: 8),
           Text(
             '$coins',
-            style: cpSans(size: 13, weight: FontWeight.w600, spacing: 0.5),
+            style: cpSans(size: 13, weight: FontWeight.w600, spacing: 0.3),
           ),
         ],
       ),
@@ -506,8 +583,40 @@ class CpCoins extends StatelessWidget {
   }
 }
 
-/// A small speech slip — a printed card the pet "says" on a pat. Framed by a
-/// eucalyptus hairline. Carries a stable key so it fades cleanly in switchers.
+/// Paints a small gold coin: a filled [cpGold] disc with a subtle lighter inner
+/// ring for a minted look. Purely decorative — the count lives beside it.
+class _CoinPainter extends CustomPainter {
+  const _CoinPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = size.center(Offset.zero);
+    final r = size.width / 2;
+    canvas.drawCircle(
+      center,
+      r,
+      Paint()
+        ..color = cpGold
+        ..isAntiAlias = true,
+    );
+    canvas.drawCircle(
+      center,
+      r * 0.6,
+      Paint()
+        ..color = cpMist.withValues(alpha: 0.55)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = r * 0.18
+        ..isAntiAlias = true,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _CoinPainter oldDelegate) => false;
+}
+
+/// A soft rounded speech bubble — a warm-white slip the pet "says" on a pat,
+/// framed by a gentle pink border. Carries a stable key so it fades cleanly in
+/// switchers.
 class CpSpeechSlip extends StatelessWidget {
   const CpSpeechSlip(this.text, {super.key});
 
@@ -517,11 +626,18 @@ class CpSpeechSlip extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       constraints: const BoxConstraints(maxWidth: 300),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
       decoration: BoxDecoration(
         color: cpPrint,
-        borderRadius: BorderRadius.circular(2),
-        border: Border.all(color: cpEucA(0.45), width: 0.5),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: cpEucA(0.3)),
+        boxShadow: [
+          BoxShadow(
+            color: cpInkA(0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 5),
+          ),
+        ],
       ),
       child: Text(
         text,
@@ -532,8 +648,8 @@ class CpSpeechSlip extends StatelessWidget {
   }
 }
 
-/// A hairline progress bar toward the next level. [growth] is 0..1; the eyebrow
-/// reads [levelLabel] (default '다음 레벨') and the percentage is shown in accent.
+/// A soft rounded progress bar toward the next level. [growth] is 0..1; the
+/// eyebrow reads [levelLabel] (default '다음 레벨') and the percentage is in accent.
 class CpGrowth extends StatelessWidget {
   const CpGrowth(this.growth, {super.key, this.levelLabel = '다음 레벨'});
 
@@ -549,27 +665,26 @@ class CpGrowth extends StatelessWidget {
         children: [
           Row(
             children: [
-              CpEyebrow(levelLabel, size: 9),
+              CpEyebrow(levelLabel, size: 10),
               const Spacer(),
               Text(
                 '$pct%',
-                style:
-                    cpSans(size: 11, color: cpEuc, weight: FontWeight.w600),
+                style: cpSans(size: 11, color: cpEuc, weight: FontWeight.w600),
               ),
             ],
           ),
           const SizedBox(height: 8),
           ClipRRect(
-            borderRadius: BorderRadius.circular(1),
+            borderRadius: BorderRadius.circular(cpRadiusPill),
             child: LayoutBuilder(
               builder: (context, c) {
                 final w = c.maxWidth;
                 return Stack(
                   children: [
-                    Container(width: w, height: 3, color: cpInkA(0.10)),
+                    Container(width: w, height: 6, color: cpInkA(0.10)),
                     Container(
                       width: w * growth.clamp(0.0, 1.0),
-                      height: 3,
+                      height: 6,
                       color: cpEuc,
                     ),
                   ],
@@ -587,7 +702,7 @@ class CpGrowth extends StatelessWidget {
 // Album pieces
 // ===========================================================================
 
-/// A pill filter chip; selected chips warm to a eucalyptus keyline + tint.
+/// A pill filter chip; selected chips warm to a soft pink tint + border.
 class CpFilterChip extends StatelessWidget {
   const CpFilterChip({
     super.key,
@@ -608,22 +723,21 @@ class CpFilterChip extends StatelessWidget {
         onTap: onTap,
         behavior: HitTestBehavior.opaque,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
           decoration: BoxDecoration(
-            color: selected ? cpEucA(0.12) : Colors.transparent,
-            borderRadius: BorderRadius.circular(1),
+            color: selected ? cpEucA(0.12) : cpPrint,
+            borderRadius: BorderRadius.circular(cpRadiusPill),
             border: Border.all(
-              color: selected ? cpEucA(0.5) : cpInkA(0.14),
-              width: 0.5,
+              color: selected ? cpEucA(0.5) : cpInkA(0.10),
             ),
           ),
           child: Text(
             label,
             style: cpSans(
-              size: 11,
-              color: selected ? cpInk : cpInkA(0.55),
+              size: 12,
+              color: selected ? cpEuc : cpInkA(0.55),
               weight: selected ? FontWeight.w600 : FontWeight.w500,
-              spacing: 0.6,
+              spacing: 0.3,
             ),
           ),
         ),
@@ -637,8 +751,8 @@ class CpChipRow extends StatelessWidget {
   const CpChipRow({
     super.key,
     required this.children,
-    this.padding = const EdgeInsets.symmetric(horizontal: 28),
-    this.height = 34,
+    this.padding = const EdgeInsets.symmetric(horizontal: 24),
+    this.height = 40,
   });
 
   final List<Widget> children;
@@ -658,7 +772,8 @@ class CpChipRow extends StatelessWidget {
   }
 }
 
-/// A two-segment date/type sort toggle (inked pill segments).
+/// A two-segment date/type sort toggle — a soft pill control on [cpDim]; the
+/// active segment lifts to a warm-white pill. Tapping toggles [byDate].
 class CpSortToggle extends StatelessWidget {
   const CpSortToggle({super.key, required this.byDate, required this.onTap});
 
@@ -667,19 +782,29 @@ class CpSortToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Widget seg(String label, bool on) => Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+    Widget seg(String label, bool on) => AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
-            color: on ? cpInk : Colors.transparent,
-            borderRadius: BorderRadius.circular(1),
+            color: on ? cpPrint : Colors.transparent,
+            borderRadius: BorderRadius.circular(cpRadiusPill),
+            boxShadow: on
+                ? [
+                    BoxShadow(
+                      color: cpInkA(0.06),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : null,
           ),
           child: Text(
             label,
             style: cpSans(
-              size: 10,
-              color: on ? cpMist : cpInkA(0.45),
+              size: 11,
+              color: on ? cpInk : cpInkA(0.45),
               weight: FontWeight.w600,
-              spacing: 0.6,
+              spacing: 0.3,
             ),
           ),
         );
@@ -689,10 +814,11 @@ class CpSortToggle extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(3),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(2),
-          border: Border.all(color: cpInkA(0.12), width: 0.5),
+          color: cpDim,
+          borderRadius: BorderRadius.circular(cpRadiusPill),
         ),
         child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
             seg('날짜별', byDate),
             const SizedBox(width: 2),
@@ -704,7 +830,7 @@ class CpSortToggle extends StatelessWidget {
   }
 }
 
-/// A section header: a tracked-caps [eyebrow] over a [title], with an optional
+/// A section header: a soft [eyebrow] over a serif [title], with an optional
 /// [trailing] control (e.g. [CpSortToggle]) pinned to the right.
 class CpSectionHeader extends StatelessWidget {
   const CpSectionHeader({
@@ -728,8 +854,15 @@ class CpSectionHeader extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               CpEyebrow(eyebrow),
-              const SizedBox(height: 5),
-              Text(title, style: cpSans(size: 20, weight: FontWeight.w600)),
+              const SizedBox(height: 6),
+              Text(
+                title,
+                style: cpSerif(
+                  size: 20,
+                  weight: FontWeight.w600,
+                  style: FontStyle.normal,
+                ),
+              ),
             ],
           ),
         ),
@@ -801,13 +934,13 @@ class CpDoodlePainter extends CustomPainter {
       old.data != data || old.background != background;
 }
 
-/// A square thumbnail for a [Doodle].
+/// A soft-rounded square thumbnail for a [Doodle].
 ///
 /// If [strokes] are supplied it renders them with [CpDoodlePainter]; otherwise
-/// it falls back to a muted swatch derived deterministically from the doodle's
-/// id, with a content-type glyph. The fallback is an honest placeholder — it
-/// signals the *kind* of content, it never fakes a drawing that isn't there.
-/// [active] warms the keyline to eucalyptus.
+/// it falls back to a muted pastel swatch derived deterministically from the
+/// doodle's id, with a content-type line icon ([cpContentIcon]). The fallback is
+/// an honest placeholder — it signals the *kind* of content, it never fakes a
+/// drawing that isn't there. [active] warms the border to the pink accent.
 class CpDoodleThumb extends StatelessWidget {
   const CpDoodleThumb(
     this.doodle, {
@@ -827,20 +960,21 @@ class CpDoodleThumb extends StatelessWidget {
     final swatch = _swatch(doodle.id);
     final border = Border.all(
       color: active ? cpEucA(0.6) : cpInkA(0.06),
-      width: 0.5,
+      width: active ? 1.2 : 1,
     );
     final child = (strokes != null && strokes!.strokes.isNotEmpty)
         ? ClipRRect(
-            borderRadius: BorderRadius.circular(1),
+            borderRadius: BorderRadius.circular(cpRadiusSmall),
             child: CustomPaint(
               size: Size.square(size),
               painter: CpDoodlePainter(strokes!, background: cpPrint),
             ),
           )
         : Center(
-            child: Text(
-              cpContentGlyph(doodle.contentType),
-              style: TextStyle(fontSize: size * 0.44),
+            child: Icon(
+              cpContentIcon(doodle.contentType),
+              size: size * 0.42,
+              color: cpInkA(0.45),
             ),
           );
 
@@ -849,14 +983,14 @@ class CpDoodleThumb extends StatelessWidget {
       height: size,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(1),
+        borderRadius: BorderRadius.circular(cpRadiusSmall),
         border: border,
         gradient: strokes != null
             ? null
             : LinearGradient(
                 colors: [
-                  Color.alphaBlend(cpPrint.withOpacity(0.38), swatch.$1),
-                  Color.alphaBlend(cpPrint.withOpacity(0.38), swatch.$2),
+                  Color.alphaBlend(cpPrint.withValues(alpha: 0.55), swatch.$1),
+                  Color.alphaBlend(cpPrint.withValues(alpha: 0.55), swatch.$2),
                 ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
@@ -879,54 +1013,98 @@ class CpDoodleThumb extends StatelessWidget {
 // Bottom nav
 // ===========================================================================
 
-/// The three-tab bottom nav — '펫키우기' / '사진첩' / '소통'. The active tab is
-/// inked and topped with a short eucalyptus tick.
+/// One tab of [CpBottomNav]: a line [icon] (inactive), a [activeIcon] (usually
+/// the filled variant, shown when selected), and a short [label].
+class CpNavItem {
+  const CpNavItem({
+    required this.icon,
+    required this.activeIcon,
+    required this.label,
+  });
+
+  final IconData icon;
+  final IconData activeIcon;
+  final String label;
+}
+
+/// A soft floating bottom nav bar: warm cream, rounded top corners, a subtle top
+/// hairline and a gentle upward shadow. Each [items] entry is a line icon over a
+/// tiny label; the active tab lifts to a soft pink pill with the filled icon and
+/// pink label.
 class CpBottomNav extends StatelessWidget {
-  const CpBottomNav({super.key, required this.current, required this.onTap});
+  const CpBottomNav({
+    super.key,
+    required this.current,
+    required this.onTap,
+    required this.items,
+  });
 
   final int current;
   final ValueChanged<int> onTap;
-
-  static const List<String> labels = ['펫키우기', '사진첩', '소통'];
+  final List<CpNavItem> items;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
-        color: cpMist,
-        border: Border(top: BorderSide(color: Color(0x1A26282B))),
-      ),
-      padding: const EdgeInsets.fromLTRB(28, 12, 28, 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          for (var i = 0; i < labels.length; i++)
-            _item(labels[i], i, i == current),
+      decoration: BoxDecoration(
+        borderRadius:
+            const BorderRadius.vertical(top: Radius.circular(cpRadiusCard)),
+        boxShadow: [
+          BoxShadow(
+            color: cpInkA(0.05),
+            blurRadius: 18,
+            offset: const Offset(0, -6),
+          ),
         ],
+      ),
+      child: ClipRRect(
+        borderRadius:
+            const BorderRadius.vertical(top: Radius.circular(cpRadiusCard)),
+        child: Container(
+          decoration: BoxDecoration(
+            color: cpMist,
+            border: Border(top: BorderSide(color: cpInkA(0.06))),
+          ),
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+          child: Row(
+            children: [
+              for (var i = 0; i < items.length; i++)
+                Expanded(child: _item(items[i], i, i == current)),
+            ],
+          ),
+        ),
       ),
     );
   }
 
-  Widget _item(String label, int index, bool active) {
+  Widget _item(CpNavItem item, int index, bool active) {
     return GestureDetector(
       onTap: () => onTap(index),
       behavior: HitTestBehavior.opaque,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            height: 1.5,
-            width: 16,
-            color: active ? cpEuc : Colors.transparent,
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
+            decoration: BoxDecoration(
+              color: active ? cpEucA(0.12) : Colors.transparent,
+              borderRadius: BorderRadius.circular(cpRadiusPill),
+            ),
+            child: Icon(
+              active ? item.activeIcon : item.icon,
+              size: 22,
+              color: active ? cpEuc : cpInkA(0.4),
+            ),
           ),
-          const SizedBox(height: 7),
+          const SizedBox(height: 5),
           Text(
-            label,
+            item.label,
             style: cpSans(
-              size: 12,
-              color: active ? cpInk : cpInkA(0.4),
-              weight: active ? FontWeight.w600 : FontWeight.w400,
-              spacing: 0.8,
+              size: 10.5,
+              color: active ? cpEuc : cpInkA(0.4),
+              weight: active ? FontWeight.w600 : FontWeight.w500,
+              spacing: 0.2,
             ),
           ),
         ],
@@ -939,8 +1117,9 @@ class CpBottomNav extends StatelessWidget {
 // Empty state
 // ===========================================================================
 
-/// A quiet empty state — a dimmed [icon] over a single line of [text]. Used to
-/// honestly signal "nothing here yet" instead of faking content.
+/// A quiet empty state — a dimmed line [icon] in a soft disc over a single line
+/// of [text]. Used to honestly signal "nothing here yet" instead of faking
+/// content.
 class CpEmptyState extends StatelessWidget {
   const CpEmptyState({super.key, required this.icon, required this.text});
 
@@ -953,12 +1132,21 @@ class CpEmptyState extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 34, color: cpInkA(0.28)),
-          const SizedBox(height: 14),
+          Container(
+            width: 72,
+            height: 72,
+            alignment: Alignment.center,
+            decoration: const BoxDecoration(
+              color: cpDim,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, size: 32, color: cpInkA(0.3)),
+          ),
+          const SizedBox(height: 16),
           Text(
             text,
             textAlign: TextAlign.center,
-            style: cpSans(size: 13, color: cpInkA(0.5), spacing: 0.4),
+            style: cpSans(size: 13, color: cpInkA(0.5), spacing: 0.2),
           ),
         ],
       ),

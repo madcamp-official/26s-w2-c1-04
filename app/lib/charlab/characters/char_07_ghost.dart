@@ -44,7 +44,7 @@ class Char07 extends PetCharacter {
         'Holli Rose Art — Ghost Sticker (simple single thick outline)',
         'Cults3D — Flexi Kawaii Boo (adorable articulated ghost, kawaii dot eyes)',
         'tryfreetemplates — Hamster-in-ghost doodle (wavy hem, cream paper, clean lines)',
-        'Emojipedia — 👻 Ghost emoji (little raised arms, playful boo pose)',
+        'Emojipedia —  Ghost emoji (little raised arms, playful boo pose)',
         'Pinterest — Kawaii Ghost / Chibi Ghost boards (pastel, blush, floating)',
         'LINE Friends — soft rosy-cheeked minimal mascot family (hand-drawn warmth)',
       ];

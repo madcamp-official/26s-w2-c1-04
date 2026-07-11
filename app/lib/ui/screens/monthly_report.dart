@@ -128,8 +128,7 @@ class _MonthlyReportScreenState extends State<MonthlyReportScreen> {
                   _report(r),
                 if (_error != null) ...[
                   const SizedBox(height: 18),
-                  Text(_error!,
-                      style: cpSans(size: 12, color: const Color(0xFFB5654A))),
+                  Text(_error!, style: cpSans(size: 12, color: cpEuc)),
                 ],
               ],
             ),
@@ -286,13 +285,12 @@ class _LevelPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
         color: accent ? cpEucA(0.12) : cpPrint,
-        borderRadius: BorderRadius.circular(2),
+        borderRadius: BorderRadius.circular(cpRadiusPill),
         border: Border.all(
           color: accent ? cpEucA(0.5) : cpInkA(0.12),
-          width: 0.5,
         ),
       ),
       child: Text(text,
@@ -300,7 +298,7 @@ class _LevelPill extends StatelessWidget {
             size: 11,
             color: accent ? cpEuc : cpInkA(0.65),
             weight: FontWeight.w600,
-            spacing: 1,
+            spacing: 0.6,
           )),
     );
   }
@@ -326,13 +324,23 @@ class _Bar extends StatelessWidget {
                 style: cpSans(size: 12, weight: FontWeight.w600)),
           ],
         ),
-        const SizedBox(height: 7),
-        LayoutBuilder(
-          builder: (context, c) => Stack(
-            children: [
-              Container(width: c.maxWidth, height: 3, color: cpInkA(0.10)),
-              Container(width: c.maxWidth * frac, height: 3, color: cpEuc),
-            ],
+        const SizedBox(height: 8),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(cpRadiusPill),
+          child: LayoutBuilder(
+            builder: (context, c) => Stack(
+              children: [
+                Container(width: c.maxWidth, height: 8, color: cpInkA(0.10)),
+                Container(
+                  width: c.maxWidth * frac,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: cpEuc,
+                    borderRadius: BorderRadius.circular(cpRadiusPill),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ],
@@ -370,17 +378,24 @@ class _BestDoodle extends StatelessWidget {
                     size: Size.infinite,
                   )
                 : Center(
-                    child: Text('🖼', style: const TextStyle(fontSize: 40)),
+                    // No strokes to paint (photo, or a drawing without cached
+                    // strokes / behind a network URL we can't load offline). Show
+                    // an honest content-type line icon, never a faked drawing.
+                    child: Icon(
+                      _bestIcon(b),
+                      size: 40,
+                      color: cpInkA(0.3),
+                    ),
                   ),
           ),
         ),
         const SizedBox(height: 14),
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           decoration: BoxDecoration(
             color: cpEucA(0.10),
-            borderRadius: BorderRadius.circular(2),
-            border: Border.all(color: cpEucA(0.4), width: 0.5),
+            borderRadius: BorderRadius.circular(cpRadiusPill),
+            border: Border.all(color: cpEucA(0.4)),
           ),
           child: Text(_ruleLabel(b.rule),
               style: cpSans(size: 11, color: cpEuc, weight: FontWeight.w600)),
@@ -427,6 +442,16 @@ String _typeLabel(ContentType c) => switch (c) {
       ContentType.photo => '사진',
       ContentType.text => '텍스트',
     };
+
+/// The content-type line icon for a best doodle that can't be stroke-painted.
+/// Branches honestly on the doodle's own fields — a photo shows the image glyph,
+/// a drawing the brush glyph — and falls back to the neutral image glyph. A
+/// vector Material outlined icon, never an emoji.
+IconData _bestIcon(BestDoodle b) {
+  if (b.photoUrl != null) return Icons.image_outlined;
+  if (b.drawingUrl != null) return Icons.brush_outlined;
+  return Icons.image_outlined;
+}
 
 /// Tolerates a rule the app has never heard of (future vision selection).
 String _ruleLabel(BestDoodleRule r) => switch (r) {

@@ -1,21 +1,25 @@
-// Memory Pager — Pet diary (full-screen push target). Cold Press.
+// Memory Pager — Pet diary (full-screen push target). Sumone.
 //
 // 삐삐의 그림 일기장. `appState.loadDiaries(reset: true)` pulls the pet's diary
 // page (newest first) from the repo (REST/mock = source of truth); each entry is
-// a placeholder illustration (a deterministic gradient + activity glyph standing
-// in for `image_url`, which is a server media path we can't load) over a caption,
-// an `entry_date`, and a `style.kind` badge (기본/학습).
+// a placeholder illustration (a deterministic gradient + an activity LINE ICON
+// standing in for `image_url`, which is a server media path we can't load) over
+// a caption, an `entry_date`, and a `style.kind` badge (기본/학습).
 //
-// The one narrative beat: the day `style.kind` flips `default → learned` — "우리
+// The one narrative beat: the day `style.kind` flips `default -> learned` — "우리
 // 그림체를 배운 날". In the newest-first list that transition is the adjacent pair
 // where the newer entry is `learned` and the older one is still `default`; a quiet
-// eucalyptus boundary is drawn there and dated to the learned entry. When the
+// heart-pink boundary is drawn there and dated to the learned entry. When the
 // boundary isn't present in the loaded page (all-default, all-learned, or the
 // default era hasn't paged in yet) nothing is invented — the divider simply
 // doesn't appear.
 //
-// Cold Press throughout: cpMist ground, slate ink, one eucalyptus accent, 0.5px
-// keyline mats, tracked-caps eyebrows, sharp radius, generous whitespace.
+// A soft entry card near the top opens the couple's [MonthlyReportScreen] (push).
+//
+// Sumone throughout: warm cream ground, soft brown ink, one heart-pink accent,
+// rounded pastel cards (cpRadiusCard/cpRadiusSmall/cpRadiusPill), a serif voice
+// for headers, and generous whitespace. Chrome is Material OUTLINED line icons —
+// never emoji; pet CHARACTERS stay hand-drawn elsewhere (PetView).
 
 import 'package:flutter/material.dart';
 
@@ -23,6 +27,7 @@ import '../../core/app_state.dart';
 import '../../core/models.dart';
 import '../components.dart';
 import '../theme.dart';
+import 'monthly_report.dart';
 
 // ===========================================================================
 // Screen (public name + const ctor preserved — app.dart depends on both)
@@ -90,6 +95,13 @@ class _PetDiaryScreenState extends State<PetDiaryScreen> {
         icon: Icons.arrow_back,
         onTap: () => Navigator.of(context).maybePop(),
       ),
+      actions: [
+        // Quick access to the couple's monthly report (also linked in-list).
+        CpIconButton(
+          icon: Icons.insights_outlined,
+          onTap: () => _openReport(context),
+        ),
+      ],
       body: ListenableBuilder(
         listenable: appState,
         builder: (context, _) {
@@ -115,6 +127,14 @@ class _PetDiaryScreenState extends State<PetDiaryScreen> {
       ),
     );
   }
+}
+
+/// Push the couple's monthly report. Shared by the top-bar action and the
+/// in-list entry card.
+void _openReport(BuildContext context) {
+  Navigator.of(context).push<void>(
+    MaterialPageRoute<void>(builder: (_) => const MonthlyReportScreen()),
+  );
 }
 
 // ===========================================================================
@@ -147,7 +167,9 @@ class _PdList extends StatelessWidget {
         total: diaries.length,
         learnedCount: learnedCount,
       ),
-      const SizedBox(height: 22),
+      const SizedBox(height: 18),
+      _PdReportEntry(onTap: () => _openReport(context)),
+      const SizedBox(height: 24),
     ];
 
     // Newest-first: render each card, and drop a "learned" boundary right below
@@ -175,7 +197,7 @@ class _PdList extends StatelessWidget {
     ));
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(28, 10, 28, 36),
+      padding: const EdgeInsets.fromLTRB(24, 12, 24, 36),
       children: children,
     );
   }
@@ -198,15 +220,18 @@ class _PdIntro extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const CpEyebrow('PET DIARY'),
-        const SizedBox(height: 6),
-        Text('$name의 그림 일기', style: cpSans(size: 22, weight: FontWeight.w600)),
+        const CpEyebrow('펫의 하루'),
         const SizedBox(height: 8),
         Text(
-          '$name가 하루를 그림으로 남겼어요. 우리 그림체를 배운 날부터 그림의 결이 달라져요.',
-          style: cpSans(size: 13, color: cpInkA(0.55), height: 1.55),
+          '$name의 그림 일기',
+          style: cpSerif(size: 24, weight: FontWeight.w600, style: FontStyle.normal),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
+        Text(
+          '$name가 하루를 그림으로 남겼어요. 우리 그림체를 배운 날부터 그림의 결이 달라져요.',
+          style: cpSans(size: 13, color: cpInkA(0.55), height: 1.6),
+        ),
+        const SizedBox(height: 16),
         Row(
           children: [
             _PdCountPill(label: '일기', value: '$total'),
@@ -224,7 +249,7 @@ class _PdIntro extends StatelessWidget {
   }
 }
 
-/// A tiny value+label stat pill for the intro row.
+/// A tiny value+label stat pill for the intro row — a soft rounded pill.
 class _PdCountPill extends StatelessWidget {
   const _PdCountPill({
     required this.label,
@@ -239,14 +264,11 @@ class _PdCountPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
         color: accent ? cpEucA(0.10) : cpDim,
-        borderRadius: BorderRadius.circular(2),
-        border: Border.all(
-          color: accent ? cpEucA(0.5) : cpInkA(0.10),
-          width: 0.5,
-        ),
+        borderRadius: BorderRadius.circular(cpRadiusPill),
+        border: Border.all(color: accent ? cpEucA(0.45) : cpInkA(0.07)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -257,7 +279,7 @@ class _PdCountPill extends StatelessWidget {
               size: 13,
               weight: FontWeight.w600,
               color: accent ? cpEuc : cpInk,
-              spacing: 0.4,
+              spacing: 0.3,
             ),
           ),
           const SizedBox(width: 7),
@@ -266,10 +288,75 @@ class _PdCountPill extends StatelessWidget {
             style: cpSans(
               size: 11,
               color: accent ? cpEuc : cpInkA(0.55),
-              spacing: 0.4,
+              spacing: 0.3,
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// A soft rounded menu row that opens the couple's [MonthlyReportScreen]. A pink
+/// disc icon, a title + subtitle, and a chevron — the Sumone entry-row pattern.
+class _PdReportEntry extends StatelessWidget {
+  const _PdReportEntry({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: cpPrint,
+          borderRadius: BorderRadius.circular(cpRadiusCard),
+          border: Border.all(color: cpInkA(0.06)),
+          boxShadow: [
+            BoxShadow(
+              color: cpInkA(0.05),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: cpEucA(0.12),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.insights_outlined,
+                  size: 22, color: cpEuc),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '월간 레포트',
+                    style: cpSans(size: 15, weight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    '이번 달 우리 기록을 한눈에 돌아봐요',
+                    style: cpSans(size: 12, color: cpInkA(0.5)),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Icon(Icons.chevron_right, size: 22, color: cpInkA(0.3)),
+          ],
+        ),
       ),
     );
   }
@@ -288,8 +375,7 @@ class _PdDiaryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final learned = diary.style.kind == StyleKind.learned;
     return CpMatted(
-      mat: 14,
-      keyline: learned ? 0.14 : 0.24,
+      mat: 16,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -311,7 +397,7 @@ class _PdDiaryCard extends StatelessWidget {
           const SizedBox(height: 10),
           Text(
             diary.caption,
-            style: cpSans(size: 14, height: 1.55),
+            style: cpSans(size: 14, height: 1.6),
           ),
           if (diary.activities.isNotEmpty) ...[
             const SizedBox(height: 14),
@@ -331,7 +417,7 @@ class _PdDiaryCard extends StatelessWidget {
 
 /// Honest stand-in for `image_url` (a server media path we cannot fetch, and
 /// must not on web): a deterministic two-tone gradient seeded from the diary id
-/// plus the day's activity glyph. It signals *the kind of* entry; it never
+/// plus the day's activity LINE ICON. It signals *the kind of* entry; it never
 /// pretends to be the real illustration.
 class _PdPlaceholderImage extends StatelessWidget {
   const _PdPlaceholderImage({required this.diary, required this.learned});
@@ -342,23 +428,22 @@ class _PdPlaceholderImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final swatch = _pdSwatch(diary.id);
-    final glyph = diary.activities.isNotEmpty
-        ? _pdActivityGlyph(diary.activities.first)
-        : '📖';
+    final icon = diary.activities.isNotEmpty
+        ? _pdActivityIcon(diary.activities.first)
+        : Icons.auto_stories_outlined;
     return AspectRatio(
       aspectRatio: 4 / 3,
       child: Container(
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(1),
+          borderRadius: BorderRadius.circular(cpRadiusSmall),
           border: Border.all(
-            color: learned ? cpEucA(0.45) : cpInkA(0.10),
-            width: 0.5,
+            color: learned ? cpEucA(0.4) : cpInkA(0.08),
           ),
           gradient: LinearGradient(
             colors: [
-              Color.alphaBlend(cpPrint.withOpacity(0.42), swatch.$1),
-              Color.alphaBlend(cpPrint.withOpacity(0.42), swatch.$2),
+              Color.alphaBlend(cpPrint.withValues(alpha: 0.5), swatch.$1),
+              Color.alphaBlend(cpPrint.withValues(alpha: 0.5), swatch.$2),
             ],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
@@ -366,10 +451,16 @@ class _PdPlaceholderImage extends StatelessWidget {
         ),
         child: Stack(
           children: [
-            Center(child: Text(glyph, style: const TextStyle(fontSize: 44))),
+            Center(
+              child: Icon(
+                icon,
+                size: 46,
+                color: learned ? cpEucA(0.75) : cpInkA(0.45),
+              ),
+            ),
             Positioned(
-              left: 12,
-              bottom: 10,
+              left: 14,
+              bottom: 12,
               child: CpEyebrow(
                 learned ? '학습 그림체' : '기본 그림체',
                 color: cpInk,
@@ -383,7 +474,7 @@ class _PdPlaceholderImage extends StatelessWidget {
   }
 }
 
-/// The `style.kind` badge (기본/학습 그림체) shown on every card.
+/// The `style.kind` badge (기본/학습 그림체) shown on every card — a soft pill.
 class _PdStyleBadge extends StatelessWidget {
   const _PdStyleBadge({required this.style});
 
@@ -394,20 +485,17 @@ class _PdStyleBadge extends StatelessWidget {
     final learned = style.kind == StyleKind.learned;
     final fg = learned ? cpEuc : cpInkA(0.55);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
       decoration: BoxDecoration(
         color: learned ? cpEucA(0.12) : cpDim,
-        borderRadius: BorderRadius.circular(2),
-        border: Border.all(
-          color: learned ? cpEucA(0.5) : cpInkA(0.10),
-          width: 0.5,
-        ),
+        borderRadius: BorderRadius.circular(cpRadiusPill),
+        border: Border.all(color: learned ? cpEucA(0.45) : cpInkA(0.08)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (learned) ...[
-            const Text('🎨', style: TextStyle(fontSize: 11)),
+            const Icon(Icons.palette_outlined, size: 13, color: cpEuc),
             const SizedBox(width: 6),
           ],
           Text(
@@ -416,14 +504,18 @@ class _PdStyleBadge extends StatelessWidget {
               size: 11,
               color: fg,
               weight: FontWeight.w600,
-              spacing: 0.4,
+              spacing: 0.3,
             ),
           ),
           if (style.version > 0) ...[
             const SizedBox(width: 6),
             Text(
               'v${style.version}',
-              style: cpSans(size: 10, color: fg.withOpacity(0.7), spacing: 0.4),
+              style: cpSans(
+                size: 10,
+                color: fg.withValues(alpha: 0.7),
+                spacing: 0.3,
+              ),
             ),
           ],
         ],
@@ -432,7 +524,7 @@ class _PdStyleBadge extends StatelessWidget {
   }
 }
 
-/// A small activity tag (glyph + Korean label) from the diary's activities.
+/// A small activity tag (line icon + Korean label) from the diary's activities.
 class _PdActivityTag extends StatelessWidget {
   const _PdActivityTag({required this.kind});
 
@@ -441,19 +533,20 @@ class _PdActivityTag extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(1),
-        border: Border.all(color: cpInkA(0.12), width: 0.5),
+        color: cpDim,
+        borderRadius: BorderRadius.circular(cpRadiusPill),
+        border: Border.all(color: cpInkA(0.06)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(_pdActivityGlyph(kind), style: const TextStyle(fontSize: 11)),
+          Icon(_pdActivityIcon(kind), size: 13, color: cpInkA(0.55)),
           const SizedBox(width: 6),
           Text(
             _pdActivityLabel(kind),
-            style: cpSans(size: 11, color: cpInkA(0.6), spacing: 0.4),
+            style: cpSans(size: 11, color: cpInkA(0.6), spacing: 0.3),
           ),
         ],
       ),
@@ -465,7 +558,7 @@ class _PdActivityTag extends StatelessWidget {
 // "우리 그림체를 배운 날" boundary
 // ===========================================================================
 
-/// The quiet eucalyptus divider marking the day `style.kind` flipped to
+/// The quiet heart-pink divider marking the day `style.kind` flipped to
 /// `learned`. Sits between the learned era (above) and the default era (below).
 class _PdLearnedBoundary extends StatelessWidget {
   const _PdLearnedBoundary({required this.date});
@@ -475,26 +568,27 @@ class _PdLearnedBoundary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 20),
+      padding: const EdgeInsets.symmetric(vertical: 22),
       child: Column(
         children: [
           Row(
             children: [
-              Expanded(child: Container(height: 1, color: cpEucA(0.35))),
+              Expanded(child: Container(height: 1, color: cpEucA(0.3))),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 child: Container(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   decoration: BoxDecoration(
                     color: cpEucA(0.10),
-                    borderRadius: BorderRadius.circular(2),
-                    border: Border.all(color: cpEucA(0.5), width: 0.5),
+                    borderRadius: BorderRadius.circular(cpRadiusPill),
+                    border: Border.all(color: cpEucA(0.45)),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Text('🎨', style: TextStyle(fontSize: 12)),
+                      const Icon(Icons.palette_outlined,
+                          size: 14, color: cpEuc),
                       const SizedBox(width: 8),
                       Text(
                         '우리 그림체를 배운 날',
@@ -504,13 +598,13 @@ class _PdLearnedBoundary extends StatelessWidget {
                   ),
                 ),
               ),
-              Expanded(child: Container(height: 1, color: cpEucA(0.35))),
+              Expanded(child: Container(height: 1, color: cpEucA(0.3))),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           Text(
             _pdFmtDate(date),
-            style: cpSans(size: 11, color: cpEucA(0.9), spacing: 1.2),
+            style: cpSans(size: 11, color: cpEucA(0.9), spacing: 0.8),
           ),
         ],
       ),
@@ -537,17 +631,17 @@ class _PdFooter extends StatelessWidget {
   Widget build(BuildContext context) {
     if (!hasMore) {
       return Padding(
-        padding: const EdgeInsets.only(top: 8),
+        padding: const EdgeInsets.only(top: 12),
         child: Center(
           child: Text(
-            '· 여기까지가 처음이에요 ·',
-            style: cpSans(size: 11, color: cpInkA(0.35), spacing: 1.0),
+            '여기까지가 처음이에요',
+            style: cpSans(size: 11, color: cpInkA(0.35), spacing: 0.6),
           ),
         ),
       );
     }
     return Padding(
-      padding: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.only(top: 12),
       child: Center(
         child: loadingMore
             ? const SizedBox(
@@ -643,15 +737,16 @@ String _pdFmtDate(DateTime d) {
   return '${d.year}.$mm.$dd ($wd)';
 }
 
-/// Emoji standing in for an activity in the placeholder / tag. Exhaustive over
-/// the closed enum (unknown wire values already fold to [PetActivityKind.waiting]).
-String _pdActivityGlyph(PetActivityKind k) => switch (k) {
-      PetActivityKind.eating => '🍚',
-      PetActivityKind.sleeping => '😴',
-      PetActivityKind.walking => '🚶',
-      PetActivityKind.playing => '🎾',
-      PetActivityKind.drawing => '🎨',
-      PetActivityKind.waiting => '🪟',
+/// Material OUTLINED line icon standing in for an activity in the placeholder /
+/// tag — a vector glyph, NOT an emoji. Exhaustive over the closed enum (unknown
+/// wire values already fold to [PetActivityKind.waiting]).
+IconData _pdActivityIcon(PetActivityKind k) => switch (k) {
+      PetActivityKind.eating => Icons.restaurant_outlined,
+      PetActivityKind.sleeping => Icons.bedtime_outlined,
+      PetActivityKind.walking => Icons.directions_walk_outlined,
+      PetActivityKind.playing => Icons.toys_outlined,
+      PetActivityKind.drawing => Icons.brush_outlined,
+      PetActivityKind.waiting => Icons.schedule_outlined,
     };
 
 /// Korean label for an activity tag.

@@ -1,8 +1,9 @@
 // Memory Pager — Pet house / 집 꾸미기 (P2 / PT-3, full-screen push target).
 //
 // A room you arrange. Tap a room-category item (furniture / background / prop)
-// to place it; drag it to move; tap ✕ to take it out. Every move writes through
-// `PATCH /pets/{pet_id}/items/{item_id}` with `{is_equipped, pos_x, pos_y}`.
+// to place it; drag it to move; tap the close button to take it out. Every move
+// writes through `PATCH /pets/{pet_id}/items/{item_id}` with
+// `{is_equipped, pos_x, pos_y}`.
 //
 // Contract gap worth naming: `GET /groups/{id}/pet` returns `equipped_items`
 // WITHOUT `pos_x`/`pos_y` (API.md §5), even though the column exists in the ERD.
@@ -15,6 +16,7 @@ import 'package:flutter/material.dart';
 import '../../core/app_state.dart';
 import '../../core/models.dart';
 import '../components.dart';
+import '../pet_view.dart';
 import '../theme.dart';
 
 /// Categories that live in the room (the rest are worn on the pet).
@@ -143,16 +145,28 @@ class _PetHouseScreenState extends State<PetHouseScreen> {
                   const SizedBox(height: 12),
                   Text(_error!,
                       textAlign: TextAlign.center,
-                      style: cpSans(size: 12, color: const Color(0xFFB5654A))),
+                      style: cpSans(size: 12, color: cpEuc)),
                 ],
                 const SizedBox(height: 18),
                 CpEyebrow('소품 · 가구', size: 9),
                 const SizedBox(height: 12),
                 SizedBox(height: 92, child: _trayRow()),
                 const SizedBox(height: 10),
-                Text('탭해서 놓고, 끌어서 옮기고, ✕로 치워요',
-                    textAlign: TextAlign.center,
-                    style: cpSans(size: 11, color: cpInkA(0.4))),
+                Text.rich(
+                  TextSpan(
+                    style: cpSans(size: 11, color: cpInkA(0.4)),
+                    children: [
+                      const TextSpan(text: '탭해서 놓고, 끌어서 옮기고, '),
+                      WidgetSpan(
+                        alignment: PlaceholderAlignment.middle,
+                        child: Icon(Icons.close,
+                            size: 12, color: cpInkA(0.4)),
+                      ),
+                      const TextSpan(text: ' 로 치워요'),
+                    ],
+                  ),
+                  textAlign: TextAlign.center,
+                ),
               ],
             ),
           );
@@ -178,7 +192,12 @@ class _PetHouseScreenState extends State<PetHouseScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text('🐣', style: const TextStyle(fontSize: 54)),
+                    PetView(
+                      speciesId: appState.petSpecies,
+                      size: 104,
+                      expression:
+                          expressionForActivity(appState.currentActivity),
+                    ),
                     const SizedBox(height: 6),
                     Text(pet?.name ?? '',
                         style: cpSans(size: 11, color: cpInkA(0.45))),
@@ -225,34 +244,36 @@ class _PetHouseScreenState extends State<PetHouseScreen> {
           behavior: HitTestBehavior.opaque,
           child: Container(
             width: 78,
-            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
             decoration: BoxDecoration(
-              color: cpPrint,
-              borderRadius: BorderRadius.circular(2),
+              color: on ? cpEucA(0.10) : cpPrint,
+              borderRadius: BorderRadius.circular(cpRadiusSmall),
               border: Border.all(
-                color: on ? cpEucA(0.55) : cpInkA(0.10),
-                width: 0.5,
+                color: on ? cpEucA(0.5) : cpInkA(0.08),
               ),
             ),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Opacity(
-                  opacity: on ? 0.35 : 1,
-                  child: Text(_glyph(it.category),
-                      style: const TextStyle(fontSize: 24)),
+                  opacity: on ? 0.4 : 1,
+                  child: Icon(_categoryIcon(it.category),
+                      size: 24, color: on ? cpEuc : cpInkA(0.7)),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 8),
                 Text(it.name,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: cpSans(size: 10, color: cpInkA(0.6))),
-                const SizedBox(height: 3),
-                Text(on ? '놓음' : '🪙 ${it.priceCoins}',
-                    style: cpSans(
-                        size: 9,
-                        color: on ? cpEuc : cpInkA(0.45),
-                        spacing: 0.4)),
+                const SizedBox(height: 4),
+                on
+                    ? Text('놓음',
+                        style: cpSans(
+                            size: 9,
+                            color: cpEuc,
+                            weight: FontWeight.w600,
+                            spacing: 0.3))
+                    : _priceTag(it.priceCoins),
               ],
             ),
           ),
@@ -324,25 +345,31 @@ class _PlacedItemState extends State<_PlacedItem> {
             clipBehavior: Clip.none,
             children: [
               Center(
-                child: Text(_glyph(widget.item.category),
-                    style: const TextStyle(fontSize: 32)),
+                child: Icon(_categoryIcon(widget.item.category),
+                    size: 30, color: cpInkA(0.75)),
               ),
               Positioned(
-                right: -2,
-                top: -2,
+                right: -4,
+                top: -4,
                 child: GestureDetector(
                   onTap: widget.onRemove,
                   child: Container(
-                    width: 18,
-                    height: 18,
+                    width: 20,
+                    height: 20,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
                       color: cpPrint,
                       shape: BoxShape.circle,
-                      border: Border.all(color: cpInkA(0.2), width: 0.5),
+                      border: Border.all(color: cpInkA(0.12)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: cpInkA(0.08),
+                          blurRadius: 4,
+                          offset: const Offset(0, 1),
+                        ),
+                      ],
                     ),
-                    child: Text('✕',
-                        style: cpSans(size: 9, color: cpInkA(0.6))),
+                    child: Icon(Icons.close, size: 12, color: cpInkA(0.55)),
                   ),
                 ),
               ),
@@ -354,11 +381,30 @@ class _PlacedItemState extends State<_PlacedItem> {
   }
 }
 
-String _glyph(ItemCategory c) => switch (c) {
-      ItemCategory.clothes => '👕',
-      ItemCategory.hat => '🎩',
-      ItemCategory.accessory => '🎀',
-      ItemCategory.furniture => '🪑',
-      ItemCategory.background => '🖼️',
-      ItemCategory.prop => '🧸',
+/// A Material OUTLINED line icon standing in for an item category (never emoji).
+/// Only the room categories (furniture / background / prop) actually render here;
+/// the worn categories are mapped too so the switch stays exhaustive.
+IconData _categoryIcon(ItemCategory c) => switch (c) {
+      ItemCategory.clothes => Icons.checkroom,
+      ItemCategory.hat => Icons.shopping_bag_outlined,
+      ItemCategory.accessory => Icons.auto_awesome_outlined,
+      ItemCategory.furniture => Icons.chair_outlined,
+      ItemCategory.background => Icons.image_outlined,
+      ItemCategory.prop => Icons.category_outlined,
     };
+
+/// A tiny painted gold coin + price (no emoji). Uses the [cpGold] currency token.
+Widget _priceTag(int coins) => Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 9,
+          height: 9,
+          decoration:
+              const BoxDecoration(color: cpGold, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 4),
+        Text('$coins',
+            style: cpSans(size: 9, color: cpInkA(0.45), spacing: 0.3)),
+      ],
+    );

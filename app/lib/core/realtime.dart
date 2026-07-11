@@ -202,7 +202,7 @@ class MockRealtime implements Realtime {
   // Deterministic activity rotation (kind + fresh utterance).
   static const List<(PetActivityKind, String)> _activities = [
     (PetActivityKind.eating, '냠냠 맛있다! 오늘 낙서도 그려줄 거지?'),
-    (PetActivityKind.playing, '심심해서 공 굴리는 중! 같이 놀자 🎈'),
+    (PetActivityKind.playing, '심심해서 공 굴리는 중! 같이 놀자 '),
     (PetActivityKind.drawing, '너희 그림체 따라서 슥슥 그려보는 중이야'),
     (PetActivityKind.walking, '창밖 산책하면서 둘 생각했어'),
     (PetActivityKind.sleeping, '졸려어… 잠깐만 눈 붙일게 zzz'),
@@ -213,8 +213,8 @@ class MockRealtime implements Realtime {
   static const List<String> _partnerLines = [
     '지금 뭐해? 삐삐가 심심해한다 ㅋㅋ',
     '이거 봐봐, 방금 그린 거!',
-    '오늘 하루도 화이팅 💪',
-    '보고싶다 ☺️',
+    '오늘 하루도 화이팅 ',
+    '보고싶다 ️',
   ];
 
   @override

@@ -484,7 +484,7 @@ class AppState extends ChangeNotifier {
       case final PokeReceived ev:
         _pushNotification(
           kind: NotificationKind.pokeReceived,
-          text: '${_nameFor(ev.fromUserId)}님이 콕 찔렀어요 👉',
+          text: '${_nameFor(ev.fromUserId)}님이 콕 찔렀어요 ',
           fromUserId: ev.fromUserId,
           at: ev.at,
         );

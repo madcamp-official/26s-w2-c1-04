@@ -9,10 +9,10 @@
 // optional `Uri.base.queryParameters` QA deep-links:
 //   - `?route=` ∈ {onboarding, home, album, draw, viewer, diary, report, store,
 //                   house, explore, settings, widget}
-//   - `?tab=`   ∈ {pet, album, comm}
+//   - `?tab=`   ∈ {pet, home, album, diary, more}
 // Rules: not onboarded OR route=onboarding → [OnboardingScreen]; a pushable
 // route → [AppShell] then push that screen after first frame; otherwise the
-// [AppShell] at the requested tab (default the pet tab).
+// [AppShell] at the requested tab (default the home/pet tab).
 
 import 'package:flutter/material.dart';
 
@@ -155,36 +155,45 @@ class _HomeState extends State<_Home> {
   }
 }
 
-/// Resolve the starting tab. The tab-routes `home`/`album` pin the tab
-/// directly; otherwise the `?tab=` param decides (pet → 0, album → 1, comm → 2).
+/// Resolve the starting tab. Tab-routes pin the tab directly; otherwise the
+/// `?tab=` param decides. The four tabs are: 0 홈(pet home), 1 그림함(album),
+/// 2 일기(diary), 3 더보기(more). Tab names map pet/home → 0, album → 1,
+/// diary → 2, more → 3 (legacy `comm` also lands on 더보기).
 int _tabIndexFor(String? route, String? tab) {
   switch (route) {
     case 'home':
       return 0;
     case 'album':
       return 1;
+    case 'diary':
+      return 2;
+    case 'more':
+      return 3;
   }
   switch (tab) {
     case 'album':
       return 1;
-    case 'comm':
+    case 'diary':
       return 2;
+    case 'more':
+    case 'comm':
+      return 3;
     case 'pet':
+    case 'home':
     default:
       return 0;
   }
 }
 
 /// The full-screen screen a pushable deep-link route names, or null for the
-/// tab/onboarding routes. `viewer` opens at index 0 by default.
+/// tab/onboarding routes. `viewer` opens at index 0 by default. `diary` is now
+/// a tab (handled by [_tabIndexFor]), so it is not a push target here.
 WidgetBuilder? _pushTargetFor(String? route) {
   switch (route) {
     case 'draw':
       return (_) => const DrawSendScreen();
     case 'viewer':
       return (_) => const ViewerScreen(initialIndex: 0);
-    case 'diary':
-      return (_) => const PetDiaryScreen();
     case 'report':
       return (_) => const MonthlyReportScreen();
     case 'store':
@@ -203,13 +212,15 @@ WidgetBuilder? _pushTargetFor(String? route) {
 }
 
 // ===========================================================================
-// AppShell — the three-tab home with a notifications overlay
+// AppShell — the four-tab home with a notifications overlay
 // ===========================================================================
 
-/// The tabbed home: an [IndexedStack] over the three tab screens with a
-/// [CpBottomNav] beneath and a transient notifications banner floated on top.
-/// If [pushOnStart] is set, that full-screen route is pushed once after the
-/// first frame (the QA deep-link path).
+/// The tabbed home: an [IndexedStack] over the four tab screens with an
+/// icon [CpBottomNav] beneath and a transient notifications banner floated on
+/// top. Tabs: 0 홈([PetHomeScreen]) · 1 그림함([AlbumScreen]) · 2 일기
+/// ([PetDiaryScreen]) · 3 더보기([MoreScreen]). If [pushOnStart] is set, that
+/// full-screen route is pushed once after the first frame (the QA deep-link
+/// path).
 class AppShell extends StatefulWidget {
   const AppShell({super.key, this.initialTab = 0, this.pushOnStart});
 
@@ -226,7 +237,29 @@ class _AppShellState extends State<AppShell> {
   static const List<Widget> _tabs = [
     PetHomeScreen(),
     AlbumScreen(),
-    CommHomeScreen(),
+    PetDiaryScreen(),
+    MoreScreen(),
+  ];
+
+  /// The bottom-nav tabs — Material outlined line icons (never emoji); the
+  /// active tab lifts to the filled variant tinted [cpEuc].
+  static const List<CpNavItem> _navItems = [
+    CpNavItem(icon: Icons.home_outlined, activeIcon: Icons.home, label: '홈'),
+    CpNavItem(
+      icon: Icons.collections_outlined,
+      activeIcon: Icons.collections,
+      label: '그림함',
+    ),
+    CpNavItem(
+      icon: Icons.menu_book_outlined,
+      activeIcon: Icons.menu_book,
+      label: '일기',
+    ),
+    CpNavItem(
+      icon: Icons.favorite_border,
+      activeIcon: Icons.favorite,
+      label: '더보기',
+    ),
   ];
 
   @override
@@ -259,6 +292,7 @@ class _AppShellState extends State<AppShell> {
       bottomNavigationBar: CpBottomNav(
         current: _tab,
         onTap: (i) => setState(() => _tab = i),
+        items: _navItems,
       ),
     );
   }
@@ -281,30 +315,33 @@ class _NotificationsBanner extends StatelessWidget {
       builder: (context, _) {
         if (appState.notifications.isEmpty) return const SizedBox.shrink();
         final n = appState.notifications.first;
-        final glyph =
-            n.kind == NotificationKind.pokeReceived ? '👉' : '✏️';
+        // A line icon, never an emoji: a poke rings the bell, a new doodle
+        // arrives as a letter.
+        final icon = n.kind == NotificationKind.pokeReceived
+            ? Icons.notifications_none
+            : Icons.mail_outline;
         return Padding(
           padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
           child: GestureDetector(
             onTap: () => appState.dismissNotification(n.id),
             behavior: HitTestBehavior.opaque,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
               decoration: BoxDecoration(
                 color: cpPrint,
-                borderRadius: BorderRadius.circular(2),
-                border: Border.all(color: cpEucA(0.5), width: 0.5),
+                borderRadius: BorderRadius.circular(cpRadiusCard),
+                border: Border.all(color: cpEucA(0.4)),
                 boxShadow: [
                   BoxShadow(
                     color: cpInkA(0.08),
-                    blurRadius: 14,
-                    offset: const Offset(0, 5),
+                    blurRadius: 18,
+                    offset: const Offset(0, 8),
                   ),
                 ],
               ),
               child: Row(
                 children: [
-                  Text(glyph, style: const TextStyle(fontSize: 16)),
+                  Icon(icon, size: 20, color: cpEuc),
                   const SizedBox(width: 12),
                   Expanded(child: Text(n.text, style: cpSans(size: 13))),
                   const SizedBox(width: 8),

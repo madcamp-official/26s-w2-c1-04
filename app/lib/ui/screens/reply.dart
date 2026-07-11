@@ -327,7 +327,9 @@ class _RpFooter extends StatelessWidget {
   }
 }
 
-/// A full-width ink CTA in the Cold Press voice (tracked caps, radius 2).
+/// A full-width, pill-shaped pink CTA — the Sumone primary voice. A soft brush
+/// line icon paired with the label, warm-white text on the [cpEuc] accent, and a
+/// gentle glow. Rounded [cpRadiusPill], never the old boxy 2px keyline.
 class _RpWideButton extends StatelessWidget {
   const _RpWideButton({required this.label, required this.onTap});
 
@@ -342,19 +344,33 @@ class _RpWideButton extends StatelessWidget {
       child: Container(
         width: double.infinity,
         alignment: Alignment.center,
-        padding: const EdgeInsets.symmetric(vertical: 14),
+        padding: const EdgeInsets.symmetric(vertical: 15),
         decoration: BoxDecoration(
-          color: cpInk,
-          borderRadius: BorderRadius.circular(2),
+          color: cpEuc,
+          borderRadius: BorderRadius.circular(cpRadiusPill),
+          boxShadow: [
+            BoxShadow(
+              color: cpEucA(0.28),
+              blurRadius: 14,
+              offset: const Offset(0, 6),
+            ),
+          ],
         ),
-        child: Text(
-          label,
-          style: cpSans(
-            size: 13,
-            color: cpMist,
-            weight: FontWeight.w600,
-            spacing: 1.8,
-          ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.brush_outlined, size: 18, color: cpPrint),
+            const SizedBox(width: 9),
+            Text(
+              label,
+              style: cpSans(
+                size: 14,
+                color: cpPrint,
+                weight: FontWeight.w600,
+                spacing: 0.3,
+              ),
+            ),
+          ],
         ),
       ),
     );

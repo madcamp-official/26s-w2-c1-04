@@ -7,7 +7,9 @@
 //   배경 색상     PATCH /groups/{id}   (6-hex, no '#')
 //
 // Each field saves on its own; nothing is written until you press 저장, and a
-// failure shows the server's own message.
+// failure shows the server's own message. Styled in the Sumone language: warm
+// cream ground, soft rounded cards, one gentle pink accent, outlined line icons
+// for chrome — zero emoji. Pet CHARACTERS stay hand-drawn (PetView).
 
 import 'package:flutter/material.dart';
 
@@ -30,6 +32,9 @@ const List<String> _swatches = <String>[
   'E9EFEA',
   'F1EAE1',
 ];
+
+/// A gentle warm error tone (never pure red) for save failures.
+const Color _errorTone = Color(0xFFB5654A);
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -153,7 +158,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 const SizedBox(height: 26),
 
-                CpEyebrow('배경 색상', size: 9),
+                const CpEyebrow('배경 색상'),
                 const SizedBox(height: 14),
                 _swatchRow(g?.backgroundColor),
                 const SizedBox(height: 30),
@@ -185,9 +190,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                 if (_error != null) ...[
                   const SizedBox(height: 20),
-                  Text(_error!,
-                      textAlign: TextAlign.center,
-                      style: cpSans(size: 12, color: const Color(0xFFB5654A))),
+                  _errorSlip(_error!),
                 ],
               ],
             ),
@@ -204,8 +207,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Row(
       children: [
         if (saved)
-          Text('저장했어요',
-              style: cpSans(size: 11, color: cpEuc, weight: FontWeight.w600)),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.check_circle_outline, size: 15, color: cpEuc),
+              const SizedBox(width: 6),
+              Text('저장했어요',
+                  style:
+                      cpSans(size: 11, color: cpEuc, weight: FontWeight.w600)),
+            ],
+          ),
         const Spacer(),
         Opacity(
           opacity: enabled && !busy ? 1 : 0.35,
@@ -224,27 +235,41 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _swatchRow(String? current) {
+    final cur = (current ?? '').toUpperCase();
     return Wrap(
       spacing: 12,
       runSpacing: 12,
       children: [
         for (final hex in _swatches)
           GestureDetector(
-            onTap: () => _save('bg', () => appState.updateGroup(backgroundColor: hex)),
+            onTap: () =>
+                _save('bg', () => appState.updateGroup(backgroundColor: hex)),
             behavior: HitTestBehavior.opaque,
-            child: Container(
-              width: 44,
-              height: 44,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              width: 46,
+              height: 46,
+              alignment: Alignment.center,
               decoration: BoxDecoration(
                 color: hexToColor(hex),
-                borderRadius: BorderRadius.circular(2),
+                borderRadius: BorderRadius.circular(cpRadiusSmall),
                 border: Border.all(
-                  color: (current ?? '').toUpperCase() == hex
-                      ? cpEuc
-                      : cpInkA(0.14),
-                  width: (current ?? '').toUpperCase() == hex ? 1.5 : 0.5,
+                  color: cur == hex ? cpEuc : cpInkA(0.12),
+                  width: cur == hex ? 2 : 1,
                 ),
+                boxShadow: cur == hex
+                    ? [
+                        BoxShadow(
+                          color: cpEucA(0.25),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ]
+                    : null,
               ),
+              child: cur == hex
+                  ? const Icon(Icons.check, size: 20, color: cpEuc)
+                  : null,
             ),
           ),
       ],
@@ -257,27 +282,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
         MaterialPageRoute<void>(builder: (_) => const PetPickerScreen()),
       ),
       behavior: HitTestBehavior.opaque,
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: cpPrint,
-          borderRadius: BorderRadius.circular(2),
-          border: Border.all(color: cpInkA(0.10), width: 0.5),
-        ),
+      child: CpMatted(
+        mat: 14,
         child: Row(
           children: [
-            SizedBox(
-              width: 52,
-              height: 52,
+            Container(
+              width: 56,
+              height: 56,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: cpMist,
+                borderRadius: BorderRadius.circular(cpRadiusSmall),
+              ),
               child: PetView(
-                  speciesId: appState.petSpecies, size: 52, frozenT: 0.25),
+                  speciesId: appState.petSpecies, size: 48, frozenT: 0.25),
             ),
             const SizedBox(width: 14),
             Expanded(
-              child: Text('펫 캐릭터 바꾸기',
-                  style: cpSans(size: 14, weight: FontWeight.w500)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('펫 캐릭터 바꾸기',
+                      style: cpSans(size: 15, weight: FontWeight.w600)),
+                  const SizedBox(height: 3),
+                  Text('둘이 함께 키울 캐릭터를 골라요',
+                      style: cpSans(size: 12, color: cpInkA(0.45))),
+                ],
+              ),
             ),
-            Icon(Icons.chevron_right, size: 20, color: cpInkA(0.4)),
+            Icon(Icons.chevron_right, size: 22, color: cpInkA(0.35)),
           ],
         ),
       ),
@@ -285,29 +318,66 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _inviteRow(Group g) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: cpPrint,
-        borderRadius: BorderRadius.circular(2),
-        border: Border.all(color: cpInkA(0.10), width: 0.5),
-      ),
+    return CpMatted(
       child: Row(
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              CpEyebrow('초대 코드', size: 9),
-              const SizedBox(height: 8),
-              SelectableText(
-                g.inviteCode.isEmpty ? '—' : g.inviteCode,
-                style: cpSans(size: 17, weight: FontWeight.w600, spacing: 2),
-              ),
-            ],
+          Container(
+            width: 44,
+            height: 44,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: cpEucA(0.10),
+              borderRadius: BorderRadius.circular(cpRadiusSmall),
+            ),
+            child: const Icon(Icons.mail_outline, size: 22, color: cpEuc),
           ),
-          const Spacer(),
-          Text('정원 ${g.memberCount}/2',
-              style: cpSans(size: 11, color: cpInkA(0.45))),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const CpEyebrow('초대 코드'),
+                const SizedBox(height: 6),
+                SelectableText(
+                  g.inviteCode.isEmpty ? '—' : g.inviteCode,
+                  style: cpSans(size: 18, weight: FontWeight.w700, spacing: 2),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+            decoration: BoxDecoration(
+              color: cpDim,
+              borderRadius: BorderRadius.circular(cpRadiusPill),
+              border: Border.all(color: cpInkA(0.06)),
+            ),
+            child: Text('정원 ${g.memberCount}/2',
+                style: cpSans(
+                    size: 11, color: cpInkA(0.5), weight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _errorSlip(String message) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: _errorTone.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(cpRadiusSmall),
+        border: Border.all(color: _errorTone.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.error_outline, size: 16, color: _errorTone),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(message,
+                style: cpSans(size: 12, color: _errorTone)),
+          ),
         ],
       ),
     );

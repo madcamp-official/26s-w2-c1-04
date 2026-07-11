@@ -204,7 +204,7 @@ class _PokeBodyState extends State<_PokeBody> with TickerProviderStateMixin {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const CpEyebrow('POKE · 콕 찌르기'),
+                      const CpEyebrow('가벼운 안부'),
                       const SizedBox(height: 14),
                       Text(
                         _name(partner),
@@ -285,14 +285,20 @@ class _PokeBodyState extends State<_PokeBody> with TickerProviderStateMixin {
                   height: 116,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: cpPrint,
+                    color: warm ? cpEucA(0.10) : cpPrint,
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: warm ? cpEucA(0.6) : cpInkA(0.14),
-                      width: 0.8,
+                      color: warm ? cpEucA(0.6) : cpInkA(0.12),
+                      width: 1.2,
                     ),
                   ),
-                  child: const Text('👉', style: TextStyle(fontSize: 40)),
+                  // A soft line heart that fills warm on a poke — the pastel focal
+                  // glyph (Material outlined/filled vector icon, never an emoji).
+                  child: Icon(
+                    warm ? Icons.favorite : Icons.favorite_border,
+                    size: 44,
+                    color: warm ? cpEuc : cpInkA(0.4),
+                  ),
                 ),
               ),
             ),
@@ -310,7 +316,7 @@ class _PokeBodyState extends State<_PokeBody> with TickerProviderStateMixin {
         return Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            CpSpeechSlip('${_name(partner)}님이 콕 되받았어요 👉'),
+            CpSpeechSlip('${_name(partner)}님이 콕 되받았어요'),
             const SizedBox(height: 12),
             Text(
               '또 콕 찔러볼까요?',
@@ -385,7 +391,7 @@ class _CpPokeRipplePainter extends CustomPainter {
           ..style = PaintingStyle.stroke
           ..strokeWidth = 0.8
           ..isAntiAlias = true
-          ..color = color.withOpacity(opacity),
+          ..color = color.withValues(alpha: opacity),
       );
     }
   }

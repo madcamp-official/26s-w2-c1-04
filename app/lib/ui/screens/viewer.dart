@@ -1,14 +1,14 @@
 // Memory Pager — Doodle viewer (P0/P1, full-screen push target).
 //
 // Opens on [initialIndex] of the album and pages through it. Opening a doodle
-// registers the view (`appState.openDoodle` → `POST /doodles/{id}/view`,
+// registers the view (`appState.openDoodle` -> `POST /doodles/{id}/view`,
 // idempotent) and, when it is an *ephemeral* doodle that someone else sent,
 // arms the 5-second countdown the server also runs. When the timer lands the
 // doodle is gone for good and we say so.
 //
 // The contract distinguishes two absences and so do we (API.md §0):
-//   410 doodle_expired → "사라졌어요"  (it existed; it self-destructed)
-//   404 not_found      → "없는 낙서예요" (it never existed / bad link)
+//   410 doodle_expired -> "사라졌어요"  (it existed; it self-destructed)
+//   404 not_found      -> "없는 낙서예요" (it never existed / bad link)
 
 import 'dart:async';
 import 'dart:typed_data';
@@ -208,16 +208,20 @@ class _ViewerScreenState extends State<ViewerScreen> {
         const Spacer(),
         Column(
           children: [
-            CpEyebrow('기억 · MEMORY', size: 9),
+            const CpEyebrow('받은 그림'),
             const SizedBox(height: 4),
             Text(
               d == null ? '—' : _senderName(d.senderId),
-              style: cpSans(size: 16, weight: FontWeight.w600),
+              style: cpSerif(
+                size: 17,
+                weight: FontWeight.w600,
+                style: FontStyle.normal,
+              ),
             ),
           ],
         ),
         const Spacer(),
-        const SizedBox(width: 34),
+        const SizedBox(width: 40),
       ],
     );
   }
@@ -266,9 +270,21 @@ class _ViewerScreenState extends State<ViewerScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(cpContentGlyph(d.contentType),
-                  style: const TextStyle(fontSize: 44)),
-              const SizedBox(height: 14),
+              Container(
+                width: 84,
+                height: 84,
+                alignment: Alignment.center,
+                decoration: const BoxDecoration(
+                  color: cpDim,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  cpContentIcon(d.contentType),
+                  size: 38,
+                  color: cpInkA(0.4),
+                ),
+              ),
+              const SizedBox(height: 16),
               if ((d.textBody ?? '').isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -387,12 +403,15 @@ class _Countdown extends StatelessWidget {
         Text('${r.ceil()}초 뒤 사라져요',
             style: cpSans(size: 12, color: cpEuc, weight: FontWeight.w600)),
         const SizedBox(height: 8),
-        LayoutBuilder(
-          builder: (context, c) => Stack(
-            children: [
-              Container(width: c.maxWidth, height: 2, color: cpInkA(0.10)),
-              Container(width: c.maxWidth * frac, height: 2, color: cpEuc),
-            ],
+        ClipRRect(
+          borderRadius: BorderRadius.circular(cpRadiusPill),
+          child: LayoutBuilder(
+            builder: (context, c) => Stack(
+              children: [
+                Container(width: c.maxWidth, height: 4, color: cpInkA(0.10)),
+                Container(width: c.maxWidth * frac, height: 4, color: cpEuc),
+              ],
+            ),
           ),
         ),
       ],
@@ -408,13 +427,19 @@ class _Chip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(1),
-        border: Border.all(color: cpInkA(0.14), width: 0.5),
+        color: cpDim,
+        borderRadius: BorderRadius.circular(cpRadiusPill),
+        border: Border.all(color: cpInkA(0.06)),
       ),
       child: Text(label,
-          style: cpSans(size: 10, color: cpInkA(0.6), spacing: 0.5)),
+          style: cpSans(
+            size: 11,
+            color: cpInkA(0.6),
+            weight: FontWeight.w500,
+            spacing: 0.3,
+          )),
     );
   }
 }

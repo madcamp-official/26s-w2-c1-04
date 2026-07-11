@@ -84,7 +84,7 @@ abstract class Repository {
   /// member. Nicknaming yourself is 400. Returns the updated group.
   Future<Group> setNickname(String groupId, String userId, String nickname);
 
-  // -- Doodles (API.md §4, ⭐) -----------------------------------------------
+  // -- Doodles (API.md §4, ) -----------------------------------------------
 
   /// `POST /doodles` (multipart). The app decides [contentType]; the server
   /// does not recompute it. [parentId] carries a reply (RV-1).
@@ -112,20 +112,20 @@ abstract class Repository {
   /// if it was destroyed by ephemeral mode, 404 if it never existed.
   Future<Doodle> getDoodle(String id);
 
-  /// `POST /doodles/{id}/view` (SD-6, ⭐). Idempotent receipt. If the doodle
+  /// `POST /doodles/{id}/view` (SD-6, ). Idempotent receipt. If the doodle
   /// is ephemeral and *not* sent by me, arms the 5s self-destruct and returns
   /// the `expires_at`; otherwise returns null.
   Future<DateTime?> viewDoodle(String id);
 
-  /// `POST /groups/{groupId}/pokes` (SD-7, ⭐).
+  /// `POST /groups/{groupId}/pokes` (SD-7, ).
   Future<void> poke(String groupId, String toUserId);
 
-  // -- Pet (API.md §5, ⭐) ---------------------------------------------------
+  // -- Pet (API.md §5, ) ---------------------------------------------------
 
   /// `GET /groups/{groupId}/pet`. The home screen.
   Future<Pet> getPet(String groupId);
 
-  /// `POST /pets/{petId}/pat` (PT-1, ⭐). Echoes the cached activity
+  /// `POST /pets/{petId}/pat` (PT-1, ). Echoes the cached activity
   /// utterance — never null, falls back to a default line if the pet has no
   /// activity yet. Does not call the LLM.
   Future<PatResult> pat(String petId);
@@ -149,7 +149,7 @@ abstract class Repository {
   /// latest (ephemerals excluded).
   Future<MonthlyReport> generateReport(String groupId, String month);
 
-  // -- Widget (API.md §7, RV-5 ⭐) -------------------------------------------
+  // -- Widget (API.md §7, RV-5 ) -------------------------------------------
 
   /// `GET /widget/{groupId}`. Null when the group has no doodle yet.
   Future<WidgetData?> getWidget(String groupId);

@@ -419,21 +419,23 @@ class _AlbumRow extends StatelessWidget {
   }
 }
 
-/// A quiet eucalyptus keyline badge marking a 사라지기(ephemeral) doodle.
+/// A soft pink pill marking a 사라지기(ephemeral) doodle. Gentle tint + rounded,
+/// in keeping with the Sumone voice — no boxy keyline.
 class _EphemeralBadge extends StatelessWidget {
   const _EphemeralBadge();
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(1),
-        border: Border.all(color: cpEucA(0.5), width: 0.5),
+        color: cpEucA(0.10),
+        borderRadius: BorderRadius.circular(cpRadiusPill),
+        border: Border.all(color: cpEucA(0.4)),
       ),
       child: Text(
         '사라지기',
-        style: cpSans(size: 9, color: cpEuc, weight: FontWeight.w600, spacing: 0.8),
+        style: cpSans(size: 9, color: cpEuc, weight: FontWeight.w600, spacing: 0.3),
       ),
     );
   }

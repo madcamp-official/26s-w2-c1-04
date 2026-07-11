@@ -18,7 +18,7 @@
 //
 // Cuteness cues:
 //   · plump rounded bean body in soft pastel green
-//   · TWO leaves on a short stem from the top of the head (the 🌱 signature)
+//   · TWO leaves on a short stem from the top of the head (the  signature)
 //   · big low-placed glossy dot eyes (kawaii rule)
 //   · earthy soil-toned blush instead of pink (흙빛 볼)
 //   · a soft ground shadow so it feels planted
@@ -47,7 +47,7 @@ class Char09 extends PetCharacter {
         'Pinterest (momowynaut) — Bean Sprout kawaii board',
         'Pinterest — Sprout Drawing Cute ideas',
         'Pinterest — Cartoon Plant Sprout ideas',
-        'Emojipedia — 🌱 Seedling emoji (two leaves from a brown earth mound)',
+        'Emojipedia —  Seedling emoji (two leaves from a brown earth mound)',
         'emojicombos — Sprout ("tiny green kawaii smol bean")',
         "Dandy's World — Sprout Seedly (leaves crowning a blobby toon)",
         'Among Us Wiki — Young Sprout (sprout on head)',

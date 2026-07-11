@@ -2,9 +2,9 @@
 //
 // The coin store and pet-customization surface. A category segment
 // ([ItemCategory]) filters the catalog via `appState.loadItems(category:)`; the
-// grid of store cards shows each item's category glyph, name, and price. Tapping
-// a card opens a Cold Press sheet to *buy* it (`appState.buyItem`, which surfaces
-// a quiet "coins short" notice on a 422) or, once owned, to *equip / unequip* it
+// grid of store cards shows each item's category line icon, name, and price. Tapping
+// a soft sheet to *buy* it (`appState.buyItem`, which surfaces a quiet "coins
+// short" notice on a 422) or, once owned, to *equip / unequip* it
 // (`appState.equipItem`, which toggles within its category on the backend).
 //
 // The header's [CpCoins] and the whole grid live under one ListenableBuilder so
@@ -251,17 +251,16 @@ class _EquippedStrip extends StatelessWidget {
 
   Widget _wornPill(EquippedItem e) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
       decoration: BoxDecoration(
         color: cpEucA(0.10),
-        borderRadius: BorderRadius.circular(2),
-        border: Border.all(color: cpEucA(0.45), width: 0.5),
+        borderRadius: BorderRadius.circular(cpRadiusPill),
+        border: Border.all(color: cpEucA(0.4)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(_categoryGlyph(e.category),
-              style: const TextStyle(fontSize: 13)),
+          Icon(_categoryIcon(e.category), size: 15, color: cpEuc),
           const SizedBox(width: 7),
           Text(
             _categoryLabel(e.category),
@@ -298,26 +297,41 @@ class _StoreCard extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           color: cpPrint,
-          borderRadius: BorderRadius.circular(2),
+          borderRadius: BorderRadius.circular(cpRadiusCard),
           border: Border.all(
-            color: equipped ? cpEucA(0.55) : cpInkA(0.10),
-            width: 0.5,
+            color: equipped ? cpEucA(0.5) : cpInkA(0.06),
+            width: equipped ? 1.2 : 1,
           ),
+          boxShadow: [
+            BoxShadow(
+              color: cpInkA(0.05),
+              blurRadius: 14,
+              offset: const Offset(0, 6),
+            ),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Expanded(
-              child: Center(
-                child: Text(
-                  _categoryGlyph(item.category),
-                  style: const TextStyle(fontSize: 40),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 14, 12, 8),
+                child: Container(
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: equipped ? cpEucA(0.10) : cpDim,
+                    borderRadius: BorderRadius.circular(cpRadiusSmall),
+                  ),
+                  child: Icon(
+                    _categoryIcon(item.category),
+                    size: 38,
+                    color: equipped ? cpEuc : cpInkA(0.45),
+                  ),
                 ),
               ),
             ),
-            Container(height: 0.5, color: cpInkA(0.08)),
             Padding(
-              padding: const EdgeInsets.fromLTRB(12, 11, 12, 12),
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -354,7 +368,7 @@ class _StoreCard extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Text('🪙', style: TextStyle(fontSize: 11)),
+        Icon(Icons.paid_outlined, size: 14, color: cpGold),
         const SizedBox(width: 6),
         Text(
           '${item.priceCoins}',
@@ -466,8 +480,10 @@ class _ItemSheetState extends State<_ItemSheet> {
         return Container(
           decoration: BoxDecoration(
             color: cpMist,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(2)),
-            border: Border(top: BorderSide(color: cpInkA(0.12), width: 0.5)),
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(cpRadiusCard),
+            ),
+            border: Border(top: BorderSide(color: cpInkA(0.08))),
           ),
           child: SafeArea(
             top: false,
@@ -479,11 +495,11 @@ class _ItemSheetState extends State<_ItemSheet> {
                 children: [
                   Center(
                     child: Container(
-                      width: 36,
+                      width: 40,
                       height: 4,
                       decoration: BoxDecoration(
                         color: cpInkA(0.15),
-                        borderRadius: BorderRadius.circular(2),
+                        borderRadius: BorderRadius.circular(cpRadiusPill),
                       ),
                     ),
                   ),
@@ -498,11 +514,12 @@ class _ItemSheetState extends State<_ItemSheet> {
                   CpMatted(
                     mat: 20,
                     child: SizedBox(
-                      height: 92,
+                      height: 96,
                       child: Center(
-                        child: Text(
-                          _categoryGlyph(_item.category),
-                          style: const TextStyle(fontSize: 46),
+                        child: Icon(
+                          _categoryIcon(_item.category),
+                          size: 46,
+                          color: cpInkA(0.5),
                         ),
                       ),
                     ),
@@ -538,7 +555,7 @@ class _ItemSheetState extends State<_ItemSheet> {
     if (equipped) {
       return Row(
         children: [
-          const Text('✓', style: TextStyle(fontSize: 13, color: cpEuc)),
+          Icon(Icons.check_circle_outline, size: 16, color: cpEuc),
           const SizedBox(width: 8),
           Text('지금 착용 중이에요',
               style: cpSans(size: 13, color: cpInk, weight: FontWeight.w500)),
@@ -554,7 +571,7 @@ class _ItemSheetState extends State<_ItemSheet> {
       children: [
         CpEyebrow('가격'),
         const Spacer(),
-        const Text('🪙', style: TextStyle(fontSize: 15)),
+        Icon(Icons.paid_outlined, size: 18, color: cpGold),
         const SizedBox(width: 8),
         Text('$price',
             style: cpSans(size: 20, weight: FontWeight.w600, spacing: 0.4)),
@@ -592,8 +609,8 @@ class _ItemSheetState extends State<_ItemSheet> {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
       decoration: BoxDecoration(
         color: cpEucA(0.10),
-        borderRadius: BorderRadius.circular(2),
-        border: Border.all(color: cpEucA(0.4), width: 0.5),
+        borderRadius: BorderRadius.circular(cpRadiusSmall),
+        border: Border.all(color: cpEucA(0.4)),
       ),
       child: Text(
         text,
@@ -604,7 +621,7 @@ class _ItemSheetState extends State<_ItemSheet> {
 }
 
 // ===========================================================================
-// Category display helpers (labels/glyphs are UI copy, not wire data)
+// Category display helpers (labels/icons are UI copy, not wire data)
 // ===========================================================================
 
 String _categoryLabel(ItemCategory c) {
@@ -624,19 +641,21 @@ String _categoryLabel(ItemCategory c) {
   }
 }
 
-String _categoryGlyph(ItemCategory c) {
+/// A Material OUTLINED line icon standing in for each category — a vector
+/// placeholder, never an emoji. The real per-item vectors land in a later step.
+IconData _categoryIcon(ItemCategory c) {
   switch (c) {
     case ItemCategory.hat:
-      return '🎩';
+      return Icons.style_outlined;
     case ItemCategory.clothes:
-      return '👕';
+      return Icons.checkroom;
     case ItemCategory.accessory:
-      return '🎀';
+      return Icons.diamond_outlined;
     case ItemCategory.furniture:
-      return '🪑';
+      return Icons.chair_outlined;
     case ItemCategory.background:
-      return '🖼️';
+      return Icons.image_outlined;
     case ItemCategory.prop:
-      return '🧸';
+      return Icons.toys_outlined;
   }
 }

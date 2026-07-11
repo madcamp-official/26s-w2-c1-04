@@ -484,7 +484,7 @@ class MockRepository implements Repository {
         petId: '101',
         name: '몽이',
         level: 6,
-        moodEmoji: '😴',
+        moodEmoji: '',
         likeCount: 12,
         likedByMe: false,
         inviteCode: 'SUNNY777',
@@ -493,7 +493,7 @@ class MockRepository implements Repository {
         petId: '102',
         name: '초코',
         level: 3,
-        moodEmoji: '🍫',
+        moodEmoji: '',
         likeCount: 5,
         likedByMe: false,
         inviteCode: 'CHOCO123',
@@ -502,7 +502,7 @@ class MockRepository implements Repository {
         petId: '103',
         name: '흰둥',
         level: 8,
-        moodEmoji: '✨',
+        moodEmoji: '',
         likeCount: 30,
         likedByMe: true,
         inviteCode: 'SNOW0001',
@@ -511,7 +511,7 @@ class MockRepository implements Repository {
         petId: '104',
         name: '코코',
         level: 2,
-        moodEmoji: '🌸',
+        moodEmoji: '',
         likeCount: 2,
         likedByMe: false,
         inviteCode: 'COCO4444',
@@ -1262,18 +1262,18 @@ class MockRepository implements Repository {
   String _moodFor(PetActivityKind? a) {
     switch (a) {
       case PetActivityKind.eating:
-        return '😋';
+        return '';
       case PetActivityKind.sleeping:
-        return '😴';
+        return '';
       case PetActivityKind.walking:
-        return '🚶';
+        return '';
       case PetActivityKind.playing:
-        return '😆';
+        return '';
       case PetActivityKind.drawing:
-        return '🎨';
+        return '';
       case PetActivityKind.waiting:
       case null:
-        return '🙂';
+        return '';
     }
   }
 

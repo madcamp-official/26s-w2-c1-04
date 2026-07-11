@@ -160,8 +160,8 @@ class _HomeScreenMock extends StatelessWidget {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: cpDim,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: cpInkA(0.08), width: 0.5),
+        borderRadius: BorderRadius.circular(cpRadiusCard),
+        border: Border.all(color: cpInkA(0.08)),
       ),
       child: child,
     );
@@ -183,8 +183,8 @@ class _WidgetShell extends StatelessWidget {
         height: 150,
         decoration: BoxDecoration(
           color: cpPrint,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: cpInkA(0.12), width: 0.5),
+          borderRadius: BorderRadius.circular(cpRadiusSmall),
+          border: Border.all(color: cpInkA(0.12)),
         ),
         clipBehavior: Clip.antiAlias,
         child: child,
@@ -214,7 +214,7 @@ class _NoDoodle extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('📟', style: const TextStyle(fontSize: 26)),
+            Icon(Icons.mail_outline, size: 26, color: cpInkA(0.4)),
             const SizedBox(height: 10),
             Text('아직 받은 낙서가 없어요',
                 style: cpSans(size: 12, color: cpInkA(0.45))),
@@ -237,7 +237,7 @@ class _WidgetFace extends StatelessWidget {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
           decoration: BoxDecoration(
-            border: Border(top: BorderSide(color: cpInkA(0.10), width: 0.5)),
+            border: Border(top: BorderSide(color: cpInkA(0.10))),
           ),
           child: Row(
             children: [
@@ -305,7 +305,7 @@ class _Thumb extends StatelessWidget {
     return Container(
       color: cpPrint,
       child: Center(
-        child: Text('🖼', style: const TextStyle(fontSize: 26)),
+        child: Icon(Icons.image_outlined, size: 26, color: cpInkA(0.4)),
       ),
     );
   }

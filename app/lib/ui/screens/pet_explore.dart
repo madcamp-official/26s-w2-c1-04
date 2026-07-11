@@ -6,12 +6,23 @@
 //
 // This is the one place the closed app looks outward, so it stays deliberately
 // quiet: a single pet per page, no counts racing, no feed.
+//
+// Sumone skin: warm cream ground, soft rounded cards, one gentle heart-pink
+// accent, generous whitespace. ZERO emoji — the like control is a Material line
+// heart, and each explore pet is drawn HAND-DRAWN via [PetView] (never the
+// server's `mood_emoji` string). `ExplorePet` has no species column, so the
+// look is derived deterministically from the pet id — an honest, stable
+// placeholder avatar (the same id-seeded pattern the album thumbs use), not a
+// claim about the pet's real chosen character.
 
 import 'package:flutter/material.dart';
 
+import '../../charlab/roster.dart';
+import '../../charlab/toolkit.dart';
 import '../../core/app_state.dart';
 import '../../core/models.dart';
 import '../components.dart';
+import '../pet_view.dart';
 import '../theme.dart';
 
 class PetExploreScreen extends StatefulWidget {
@@ -127,40 +138,47 @@ class _PetExploreScreenState extends State<PetExploreScreen> {
               children: [
                 _searchRow(),
                 if (_error != null) ...[
-                  const SizedBox(height: 12),
-                  Text(_error!,
-                      style: cpSans(size: 12, color: const Color(0xFFB5654A))),
+                  const SizedBox(height: 14),
+                  _errorSlip(_error!),
                 ],
                 if (_found != null) ...[
-                  const SizedBox(height: 18),
-                  CpEyebrow('코드로 찾은 펫', size: 9),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 20),
+                  const CpEyebrow('코드로 찾은 펫'),
+                  const SizedBox(height: 12),
                   _PetCard(
                     pet: _found!,
                     onLike: () => _toggleLike(_found!),
                     compact: true,
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 8),
                   Align(
                     alignment: Alignment.centerRight,
                     child: GestureDetector(
                       onTap: () => setState(() => _found = null),
-                      child: Text('닫기',
-                          style: cpSans(size: 11, color: cpInkA(0.45))),
+                      behavior: HitTestBehavior.opaque,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 4, vertical: 4),
+                        child: Text('닫기',
+                            style: cpSans(
+                                size: 12,
+                                color: cpInkA(0.45),
+                                weight: FontWeight.w500)),
+                      ),
                     ),
                   ),
                 ],
-                const SizedBox(height: 18),
+                const SizedBox(height: 20),
                 const CpHair(),
-                const SizedBox(height: 18),
+                const SizedBox(height: 20),
                 Expanded(
                   child: _busy && pets.isEmpty
                       ? const Center(
                           child: SizedBox(
-                            width: 20,
-                            height: 20,
+                            width: 22,
+                            height: 22,
                             child: CircularProgressIndicator(
-                                strokeWidth: 1.5, color: cpEuc),
+                                strokeWidth: 2, color: cpEuc),
                           ),
                         )
                       : pets.isEmpty
@@ -180,11 +198,21 @@ class _PetExploreScreenState extends State<PetExploreScreen> {
                               ),
                             ),
                 ),
-                const SizedBox(height: 10),
-                Text(
-                  '좌우로 넘겨 다른 펫을 구경하세요 · 공개 설정한 그룹만 보여요',
-                  textAlign: TextAlign.center,
-                  style: cpSans(size: 11, color: cpInkA(0.4)),
+                const SizedBox(height: 14),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.swipe_outlined,
+                        size: 15, color: cpInkA(0.4)),
+                    const SizedBox(width: 7),
+                    Flexible(
+                      child: Text(
+                        '좌우로 넘겨 다른 펫을 구경하세요 · 공개 설정한 그룹만 보여요',
+                        textAlign: TextAlign.center,
+                        style: cpSans(size: 11, color: cpInkA(0.4)),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -213,6 +241,30 @@ class _PetExploreScreenState extends State<PetExploreScreen> {
       ],
     );
   }
+
+  /// A quiet inline error slip — a soft pink-tinted pill with a line icon. Honest
+  /// and calm, never shouty.
+  Widget _errorSlip(String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: cpEucA(0.10),
+        borderRadius: BorderRadius.circular(cpRadiusSmall),
+        border: Border.all(color: cpEucA(0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.error_outline, size: 16, color: cpEuc),
+          const SizedBox(width: 10),
+          Flexible(
+            child: Text(text,
+                style: cpSans(
+                    size: 12, color: cpEuc, weight: FontWeight.w500)),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 // ===========================================================================
@@ -226,56 +278,102 @@ class _PetCard extends StatelessWidget {
   final VoidCallback onLike;
   final bool compact;
 
+  /// A stable roster species for this pet, seeded from its id. `ExplorePet` has
+  /// no species column, so the look is a deterministic placeholder (id-seeded,
+  /// like the album thumbs) — never a claim about the pet's real character.
+  String get _speciesId {
+    final list = petRoster;
+    if (list.isEmpty) return kDefaultSpecies;
+    return list[pet.petId.hashCode.abs() % list.length].id;
+  }
+
   @override
   Widget build(BuildContext context) {
     return CpMatted(
-      mat: compact ? 14 : 20,
-      inset: compact ? 10 : 16,
+      mat: compact ? 16 : 22,
+      inset: compact ? 10 : 18,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(pet.moodEmoji, style: TextStyle(fontSize: compact ? 40 : 76)),
-          SizedBox(height: compact ? 10 : 20),
-          Text(pet.name,
-              style: cpSans(
-                  size: compact ? 16 : 20, weight: FontWeight.w600)),
-          const SizedBox(height: 6),
-          Text('LV ${pet.level} · ${pet.inviteCode}',
-              style: cpSans(size: 11, color: cpInkA(0.45), spacing: 0.6)),
-          SizedBox(height: compact ? 12 : 22),
-          GestureDetector(
-            onTap: onLike,
-            behavior: HitTestBehavior.opaque,
-            child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
-              decoration: BoxDecoration(
-                color: pet.likedByMe ? cpEucA(0.12) : Colors.transparent,
-                borderRadius: BorderRadius.circular(2),
-                border: Border.all(
-                  color: pet.likedByMe ? cpEucA(0.55) : cpInkA(0.14),
-                  width: 0.5,
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(pet.likedByMe ? '♥' : '♡',
-                      style: TextStyle(
-                          fontSize: 14,
-                          color: pet.likedByMe ? cpEuc : cpInkA(0.4))),
-                  const SizedBox(width: 8),
-                  Text('${pet.likeCount}',
-                      style: cpSans(
-                        size: 12,
-                        color: pet.likedByMe ? cpEuc : cpInkA(0.55),
-                        weight: FontWeight.w600,
-                      )),
-                ],
-              ),
+          PetView(
+            speciesId: _speciesId,
+            size: compact ? 84 : 168,
+            expression: PetExpression.happy,
+          ),
+          SizedBox(height: compact ? 10 : 18),
+          Text(
+            pet.name,
+            style: cpSerif(
+              size: compact ? 18 : 26,
+              weight: FontWeight.w600,
+              style: FontStyle.normal,
             ),
           ),
+          const SizedBox(height: 8),
+          Text(
+            'LV ${pet.level} · ${pet.inviteCode}',
+            style: cpSans(size: 11, color: cpInkA(0.45), spacing: 0.5),
+          ),
+          SizedBox(height: compact ? 14 : 24),
+          _LikeButton(
+            liked: pet.likedByMe,
+            count: pet.likeCount,
+            onTap: onLike,
+          ),
         ],
+      ),
+    );
+  }
+}
+
+/// A soft pill like-control: a Material line heart (filled + pink when liked)
+/// beside the like count. No emoji, no boxy border.
+class _LikeButton extends StatelessWidget {
+  const _LikeButton({
+    required this.liked,
+    required this.count,
+    required this.onTap,
+  });
+
+  final bool liked;
+  final int count;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+        decoration: BoxDecoration(
+          color: liked ? cpEucA(0.12) : cpPrint,
+          borderRadius: BorderRadius.circular(cpRadiusPill),
+          border: Border.all(
+            color: liked ? cpEucA(0.5) : cpInkA(0.10),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              liked ? Icons.favorite : Icons.favorite_border,
+              size: 16,
+              color: liked ? cpEuc : cpInkA(0.4),
+            ),
+            const SizedBox(width: 9),
+            Text(
+              '$count',
+              style: cpSans(
+                size: 13,
+                color: liked ? cpEuc : cpInkA(0.55),
+                weight: FontWeight.w600,
+                spacing: 0.3,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

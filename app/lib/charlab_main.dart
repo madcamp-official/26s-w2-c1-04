@@ -140,7 +140,7 @@ class _GalleryPageState extends State<GalleryPage> {
             const SizedBox(height: 4),
             Text(c.concept, style: const TextStyle(color: Colors.white70, fontSize: 13)),
             const SizedBox(height: 2),
-            Text('✦ ${c.signature}', style: TextStyle(color: c.accent, fontSize: 12)),
+            Text(' ${c.signature}', style: TextStyle(color: c.accent, fontSize: 12)),
           ],
         ),
       );
