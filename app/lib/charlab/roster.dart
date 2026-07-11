@@ -30,8 +30,10 @@ final List<PetSpecies> petRoster = <PetSpecies>[
   PetSpecies('mochi', Char10()),
 ];
 
-/// The default pick when none is chosen yet.
-const String kDefaultSpecies = 'bear';
+/// The default pick when none is chosen yet (before the couple picks in
+/// onboarding). Hamster — the liveliest of the five, so its idle + expression
+/// reads immediately.
+const String kDefaultSpecies = 'hamster';
 
 /// Look up a species by id, falling back to the default.
 PetSpecies speciesById(String? id) {

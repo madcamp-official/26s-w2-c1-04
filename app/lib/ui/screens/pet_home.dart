@@ -8,6 +8,7 @@
 
 import 'package:flutter/material.dart';
 
+import '../../charlab/toolkit.dart';
 import '../../core/app_state.dart';
 import '../../core/models.dart';
 import '../components.dart';
@@ -96,6 +97,7 @@ class _PetHomeBodyState extends State<_PetHomeBody> {
               const SizedBox(height: 30),
               _Portrait(
                 speciesId: appState.petSpecies,
+                expression: expressionForActivity(activity),
                 pressed: _pressed,
                 onPat: _pat,
                 onPressChanged: (v) => setState(() => _pressed = v),
@@ -203,12 +205,14 @@ class _LvBadge extends StatelessWidget {
 class _Portrait extends StatelessWidget {
   const _Portrait({
     required this.speciesId,
+    required this.expression,
     required this.pressed,
     required this.onPat,
     required this.onPressChanged,
   });
 
   final String speciesId;
+  final PetExpression expression;
   final bool pressed;
   final Future<void> Function() onPat;
   final ValueChanged<bool> onPressChanged;
@@ -234,7 +238,11 @@ class _Portrait extends StatelessWidget {
               child: SizedBox(
                 height: 180,
                 child: Center(
-                  child: PetView(speciesId: speciesId, size: 170),
+                  child: PetView(
+                    speciesId: speciesId,
+                    size: 170,
+                    expression: expression,
+                  ),
                 ),
               ),
             ),

@@ -2,20 +2,26 @@
 //
 // A freshly-born harp-seal pup drawn in soft crayon: a plump, wobbly cream
 // body (wider than it is tall, so it never reads as an egg), big low dot eyes,
-// a tiny dusty-rose nose over an ω mouth, radiating whiskers, a downy cowlick
-// on the head, little side flippers and a fanned tail poking out the bottom —
-// with a scatter of sesame spots as a nod to the 점박이물범 (spotted seal).
+// a tiny dusty-rose nose over an ω mouth, a couple of confident whiskers, a
+// downy cowlick on the head, little side flippers and a fanned tail poking out
+// the bottom.
 //
 // Cuteness cues distilled from the references studied (see [inspiration]):
 //   · SHAPE   — round dumpling/bean body, no neck, head melts into body.
 //   · PROP    — body plump & low; face pushed low; eyes close together.
 //   · EYES    — big round glossy black dots ("limpid pools").
 //   · BLUSH   — pink cheek dabs just under the eyes.
-//   · SIGNATURE — whiskers, a small nose, clasped side flippers, sesame spots,
-//                 a soft white body (harp-seal pup / Mamegoma / Umimaru).
+//   · SIGNATURE — whiskers, a small nose, clasped side flippers, a soft white
+//                 body (harp-seal pup / Mamegoma / Umimaru).
+//
+// Tuned to read at ~56px (picker thumbnail): the fussy sesame-spot scatter was
+// dropped and the whiskers thinned to two confident strokes per side, so only
+// the strong silhouette + a few bold shapes survive when the pup shrinks.
 //
 // Idle signature: the two front flippers wave hello while the tail fans and the
-// head cowlick and whiskers sway, the whole pup breathing and bobbing.
+// head cowlick and whiskers sway, the whole pup breathing and bobbing. The face
+// also reacts to its [PetExpression] — happy ^_^, sleepy zzz, an eating "o",
+// an excited sparkle, a curious tilt, a focused calm.
 
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -29,7 +35,7 @@ class Char06 extends PetCharacter {
   String get name => '말랑';
   @override
   String get concept =>
-      '갓 태어난 하프물범 새끼 — 뽀얀 몸에 참깨빛 점박이, 큰 눈과 살랑이는 수염.';
+      '갓 태어난 하프물범 새끼 — 뽀얀 몸에 큰 눈과 살랑이는 수염.';
   @override
   String get signature =>
       '앞지느러미로 살랑살랑 인사하고, 꼬리 부채와 머리 솜털이 나풀거린다.';
@@ -52,11 +58,12 @@ class Char06 extends PetCharacter {
   Color get accent => const Color(0xFF9DC6D6); // soft ocean blue chip
 
   @override
-  Widget build(BuildContext context, {double? frozenT}) {
+  Widget build(BuildContext context,
+      {double? frozenT, PetExpression expression = PetExpression.neutral}) {
     return IdleAnimator(
       frozenT: frozenT,
       builder: (context, f) => CustomPaint(
-        painter: _P06(f),
+        painter: _P06(f, expression),
         size: Size.infinite,
       ),
     );
@@ -64,14 +71,15 @@ class Char06 extends PetCharacter {
 }
 
 class _P06 extends CustomPainter {
-  _P06(this.f);
+  _P06(this.f, this.expr);
   final IdleFrame f;
+  final PetExpression expr;
 
   static const _cream = Color(0xFFF9F5EE); // pup body
   static const _belly = Color(0xFFFFFEFB); // lighter tummy
   static const _ink = Color(0xFF8B7862); // warm outline (never black)
   static const _inkSoft = Color(0xFF5E4C3C); // face features
-  static const _spot = Color(0xFFCEBCA6); // sesame spots
+  static const _spot = Color(0xFFCEBCA6); // soft volume shade
   static const _nose = Color(0xFFCE9391); // dusty-rose nose (blush-harmonised)
   static const _blush = Color(0xFFF2AEB2);
   static const _ice = Color(0xFF9DC6D6); // soft ocean-blue floe
@@ -81,7 +89,7 @@ class _P06 extends CustomPainter {
     final w = size.width, h = size.height;
 
     final cx = w / 2;
-    final rx = w * 0.31; // half-width  → body ~0.62w
+    final rx = w * 0.31; // half-width  → body ~0.62w (≈60% of the stage)
     final ry = w * 0.29 * f.breath; // half-height (plump, a touch < rx)
     final baseCy = h * 0.575 + f.bob;
 
@@ -104,6 +112,8 @@ class _P06 extends CustomPainter {
 
     canvas.save();
     canvas.translate(cx, baseCy);
+    // curious → a small head-tilt feel (the whole pup leans a touch).
+    if (expr == PetExpression.curious) canvas.rotate(0.06);
 
     // -- fanned tail (drawn behind the body, peeks out the bottom) ----------
     _tail(canvas, rx, ry);
@@ -132,32 +142,62 @@ class _P06 extends CustomPainter {
     _flipper(canvas, rx, ry, -1);
     _flipper(canvas, rx, ry, 1);
 
-    // -- a few confident sesame spots (spotted-seal nod, kept legible) ------
-    final spotP = Hand.fill(_spot.withValues(alpha: 0.5));
-    canvas.drawCircle(Offset(-rx * 0.30, -ry * 0.50), rx * 0.062, spotP);
-    canvas.drawCircle(Offset(rx * 0.16, -ry * 0.62), rx * 0.05, spotP);
-    canvas.drawCircle(Offset(rx * 0.42, -ry * 0.30), rx * 0.056, spotP);
-
     // -- head cowlick (downy pup fuzz, sways) ------------------------------
     _fluff(canvas, rx, ry);
 
-    // -- face (pushed low, kawaii) -----------------------------------------
+    // -- face (pushed low, kawaii, reacts to expression) -------------------
     final eyeY = ry * 0.24; // pushed lower → bigger babyish crown above
     final eyeDx = rx * 0.34; // well spaced
     final eyeR = rx * 0.16; // big "limpid pool" dots
-    if (f.blink > 0.5) {
-      Hand.blinkEye(canvas, Offset(-eyeDx, eyeY), eyeR, _inkSoft, width: 3.6);
-      Hand.blinkEye(canvas, Offset(eyeDx, eyeY), eyeR, _inkSoft, width: 3.6);
+    final blinking = f.blink > 0.5;
+
+    // curious peeks upward a touch (paired with the body tilt above).
+    final lookUp = expr == PetExpression.curious ? -eyeR * 0.42 : 0.0;
+    final ey = eyeY + lookUp;
+
+    if (blinking || expr.eyesClosed) {
+      // blink pulse (or sleeping) → closed arcs, on top of any expression.
+      Hand.blinkEye(canvas, Offset(-eyeDx, ey), eyeR, _inkSoft, width: 3.6);
+      Hand.blinkEye(canvas, Offset(eyeDx, ey), eyeR, _inkSoft, width: 3.6);
+    } else if (expr == PetExpression.happy) {
+      // ^_^ — upward caret arcs (Hand.smile flipped).
+      _06happyEye(canvas, Offset(-eyeDx, ey), eyeR);
+      _06happyEye(canvas, Offset(eyeDx, ey), eyeR);
+    } else if (expr == PetExpression.focused) {
+      // narrowed calm eyes — short set lines.
+      _06calmEye(canvas, Offset(-eyeDx, ey), eyeR);
+      _06calmEye(canvas, Offset(eyeDx, ey), eyeR);
+    } else if (expr == PetExpression.excited) {
+      // wide sparkly eyes.
+      final r = eyeR * 1.14;
+      Hand.dotEye(canvas, Offset(-eyeDx, ey), r, _inkSoft);
+      Hand.dotEye(canvas, Offset(eyeDx, ey), r, _inkSoft);
+      _06sparkle(canvas, Offset(eyeDx + eyeR * 1.4, ey - eyeR * 1.5), eyeR * 0.5);
     } else {
-      Hand.dotEye(canvas, Offset(-eyeDx, eyeY), eyeR, _inkSoft);
-      Hand.dotEye(canvas, Offset(eyeDx, eyeY), eyeR, _inkSoft);
+      // neutral / eating / curious → open glossy dot eyes.
+      Hand.dotEye(canvas, Offset(-eyeDx, ey), eyeR, _inkSoft);
+      Hand.dotEye(canvas, Offset(eyeDx, ey), eyeR, _inkSoft);
     }
 
-    // blush on the cheeks — just below & outside the eyes.
-    Hand.blush(canvas, Offset(-eyeDx - eyeR * 1.0, eyeY + eyeR * 1.5), rx * 0.16, _blush);
-    Hand.blush(canvas, Offset(eyeDx + eyeR * 1.0, eyeY + eyeR * 1.5), rx * 0.16, _blush);
+    // blush on the cheeks — fuller for happy / eating.
+    var blushR = rx * 0.16;
+    var blushOp = 0.45;
+    if (expr == PetExpression.happy) {
+      blushR = rx * 0.185;
+      blushOp = 0.58;
+    } else if (expr == PetExpression.eating) {
+      blushR = rx * 0.205;
+      blushOp = 0.55;
+    } else if (expr == PetExpression.excited) {
+      blushR = rx * 0.175;
+      blushOp = 0.50;
+    }
+    Hand.blush(canvas, Offset(-eyeDx - eyeR, eyeY + eyeR * 1.5), blushR, _blush,
+        opacity: blushOp);
+    Hand.blush(canvas, Offset(eyeDx + eyeR, eyeY + eyeR * 1.5), blushR, _blush,
+        opacity: blushOp);
 
-    // whiskers — two per side, gentle sway.
+    // whiskers — two confident strokes per side, gentle sway.
     _whiskers(canvas, rx, eyeY + eyeR * 2.5);
 
     // nose — a small rounded dusty-rose dot with a highlight.
@@ -173,15 +213,55 @@ class _P06 extends CustomPainter {
       Hand.fill(Colors.white.withValues(alpha: 0.7)),
     );
 
-    // ω mouth — two little smiles under the nose (no fussy philtrum line).
+    // -- mouth (reacts to expression) --------------------------------------
     final mouthY = noseY + eyeR * 0.72;
-    Hand.smile(canvas, Offset(-rx * 0.10, mouthY), rx * 0.22, rx * 0.11, _inkSoft, width: 3.0);
-    Hand.smile(canvas, Offset(rx * 0.10, mouthY), rx * 0.22, rx * 0.11, _inkSoft, width: 3.0);
+    switch (expr) {
+      case PetExpression.eating:
+        // small open round "o" mouth.
+        _06openO(canvas, Offset(0, mouthY + eyeR * 0.1), eyeR * 0.5);
+        break;
+      case PetExpression.excited:
+        // open happy grin.
+        _06openGrin(canvas, Offset(0, mouthY + eyeR * 0.06), rx * 0.30, eyeR * 0.9);
+        break;
+      case PetExpression.happy:
+        // bigger ω smile.
+        Hand.smile(canvas, Offset(-rx * 0.13, mouthY), rx * 0.28, rx * 0.15,
+            _inkSoft, width: 3.2);
+        Hand.smile(canvas, Offset(rx * 0.13, mouthY), rx * 0.28, rx * 0.15,
+            _inkSoft, width: 3.2);
+        break;
+      case PetExpression.sleepy:
+        // tiny mouth.
+        Hand.smile(canvas, Offset(0, mouthY), rx * 0.14, rx * 0.06, _inkSoft,
+            width: 2.8);
+        break;
+      case PetExpression.focused:
+        // small set mouth — nearly flat.
+        Hand.smile(canvas, Offset(0, mouthY), rx * 0.16, rx * 0.03, _inkSoft,
+            width: 3.0);
+        break;
+      case PetExpression.curious:
+        // neutral little smile.
+        Hand.smile(canvas, Offset(0, mouthY), rx * 0.16, rx * 0.085, _inkSoft,
+            width: 3.0);
+        break;
+      case PetExpression.neutral:
+        // ω mouth — two little smiles under the nose.
+        Hand.smile(canvas, Offset(-rx * 0.10, mouthY), rx * 0.22, rx * 0.11,
+            _inkSoft, width: 3.0);
+        Hand.smile(canvas, Offset(rx * 0.10, mouthY), rx * 0.22, rx * 0.11,
+            _inkSoft, width: 3.0);
+        break;
+    }
+
+    // sleepy → a small drifting "zzz" that bobs with the loop.
+    if (expr == PetExpression.sleepy) _06zzz(canvas, rx, ry);
 
     canvas.restore();
 
     // faint paper grain overlay
-    Hand.paperGrain(canvas, Offset.zero & size, seed: 6, dots: 90);
+    Hand.paperGrain(canvas, Offset.zero & size, seed: 6, dots: 60);
   }
 
   // ---- pieces --------------------------------------------------------------
@@ -237,30 +317,9 @@ class _P06 extends CustomPainter {
     canvas.restore();
   }
 
-  // Downy newborn fuzz — a row of tiny soft tufts hugging the upper dome, each
-  // with its own wobble so the pup reads fluffy, not rubber-smooth.
-  void _downy(Canvas canvas, double rx, double ry, Path body) {
-    canvas.save();
-    canvas.clipPath(body);
-    final p = Hand.outline(_ink.withValues(alpha: 0.20), 1.6);
-    for (var i = -3; i <= 3; i++) {
-      final bx = i * rx * 0.15;
-      final by = -ry * 0.9 + (bx * bx) / (rx * 2.6); // follow the sphere
-      final tip = f.sway * 0.6 - rx * 0.02;
-      canvas.drawPath(
-        Hand.roughLine([
-          Offset(bx, by),
-          Offset(bx + tip, by - ry * 0.11),
-        ], wobble: 0.5, seed: 70 + i),
-        p,
-      );
-    }
-    canvas.restore();
-  }
-
   void _whiskers(Canvas canvas, double rx, double baseY) {
-    final p = Hand.outline(_inkSoft.withValues(alpha: 0.85), 2.0);
-    const angs = [-0.24, -0.02, 0.20]; // upper / mid / lower whisker
+    final p = Hand.outline(_inkSoft.withValues(alpha: 0.85), 2.4);
+    const angs = [-0.16, 0.16]; // two confident whiskers per side
     for (final side in const [-1, 1]) {
       final baseX = side * rx * 0.16;
       for (final a in angs) {
@@ -282,6 +341,67 @@ class _P06 extends CustomPainter {
     }
   }
 
+  // ---- expression bits -----------------------------------------------------
+
+  // happy ^_^ — an upward caret arc used as a squinting eye.
+  void _06happyEye(Canvas canvas, Offset at, double r) {
+    Hand.smile(canvas, at, r * 1.7, -r * 0.95, _inkSoft, width: 3.6);
+  }
+
+  // focused — a short, calm set line for a narrowed eye.
+  void _06calmEye(Canvas canvas, Offset at, double r) {
+    canvas.drawLine(at + Offset(-r * 0.6, 0), at + Offset(r * 0.6, 0),
+        Hand.outline(_inkSoft, 3.4));
+  }
+
+  // excited — a tiny 4-point glint.
+  void _06sparkle(Canvas canvas, Offset at, double s) {
+    final p = Hand.outline(Colors.white.withValues(alpha: 0.92), 2.2);
+    canvas.drawLine(at + Offset(0, -s), at + Offset(0, s), p);
+    canvas.drawLine(at + Offset(-s, 0), at + Offset(s, 0), p);
+    canvas.drawCircle(at, s * 0.30, Hand.fill(Colors.white));
+  }
+
+  // eating — a small open round "o" mouth.
+  void _06openO(Canvas canvas, Offset at, double r) {
+    canvas.drawCircle(at, r, Hand.fill(_nose.withValues(alpha: 0.55)));
+    canvas.drawCircle(at, r, Hand.outline(_inkSoft, 3.0));
+  }
+
+  // excited — an open happy grin (half-disc smile).
+  void _06openGrin(Canvas canvas, Offset at, double w, double h) {
+    final rect = Rect.fromCenter(center: at, width: w, height: h * 2);
+    final path = Path()
+      ..addArc(rect, 0, math.pi)
+      ..close();
+    canvas.drawPath(path, Hand.fill(_nose.withValues(alpha: 0.5)));
+    canvas.drawPath(path, Hand.outline(_inkSoft, 3.0));
+  }
+
+  // sleepy — a small drifting "zzz" near the head that bobs with the loop.
+  void _06zzz(Canvas canvas, double rx, double ry) {
+    final drift = math.sin(f.t * math.pi * 2) * rx * 0.05;
+    final base = Offset(rx * 0.52, -ry * 0.80);
+    const sizes = [0.13, 0.17, 0.22];
+    for (var i = 0; i < 3; i++) {
+      final tp = TextPainter(
+        text: TextSpan(
+          text: 'z',
+          style: TextStyle(
+            color: _inkSoft.withValues(alpha: 0.75 - i * 0.12),
+            fontSize: rx * sizes[i],
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      tp.paint(
+        canvas,
+        Offset(base.dx + i * rx * 0.14 + drift, base.dy - i * ry * 0.22 - drift),
+      );
+    }
+  }
+
   @override
-  bool shouldRepaint(_P06 old) => old.f.t != f.t;
+  bool shouldRepaint(_P06 old) => old.f.t != f.t || old.expr != expr;
 }

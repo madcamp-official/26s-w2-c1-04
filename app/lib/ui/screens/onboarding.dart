@@ -18,6 +18,7 @@ import '../../core/app_state.dart';
 import '../../core/models.dart';
 import '../components.dart';
 import '../theme.dart';
+import 'pet_picker.dart';
 
 const Uuid _uuid = Uuid();
 
@@ -166,6 +167,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 switch (_step) {
                   0 => _stepName(),
                   1 => _stepGroup(),
+                  2 => _stepPet(),
                   _ => _stepNickname(),
                 },
                 if (_error != null) ...[
@@ -184,14 +186,27 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   String _title() => switch (_step) {
         0 => '이름을 알려주세요',
         1 => _joining ? '초대 코드로 들어가기' : '우리 그룹 만들기',
+        2 => '펫을 골라주세요',
         _ => '거의 다 됐어요',
       };
 
   String _subtitle() => switch (_step) {
         0 => '상대에게 보일 이름이에요. 나중에 바꿀 수 있어요.',
         1 => '그룹은 두 사람만의 공간이에요. 정원은 2명입니다.',
+        2 => '둘이 함께 키울 펫이에요. 언제든 설정에서 바꿀 수 있어요.',
         _ => '초대 코드를 상대에게 보내고, 별명을 지어주세요.',
       };
+
+  Widget _stepPet() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const PetPickerBody(),
+        const SizedBox(height: 24),
+        CpPrimaryButton(label: '다음', onTap: () => setState(() => _step = 3)),
+      ],
+    );
+  }
 
   Widget _stepName() {
     return Column(
@@ -326,13 +341,13 @@ class _StepDots extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        for (int i = 0; i < 3; i++) ...[
+        for (int i = 0; i < 4; i++) ...[
           Container(
             width: 22,
             height: 2,
             color: i <= step ? cpEuc : cpInkA(0.12),
           ),
-          if (i != 2) const SizedBox(width: 6),
+          if (i != 3) const SizedBox(width: 6),
         ],
       ],
     );

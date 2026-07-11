@@ -181,6 +181,43 @@ class Hand {
 // Idle animation — one loop → a breath, a bob, an occasional blink, a sway.
 // ===========================================================================
 
+// ===========================================================================
+// Expression — how the pet's face reads, driven by what it's doing.
+// ===========================================================================
+
+/// The pet's current mood/pose. Characters read this to change eyes + mouth
+/// (and small extras like zzz / sparkles). Kept independent of the app's
+/// activity enum so the toolkit has no app dependency — the app maps its
+/// PetActivityKind onto these.
+enum PetExpression {
+  /// Default calm face — open dot eyes, gentle smile.
+  neutral,
+
+  /// Happy / greeted — curved ^_^ eyes, bigger smile, brighter blush.
+  happy,
+
+  /// Sleeping — closed eyes, small mouth, a drifting "zzz".
+  sleepy,
+
+  /// Eating — an open little "o" mouth, cheeks a touch fuller.
+  eating,
+
+  /// Excited / playing — wide sparkly eyes, open smile.
+  excited,
+
+  /// Curious / walking — one raised brow feel, looking up a little.
+  curious,
+
+  /// Focused / drawing — narrowed calm eyes, a small set mouth.
+  focused,
+}
+
+extension PetExpressionX on PetExpression {
+  bool get eyesClosed => this == PetExpression.sleepy;
+  bool get eyesHappy => this == PetExpression.happy || this == PetExpression.excited;
+  bool get mouthOpen => this == PetExpression.eating || this == PetExpression.excited;
+}
+
 /// The state of an idle loop at one instant. Characters read these to move.
 class IdleFrame {
   const IdleFrame({
@@ -288,6 +325,7 @@ abstract class PetCharacter {
   Color get accent;
 
   /// Paint the character to fit [size], animated. Pass [frozenT] to freeze the
-  /// idle loop for a deterministic still.
-  Widget build(BuildContext context, {double? frozenT});
+  /// idle loop for a deterministic still, and [expression] to set the face/pose.
+  Widget build(BuildContext context,
+      {double? frozenT, PetExpression expression = PetExpression.neutral});
 }

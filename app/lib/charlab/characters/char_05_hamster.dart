@@ -1,9 +1,16 @@
 // char_05_hamster — "햄찌" (Haemjji), the pouch-cheeked hamster.
 //
-// A HAMSTER TALK–style crayon hamster: a round golden-cream body, tiny rounded
-// ears with pink insides, low wide-set dot eyes, a cream belly patch, tiny buck
-// teeth, and — the whole point — two puffed-out cheek pouches (볼주머니 빵빵) that
-// oomph in and out as it nibbles a sunflower seed held in both little paws.
+// A crayon hamster built for tiny sizes: a round golden-cream body, small
+// rounded ears with pink insides, low wide-set glossy dot eyes, a cream belly
+// patch, strong rosy blush, and — the signature — two puffed cheek pouches
+// (볼주머니 빵빵) that oomph as it nibbles. The look is carried by ONE clean
+// thick-outlined silhouette + a few confident shapes so it still reads at 56px
+// (roster thumbnail) as well as ~170px (pet home). No thin scattered marks.
+//
+// The face reacts to PetExpression (neutral / happy / sleepy / eating /
+// excited / curious / focused): eyes + mouth change, with a drifting "zzz" when
+// sleepy and a sparkle glint when excited. The idle loop still breathes / bobs
+// / blinks / sways.
 //
 // Cuteness cues distilled from 10+ references (see [inspiration]):
 //   · body barely bigger than the head, tiny short limbs (Hamtaro / Oxnard)
@@ -12,10 +19,6 @@
 //   · strong rosy blush (홍조 진하게), low wide dot eyes, tiny ω mouth
 //   · golden-tan fur + cream white belly patch, warm crayon outline
 //   · a sunflower seed clutched in both paws (Hamtaro seed motif)
-//
-// Tuned for the real app: it must read cleanly as a live ~150px pet AND as a
-// 56px roster thumbnail, so the look is carried by a strong silhouette and a
-// few confident shapes — no thin scattered marks that turn to mud when shrunk.
 //
 // Built only on the shared charlab toolkit — no assets, no Random, no clock.
 
@@ -52,11 +55,12 @@ class Char05 extends PetCharacter {
   Color get accent => const Color(0xFFEEBE7C);
 
   @override
-  Widget build(BuildContext context, {double? frozenT}) {
+  Widget build(BuildContext context,
+      {double? frozenT, PetExpression expression = PetExpression.neutral}) {
     return IdleAnimator(
       frozenT: frozenT,
       builder: (context, f) => CustomPaint(
-        painter: _P05(f),
+        painter: _P05(f, expression),
         size: Size.infinite,
       ),
     );
@@ -64,8 +68,9 @@ class Char05 extends PetCharacter {
 }
 
 class _P05 extends CustomPainter {
-  _P05(this.f);
+  _P05(this.f, this.expr);
   final IdleFrame f;
+  final PetExpression expr;
 
   static const _fur = Color(0xFFF3D9A6); // golden-cream body
   static const _furLip = Color(0xFFEFCE8E); // faint underbelly of pouches
@@ -75,9 +80,9 @@ class _P05 extends CustomPainter {
   static const _earPink = Color(0xFFF3B4A6); // warmed toward the coral blush
   static const _blush = Color(0xFFF0958A); // warm coral 홍조, harmonizes w/ golden fur
   static const _nose = Color(0xFFC98A7A);
+  static const _mouthIn = Color(0xFFCE8575); // soft warm open-mouth interior
   static const _seed = Color(0xFF5E4326); // sunflower seed shell
-  static const _seedLine = Color(0xFFDCC7A0);
-  static const _tooth = Color(0xFFFFFDF6);
+  static const _glint = Color(0xFFF0A431); // warm sparkle glint (reads on cream + bg)
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -92,7 +97,10 @@ class _P05 extends CustomPainter {
     // A gentle nibble oscillation — deterministic from f.t, kept subtle so the
     // idle feels alive without getting busy.
     final munch = math.sin(f.t * math.pi * 2 * 3);
-    final cheekPuff = 1 + munch * 0.07;
+    final sleepy = expr == PetExpression.sleepy;
+    final eating = expr == PetExpression.eating;
+    // Cheeks puff on the nibble; eating fills them a touch fuller still.
+    final cheekPuff = 1 + munch * 0.06 + (eating ? 0.10 : 0.0);
     final seedNibble = munch * (rx * 0.045);
 
     // Soft ground shadow — anchors the little body.
@@ -141,44 +149,104 @@ class _P05 extends CustomPainter {
     canvas.save();
     canvas.translate(0, munch * ry * 0.02);
 
-    // Eyes — low and well-spaced glossy dots; blink is a short arc.
     final eyeY = -ry * 0.08;
     final eyeDx = rx * 0.34;
     final eyeR = rx * 0.15;
-    if (f.blink > 0.5) {
-      Hand.blinkEye(canvas, Offset(-eyeDx, eyeY), eyeR, _inkSoft, width: 3.6);
-      Hand.blinkEye(canvas, Offset(eyeDx, eyeY), eyeR, _inkSoft, width: 3.6);
+    final blinking = f.blink > 0.5;
+    final curious = expr == PetExpression.curious;
+    final excited = expr == PetExpression.excited;
+    // Curious peeks slightly up — a tiny "head tilt" feel.
+    final ey = eyeY + (curious ? -ry * 0.06 : 0.0);
+
+    // -- Eyes — the blink pulse always wins over any open-eyed expression.
+    if (blinking || expr.eyesClosed) {
+      // Sleeping / mid-blink → soft closed ‿ arcs.
+      _05arcEye(canvas, Offset(-eyeDx, eyeY), eyeR, up: false);
+      _05arcEye(canvas, Offset(eyeDx, eyeY), eyeR, up: false);
+    } else if (expr == PetExpression.happy) {
+      // ^_^ — happy upward arcs.
+      _05arcEye(canvas, Offset(-eyeDx, eyeY), eyeR, up: true);
+      _05arcEye(canvas, Offset(eyeDx, eyeY), eyeR, up: true);
+    } else if (expr == PetExpression.focused) {
+      // Narrowed calm eyes — short set lines.
+      _05lineEye(canvas, Offset(-eyeDx, eyeY), eyeR);
+      _05lineEye(canvas, Offset(eyeDx, eyeY), eyeR);
     } else {
-      Hand.dotEye(canvas, Offset(-eyeDx, eyeY), eyeR, _inkSoft);
-      Hand.dotEye(canvas, Offset(eyeDx, eyeY), eyeR, _inkSoft);
+      // neutral / curious / eating / excited → glossy dot eyes.
+      final r = excited ? eyeR * 1.18 : eyeR;
+      Hand.dotEye(canvas, Offset(-eyeDx, ey), r, _inkSoft);
+      Hand.dotEye(canvas, Offset(eyeDx, ey), r, _inkSoft);
+      if (excited) _05sparkle(canvas, Offset(rx * 0.60, -ry * 0.50), rx * 0.11);
     }
 
-    // Blush sitting right on the cheeks, just under the eyes — pulses w/ nibble.
-    final blushR = rx * 0.20 * cheekPuff;
-    Hand.blush(canvas, Offset(-rx * 0.50, ry * 0.12), blushR, _blush, opacity: 0.50);
-    Hand.blush(canvas, Offset(rx * 0.50, ry * 0.12), blushR, _blush, opacity: 0.50);
+    // -- Blush on the cheeks, just under the eyes — pulses w/ nibble, brighter
+    //    when happy / eating.
+    var blushMul = 1.0, blushOp = 0.50;
+    if (expr == PetExpression.happy) {
+      blushMul = 1.25;
+      blushOp = 0.60;
+    } else if (eating) {
+      blushMul = 1.35;
+      blushOp = 0.55;
+    } else if (excited) {
+      blushMul = 1.15;
+      blushOp = 0.55;
+    }
+    final blushR = rx * 0.20 * cheekPuff * blushMul;
+    Hand.blush(canvas, Offset(-rx * 0.50, ry * 0.12), blushR, _blush, opacity: blushOp);
+    Hand.blush(canvas, Offset(rx * 0.50, ry * 0.12), blushR, _blush, opacity: blushOp);
 
-    // Little nose.
+    // -- Little nose.
     final noseY = ry * 0.14;
     canvas.drawOval(
       Rect.fromCenter(center: Offset(0, noseY), width: rx * 0.13, height: rx * 0.10),
       Hand.fill(_nose),
     );
 
-    // ω mouth — two soft downward humps meeting under the nose.
-    _05mouth(canvas, at: Offset(0, noseY + rx * 0.09), w: rx * 0.28, d: rx * (0.10 + munch * 0.02));
+    // -- Mouth — set by the expression.
+    final mouthY = noseY + rx * 0.11;
+    if (eating) {
+      // Open round "o" — mid-nibble.
+      final mr = rx * 0.10;
+      final oc = Offset(0, mouthY + mr * 0.3);
+      final rect = Rect.fromCenter(center: oc, width: mr * 1.7, height: mr * 2.1);
+      canvas.drawOval(rect, Hand.fill(_mouthIn));
+      canvas.drawOval(rect, Hand.outline(_inkSoft, 2.8));
+    } else if (excited) {
+      // Open happy grin.
+      _05openSmile(canvas, Offset(0, mouthY), rx * 0.34, rx * 0.14);
+    } else if (expr == PetExpression.happy) {
+      // A bigger, brighter smile.
+      Hand.smile(canvas, Offset(0, mouthY - rx * 0.02), rx * 0.40, rx * 0.20, _inkSoft, width: 3.4);
+    } else if (sleepy) {
+      // A tiny sleeping ω.
+      _05mouth(canvas, at: Offset(0, mouthY), w: rx * 0.14, d: rx * 0.05);
+    } else if (expr == PetExpression.focused) {
+      // A small set mouth.
+      canvas.drawLine(
+        Offset(-rx * 0.08, mouthY),
+        Offset(rx * 0.08, mouthY),
+        Hand.outline(_inkSoft, 3.2),
+      );
+    } else {
+      // neutral / curious → the gentle ω hamster mouth.
+      _05mouth(canvas, at: Offset(0, mouthY), w: rx * 0.26, d: rx * (0.10 + munch * 0.02));
+    }
 
-    // Tiny buck teeth — a soft white nibbler that bobs as it chews.
-    _05teeth(canvas, at: Offset(0, noseY + rx * 0.16 + munch * rx * 0.015), s: rx);
+    // Drifting "zzz" when sleeping.
+    if (sleepy) _05zzz(canvas, Offset(rx * 0.42, -ry * 0.60), rx, f);
 
     canvas.restore(); // end head-nibble
     canvas.restore(); // end body translate
 
     // -- Paws + sunflower seed (in front of the belly), nibbled up and down.
-    final pawY = baseCy + ry * 0.56;
-    _05paw(canvas, Offset(cx - rx * 0.22, pawY - seedNibble), rx * 0.14);
-    _05paw(canvas, Offset(cx + rx * 0.22, pawY - seedNibble), rx * 0.14);
-    _05seed(canvas, Offset(cx, pawY - rx * 0.10 - seedNibble), rx);
+    //    Hands are tucked away while sleeping.
+    if (!sleepy) {
+      final pawY = baseCy + ry * 0.56;
+      _05paw(canvas, Offset(cx - rx * 0.22, pawY - seedNibble), rx * 0.15);
+      _05paw(canvas, Offset(cx + rx * 0.22, pawY - seedNibble), rx * 0.15);
+      _05seed(canvas, Offset(cx, pawY - rx * 0.12 - seedNibble), rx);
+    }
   }
 
   // -- Parts -----------------------------------------------------------------
@@ -209,6 +277,7 @@ class _P05 extends CustomPainter {
     c.drawPath(pouch, Hand.outline(_ink, 5.0));
   }
 
+  // ω mouth — two soft downward humps meeting under the nose.
   void _05mouth(Canvas c, {required Offset at, required double w, required double d}) {
     final path = Path()
       ..moveTo(at.dx - w / 2, at.dy)
@@ -217,31 +286,78 @@ class _P05 extends CustomPainter {
     c.drawPath(path, Hand.outline(_inkSoft, 3.0));
   }
 
-  void _05teeth(Canvas c, {required Offset at, required double s}) {
-    final r = RRect.fromRectAndRadius(
-      Rect.fromCenter(center: at, width: s * 0.13, height: s * 0.10),
-      Radius.circular(s * 0.025),
-    );
-    c.drawRRect(r, Hand.fill(_tooth));
-    c.drawRRect(r, Hand.outline(_inkSoft, 1.8));
-    // center split → two little front teeth
+  // A curved eye — up:true → happy ^ arc, up:false → closed ‿ arc.
+  void _05arcEye(Canvas c, Offset at, double r, {required bool up}) {
+    final rect = Rect.fromCircle(center: at, radius: r);
+    final start = up ? math.pi * 1.15 : math.pi * 0.15;
+    c.drawArc(rect, start, math.pi * 0.7, false, Hand.outline(_inkSoft, 3.8));
+  }
+
+  // A narrowed, calm eye — a short set line (focused).
+  void _05lineEye(Canvas c, Offset at, double r) {
     c.drawLine(
-      Offset(at.dx, at.dy - s * 0.03),
-      Offset(at.dx, at.dy + s * 0.045),
-      Hand.outline(_inkSoft, 1.4),
+      at + Offset(-r * 0.8, 0),
+      at + Offset(r * 0.8, 0),
+      Hand.outline(_inkSoft, 3.6),
     );
+  }
+
+  // A filled open happy grin (excited).
+  void _05openSmile(Canvas c, Offset at, double w, double d) {
+    final path = Path()
+      ..moveTo(at.dx - w / 2, at.dy)
+      ..quadraticBezierTo(at.dx, at.dy + d * 1.7, at.dx + w / 2, at.dy)
+      ..quadraticBezierTo(at.dx, at.dy + d * 0.35, at.dx - w / 2, at.dy)
+      ..close();
+    c.drawPath(path, Hand.fill(_mouthIn));
+    c.drawPath(path, Hand.outline(_inkSoft, 3.0));
+  }
+
+  // A tiny sparkle glint (excited) — a 4-point star + white center.
+  void _05sparkle(Canvas c, Offset at, double s) {
+    final p = Hand.outline(_glint, 2.6);
+    c.drawLine(at + Offset(-s, 0), at + Offset(s, 0), p);
+    c.drawLine(at + Offset(0, -s), at + Offset(0, s), p);
+    final q = Hand.outline(_glint, 1.8);
+    c.drawLine(at + Offset(-s * 0.55, -s * 0.55), at + Offset(s * 0.55, s * 0.55), q);
+    c.drawLine(at + Offset(-s * 0.55, s * 0.55), at + Offset(s * 0.55, -s * 0.55), q);
+    c.drawCircle(at, s * 0.16, Hand.fill(Colors.white));
+  }
+
+  // Drifting "zzz" near the head — three z's rising up-right, bobbing with f.
+  void _05zzz(Canvas c, Offset at, double s, IdleFrame f) {
+    final drift = math.sin(f.t * math.pi * 2);
+    for (var i = 0; i < 3; i++) {
+      final t = i / 2.0;
+      final fs = s * (0.14 + t * 0.07);
+      final pos = at +
+          Offset(s * (t * 0.16), -s * (t * 0.22)) +
+          Offset(0, drift * s * 0.03);
+      final tp = TextPainter(
+        text: TextSpan(
+          text: 'z',
+          style: TextStyle(
+            color: _inkSoft,
+            fontSize: fs,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      tp.paint(c, pos);
+    }
   }
 
   void _05paw(Canvas c, Offset at, double r) {
     final paw = Hand.blob(at, r, ry: r * 0.9, wobble: 1.4, seed: 60 + at.dx.round());
     c.drawPath(paw, Hand.fill(_fur));
-    c.drawPath(paw, Hand.outline(_ink, 4.2));
+    c.drawPath(paw, Hand.outline(_ink, 4.4));
   }
 
   void _05seed(Canvas c, Offset at, double s) {
     c.save();
     c.translate(at.dx, at.dy);
-    final hw = s * 0.13, hh = s * 0.20;
+    final hw = s * 0.15, hh = s * 0.22;
     final seed = Path()
       ..moveTo(0, -hh)
       ..quadraticBezierTo(hw, -hh * 0.25, hw * 0.72, hh * 0.55)
@@ -249,12 +365,10 @@ class _P05 extends CustomPainter {
       ..quadraticBezierTo(-hw, -hh * 0.25, 0, -hh)
       ..close();
     c.drawPath(seed, Hand.fill(_seed));
-    c.drawPath(seed, Hand.outline(_inkSoft, 2.6));
-    // one pale seam so it still reads as a sunflower seed (not a busy stripe set)
-    c.drawLine(Offset(0, -hh * 0.5), Offset(0, hh * 0.5), Hand.outline(_seedLine, 1.8));
+    c.drawPath(seed, Hand.outline(_inkSoft, 2.8));
     c.restore();
   }
 
   @override
-  bool shouldRepaint(_P05 old) => old.f.t != f.t;
+  bool shouldRepaint(_P05 old) => old.f.t != f.t || old.expr != expr;
 }

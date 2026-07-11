@@ -5,8 +5,9 @@
 // crayon outline, two low glossy dot eyes, rosy cheeks, a tiny smile, two
 // stubby feet, and a little green sakura-mochi leaf perched on top. Its idle
 // move is a squash-and-stretch *jiggle* (mallang = 말랑, "squishy"), area-
-// conserving so it reads as a bouncy rice cake rather than a breathing balloon,
-// while a couple of rice-powder sparkles twinkle in the air beside it.
+// conserving so it reads as a bouncy rice cake rather than a breathing balloon.
+// Its face reacts to the pet's mood (PetExpression): happy ^_^, sleepy zzz, an
+// eating "o", an excited sparkle — small changes that read big even at 56px.
 //
 // Look learned from mochi / rice-cake mascots (see [inspiration]). Minimal,
 // thick-lined, doodle-cat simplicity — one strong silhouette plus a few
@@ -25,7 +26,8 @@ class Char10 extends PetCharacter {
   @override
   String get concept => '말랑말랑한 떡 블롭 — 둥근 사각 실루엣, 낮은 점 눈, 볼터치, 머리 위 작은 잎사귀.';
   @override
-  String get signature => '숨 대신 몸이 통통 눌렸다 늘어나는 떡 젤리 저글(squash-and-stretch), 잎사귀는 살랑, 쌀가루 반짝임이 흩날린다.';
+  String get signature =>
+      '숨 대신 몸이 통통 눌렸다 늘어나는 떡 젤리 저글(squash-and-stretch), 잎사귀는 살랑, 기분(PetExpression)에 따라 눈·입이 바뀐다.';
   @override
   List<String> get inspiration => const [
         'Molang — round white rice-cake rabbit, blushy pink cheeks + dark button eyes (Hye-Ji Yoon)',
@@ -44,11 +46,12 @@ class Char10 extends PetCharacter {
   Color get accent => const Color(0xFFF3C6CC);
 
   @override
-  Widget build(BuildContext context, {double? frozenT}) {
+  Widget build(BuildContext context,
+      {double? frozenT, PetExpression expression = PetExpression.neutral}) {
     return IdleAnimator(
       frozenT: frozenT,
       builder: (context, f) => CustomPaint(
-        painter: _P10(f),
+        painter: _P10(f, expression),
         size: Size.infinite,
       ),
     );
@@ -56,8 +59,9 @@ class Char10 extends PetCharacter {
 }
 
 class _P10 extends CustomPainter {
-  _P10(this.f);
+  _P10(this.f, this.expr);
   final IdleFrame f;
+  final PetExpression expr;
 
   // Warm, soft palette — a faintly pink rice-cake cream, never pure white/black.
   static const _10dough = Color(0xFFFDF2EE); // mochi cream (hint of pink)
@@ -67,7 +71,8 @@ class _P10 extends CustomPainter {
   static const _10blush = Color(0xFFF29AA0); // warm coral-rose cheek
   static const _10leaf = Color(0xFFA9CE8E); // sakura-mochi leaf
   static const _10leafInk = Color(0xFF7FA968);
-  static const _10sparkle = Color(0xFFEBB9BE); // rice-powder twinkle
+  static const _10mouth = Color(0xFFE0929A); // soft warm mouth interior
+  static const _10glintC = Color(0xFFF4B740); // excited sparkle glint (gold)
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -149,36 +154,89 @@ class _P10 extends CustomPainter {
     );
     canvas.drawPath(body, Hand.outline(_10ink, 5.5));
 
-    // Face — placed low on the pillow (kawaii rule), eyes spaced wide.
-    final eyeY = ry * 0.32;
+    // Face — placed low on the pillow (kawaii rule), reacting to [expr].
+    final sleepy = expr == PetExpression.sleepy;
+    final happy = expr == PetExpression.happy;
+    final excited = expr == PetExpression.excited;
+    final eating = expr == PetExpression.eating;
+    final curious = expr == PetExpression.curious;
+    final focused = expr == PetExpression.focused;
+
+    final baseEyeY = ry * 0.32;
     final eyeDx = rx * 0.34;
     final eyeR = rx * 0.14;
-    if (f.blink > 0.5) {
+    // Curious looks up a touch — a small head-tilt feel via raised eyes.
+    final eyeY = curious ? baseEyeY - eyeR * 0.7 : baseEyeY;
+
+    // Eyes. Blink pulse wins over any open-eyed expression; sleepy stays shut.
+    if (f.blink > 0.5 || expr.eyesClosed) {
       Hand.blinkEye(canvas, Offset(-eyeDx, eyeY), eyeR, _10inkSoft, width: 4.0);
       Hand.blinkEye(canvas, Offset(eyeDx, eyeY), eyeR, _10inkSoft, width: 4.0);
+    } else if (happy) {
+      // Joyful ^_^ squint.
+      _10happyEye(canvas, Offset(-eyeDx, eyeY), eyeR);
+      _10happyEye(canvas, Offset(eyeDx, eyeY), eyeR);
+    } else if (focused) {
+      // Narrowed, calm eyes — short horizontal strokes.
+      for (final s in const [-1.0, 1.0]) {
+        canvas.drawLine(
+          Offset(s * eyeDx - eyeR * 0.62, eyeY),
+          Offset(s * eyeDx + eyeR * 0.62, eyeY),
+          Hand.outline(_10inkSoft, 4.0),
+        );
+      }
     } else {
-      Hand.dotEye(canvas, Offset(-eyeDx, eyeY), eyeR, _10inkSoft);
-      Hand.dotEye(canvas, Offset(eyeDx, eyeY), eyeR, _10inkSoft);
+      // Open glossy dot eyes — excited opens them wide + adds a glint.
+      final r = excited ? eyeR * 1.24 : eyeR;
+      Hand.dotEye(canvas, Offset(-eyeDx, eyeY), r, _10inkSoft);
+      Hand.dotEye(canvas, Offset(eyeDx, eyeY), r, _10inkSoft);
+      if (excited) {
+        _10glint(canvas, Offset(eyeDx + r * 1.35, eyeY - r * 1.2), rx * 0.11);
+      }
     }
-    // Rosy cheeks — one soft dab each, sitting just below & outside the eyes.
+
+    // Rosy cheeks — fuller for eating, brighter for happy/excited.
+    final brightBlush = expr.eyesHappy;
+    final blushR = eating ? rx * 0.20 : (brightBlush ? rx * 0.185 : rx * 0.16);
+    final blushOp = brightBlush ? 0.62 : (eating ? 0.58 : 0.5);
     for (final s in const [-1.0, 1.0]) {
       Hand.blush(
         canvas,
-        Offset(eyeDx * 1.5 * s, eyeY + eyeR * 1.9),
-        rx * 0.16,
+        Offset(eyeDx * 1.5 * s, baseEyeY + eyeR * 1.9),
+        blushR,
         _10blush,
-        opacity: 0.5,
+        opacity: blushOp,
       );
     }
-    // A small, gentle smile.
-    Hand.smile(
-      canvas,
-      Offset(0, eyeY + eyeR * 2.4),
-      rx * 0.26,
-      rx * 0.14,
-      _10inkSoft,
-      width: 3.8,
-    );
+
+    // Mouth — changes with the mood.
+    final mouthAt = Offset(0, baseEyeY + eyeR * 2.4);
+    if (expr.mouthOpen) {
+      if (eating) {
+        // A small open round "o".
+        canvas.drawCircle(mouthAt, rx * 0.09, Hand.fill(_10mouth));
+        canvas.drawCircle(mouthAt, rx * 0.09, Hand.outline(_10inkSoft, 3.2));
+      } else {
+        // Excited — a big open happy grin.
+        _10openMouth(canvas, mouthAt, rx * 0.30, rx * 0.22);
+      }
+    } else if (happy) {
+      Hand.smile(canvas, mouthAt, rx * 0.34, rx * 0.20, _10inkSoft, width: 4.0);
+    } else if (sleepy) {
+      Hand.smile(canvas, mouthAt, rx * 0.12, rx * 0.055, _10inkSoft,
+          width: 3.4);
+    } else if (focused) {
+      // A small, set mouth.
+      Hand.smile(canvas, mouthAt, rx * 0.15, rx * 0.03, _10inkSoft, width: 3.6);
+    } else {
+      // neutral / curious — the gentle default smile.
+      Hand.smile(canvas, mouthAt, rx * 0.26, rx * 0.14, _10inkSoft, width: 3.8);
+    }
+
+    // Sleepy drifts a little "zzz" up beside its head, bobbing with the loop.
+    if (sleepy) {
+      _10zzz(canvas, Offset(rx * 0.5, -ry * 0.92), rx * 0.22);
+    }
 
     canvas.restore();
 
@@ -189,16 +247,6 @@ class _P10 extends CustomPainter {
       Offset(cx - rx * 0.16 + f.sway * 1.2, headTop + ry * 0.06),
       rx * 0.32,
     );
-
-    // A couple of rice-powder sparkles twinkling in the air beside the mochi —
-    // kept minimal so they read as sparkle, not scatter. Each pulses in size +
-    // opacity on its own phase, and drifts with the sway, so the air feels alive.
-    final sway = f.sway * 0.7;
-    double tw(double phase) => 0.7 + 0.3 * math.sin(f.t * math.pi * 2 + phase);
-    _10sparkleAt(canvas, Offset(cx + rx * 0.72 + sway, baseCy - ry * 0.58), 5.5,
-        twinkle: tw(0.0));
-    _10sparkleAt(canvas, Offset(cx - rx * 0.76 - sway, baseCy - ry * 0.36), 4.4,
-        twinkle: tw(3.1));
   }
 
   // A wobbly superellipse (squircle) — the mochi pillow. exp < 1 squares the
@@ -264,34 +312,61 @@ class _P10 extends CustomPainter {
       ..close();
     canvas.drawPath(leaf, Hand.fill(_10leaf));
     canvas.drawPath(leaf, Hand.outline(_10leafInk, 3.2));
-    // One confident center vein so it reads as a leaf — no scattered detail.
-    final vein = Hand.roughLine(
-      [Offset(0, s * 0.4), Offset(0, -s * 0.42)],
-      wobble: 0.7,
-      seed: 22,
-    );
-    canvas.drawPath(vein, Hand.outline(_10leafInk, 2.6));
     canvas.restore();
   }
 
-  void _10sparkleAt(Canvas canvas, Offset at, double s, {double twinkle = 1.0}) {
-    canvas.save();
-    canvas.translate(at.dx, at.dy);
-    final ss = s * twinkle; // pulse the size with the twinkle phase
-    final i = ss * 0.28;
-    final star = Path()
-      ..moveTo(0, -ss)
-      ..quadraticBezierTo(i, -i, ss, 0)
-      ..quadraticBezierTo(i, i, 0, ss)
-      ..quadraticBezierTo(-i, i, -ss, 0)
-      ..quadraticBezierTo(-i, -i, 0, -ss)
+  // An upward arch ⌒ eye — the joyful ^_^ squint.
+  void _10happyEye(Canvas c, Offset at, double r) {
+    final path = Path()
+      ..moveTo(at.dx - r, at.dy + r * 0.34)
+      ..quadraticBezierTo(at.dx, at.dy - r * 0.72, at.dx + r, at.dy + r * 0.34);
+    c.drawPath(path, Hand.outline(_10inkSoft, 4.2));
+  }
+
+  // A big open happy grin — a filled downward arc closed along the top.
+  void _10openMouth(Canvas c, Offset at, double w, double depth) {
+    final path = Path()
+      ..moveTo(at.dx - w / 2, at.dy)
+      ..quadraticBezierTo(at.dx, at.dy + depth * 1.4, at.dx + w / 2, at.dy)
       ..close();
-    // ...and its opacity, so it reads as a real drifting glint.
-    canvas.drawPath(
-        star, Hand.fill(_10sparkle.withValues(alpha: 0.55 + 0.45 * twinkle)));
-    canvas.restore();
+    c.drawPath(path, Hand.fill(_10mouth));
+    c.drawPath(path, Hand.outline(_10inkSoft, 3.6));
+  }
+
+  // A tiny 4-point star glint for the excited sparkle.
+  void _10glint(Canvas c, Offset at, double s) {
+    final star = Path()
+      ..moveTo(at.dx, at.dy - s)
+      ..quadraticBezierTo(at.dx + s * 0.22, at.dy - s * 0.22, at.dx + s, at.dy)
+      ..quadraticBezierTo(at.dx + s * 0.22, at.dy + s * 0.22, at.dx, at.dy + s)
+      ..quadraticBezierTo(at.dx - s * 0.22, at.dy + s * 0.22, at.dx - s, at.dy)
+      ..quadraticBezierTo(at.dx - s * 0.22, at.dy - s * 0.22, at.dx, at.dy - s)
+      ..close();
+    c.drawPath(star, Hand.fill(_10glintC));
+  }
+
+  // A small drifting "zzz" for the sleepy face — bobs up with the idle loop.
+  void _10zzz(Canvas canvas, Offset base, double s) {
+    final rise = math.sin(f.t * math.pi * 2) * 0.5 + 0.5; // 0..1 drift
+    for (var i = 0; i < 3; i++) {
+      final fs = s * (0.62 + i * 0.28);
+      final tp = TextPainter(
+        text: TextSpan(
+          text: 'z',
+          style: TextStyle(
+            color: _10inkSoft.withValues(alpha: 0.85),
+            fontSize: fs,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      final dx = base.dx + i * s * 0.52;
+      final dy = base.dy - i * s * 0.6 - rise * s * 0.45;
+      tp.paint(canvas, Offset(dx, dy));
+    }
   }
 
   @override
-  bool shouldRepaint(_P10 old) => old.f.t != f.t;
+  bool shouldRepaint(_P10 old) => old.f.t != f.t || old.expr != expr;
 }

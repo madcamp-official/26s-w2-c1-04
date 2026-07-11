@@ -23,6 +23,10 @@ class CharlabApp extends StatelessWidget {
     final solo = p['solo'] == '1';
     final t = double.tryParse(p['t'] ?? '');
     final id = p['c'];
+    final expr = PetExpression.values.firstWhere(
+      (e) => e.name == p['expr'],
+      orElse: () => PetExpression.neutral,
+    );
     var idx = id == null ? 0 : characters.indexWhere((c) => c.id == id);
     if (idx < 0) idx = 0;
 
@@ -31,7 +35,7 @@ class CharlabApp extends StatelessWidget {
       title: 'Charlab · Pet Characters',
       theme: ThemeData(useMaterial3: true, brightness: Brightness.light),
       home: solo
-          ? _Solo(character: characters[idx], frozenT: t)
+          ? _Solo(character: characters[idx], frozenT: t, expression: expr)
           : GalleryPage(initial: idx, frozenT: t),
     );
   }
@@ -41,9 +45,14 @@ class CharlabApp extends StatelessWidget {
 const _paper = Color(0xFFF3EFE6);
 
 class _Solo extends StatelessWidget {
-  const _Solo({required this.character, this.frozenT});
+  const _Solo({
+    required this.character,
+    this.frozenT,
+    this.expression = PetExpression.neutral,
+  });
   final PetCharacter character;
   final double? frozenT;
+  final PetExpression expression;
 
   @override
   Widget build(BuildContext context) {
@@ -53,7 +62,7 @@ class _Solo extends StatelessWidget {
         child: SizedBox(
           width: 360,
           height: 360,
-          child: character.build(context, frozenT: frozenT),
+          child: character.build(context, frozenT: frozenT, expression: expression),
         ),
       ),
     );

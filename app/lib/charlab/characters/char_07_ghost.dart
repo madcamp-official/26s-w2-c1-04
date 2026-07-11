@@ -52,7 +52,8 @@ class Char07 extends PetCharacter {
   Color get accent => const Color(0xFFC7BCE8);
 
   @override
-  Widget build(BuildContext context, {double? frozenT}) {
+  Widget build(BuildContext context,
+      {double? frozenT, PetExpression expression = PetExpression.neutral}) {
     return IdleAnimator(
       frozenT: frozenT,
       builder: (context, f) => CustomPaint(

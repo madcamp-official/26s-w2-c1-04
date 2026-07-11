@@ -11,12 +11,19 @@
 // bean seam, leaf veins, extra sparkles) were dropped so nothing turns to mud
 // when shrunk.
 //
+// Reactive face: the eyes / mouth / cheeks switch on [PetExpression] — happy
+// ^_^, sleepy closed eyes + a drifting "zzz", eating a little 'o', excited
+// wide eyes + a sparkle, curious up-look, focused calm — while the idle blink
+// still pulses on top of any open-eyed look.
+//
 // Cuteness cues:
 //   · plump rounded bean body in soft pastel green
 //   · TWO leaves on a short stem from the top of the head (the 🌱 signature)
 //   · big low-placed glossy dot eyes (kawaii rule)
 //   · earthy soil-toned blush instead of pink (흙빛 볼)
 //   · a soft ground shadow so it feels planted
+
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
@@ -52,11 +59,12 @@ class Char09 extends PetCharacter {
   Color get accent => const Color(0xFF9CCB6A);
 
   @override
-  Widget build(BuildContext context, {double? frozenT}) {
+  Widget build(BuildContext context,
+      {double? frozenT, PetExpression expression = PetExpression.neutral}) {
     return IdleAnimator(
       frozenT: frozenT,
       builder: (context, f) => CustomPaint(
-        painter: _P09(f),
+        painter: _P09(f, expression),
         size: Size.infinite,
       ),
     );
@@ -64,8 +72,9 @@ class Char09 extends PetCharacter {
 }
 
 class _P09 extends CustomPainter {
-  _P09(this.f);
+  _P09(this.f, this.expr);
   final IdleFrame f;
+  final PetExpression expr;
 
   // Warm, soft palette — nothing pure black.
   static const _bean = Color(0xFFC7E39C); // pistachio bean body
@@ -76,6 +85,7 @@ class _P09 extends CustomPainter {
   static const _leafDark = Color(0xFF6E9440); // leaf outline
   static const _stem = Color(0xFF89B857); // sprout stem
   static const _blush = Color(0xFFD79B72); // 흙빛 earthy-terracotta cheeks
+  static const _mouth = Color(0xFFB4705A); // warm open-mouth interior
   static const _shadow = Color(0x14000000);
 
   @override
@@ -128,28 +138,8 @@ class _P09 extends CustomPainter {
     canvas.drawPath(belly, Hand.fill(_beanLight.withValues(alpha: 0.85)));
     canvas.drawPath(body, Hand.outline(_ink, 5.5));
 
-    // --- Face — low on the body (kawaii rule), eyes well spaced. ---
-    final eyeY = ry * 0.32;
-    final eyeDx = rx * 0.36;
-    final eyeR = rx * 0.18; // bold round baby eyes that survive shrinking
-    if (f.blink > 0.5) {
-      Hand.blinkEye(canvas, Offset(-eyeDx, eyeY), eyeR, _inkSoft, width: 3.8);
-      Hand.blinkEye(canvas, Offset(eyeDx, eyeY), eyeR, _inkSoft, width: 3.8);
-    } else {
-      Hand.dotEye(canvas, Offset(-eyeDx, eyeY), eyeR, _inkSoft);
-      Hand.dotEye(canvas, Offset(eyeDx, eyeY), eyeR, _inkSoft);
-    }
-    // Earthy soil-toned cheeks, sitting just under-and-outside each eye.
-    Hand.blush(canvas, Offset(-eyeDx * 1.16, eyeY + eyeR * 1.5), rx * 0.15,
-        _blush,
-        opacity: 0.6);
-    Hand.blush(
-        canvas, Offset(eyeDx * 1.16, eyeY + eyeR * 1.5), rx * 0.15, _blush,
-        opacity: 0.6);
-    // Warm little grin.
-    Hand.smile(canvas, Offset(0, eyeY + eyeR * 2.1), rx * 0.26, rx * 0.15,
-        _inkSoft,
-        width: 3.4);
+    // --- Face — low on the body (kawaii rule), reacting to [expr]. ---
+    _09Face(canvas, rx, ry);
 
     canvas.restore();
 
@@ -214,6 +204,168 @@ class _P09 extends CustomPainter {
     canvas.drawPath(leaf, Hand.outline(_leafDark, 3.2));
   }
 
+  /// The face — a few confident shapes that read at 56px, switching on [expr].
+  /// The idle blink pulse still fires on top of any open-eyed look, so the pet
+  /// keeps blinking whatever mood it's in.
+  void _09Face(Canvas canvas, double rx, double ry) {
+    final baseEyeY = ry * 0.32;
+    final eyeDx = rx * 0.36;
+    final eyeR = rx * 0.18; // bold round baby eyes that survive shrinking
+
+    // Curious looks up a touch, with a hair of head-tilt feel (eyes offset up).
+    final lookUp = expr == PetExpression.curious ? eyeR * 0.55 : 0.0;
+    final tilt = expr == PetExpression.curious ? eyeR * 0.12 : 0.0;
+    final eyeY = baseEyeY - lookUp;
+    final lEye = Offset(-eyeDx, eyeY - tilt);
+    final rEye = Offset(eyeDx, eyeY + tilt);
+
+    final blinking = f.blink > 0.5;
+
+    // --- Eyes ---------------------------------------------------------------
+    if (blinking || expr.eyesClosed) {
+      // Idle blink pulse OR a sleeping face → gentle closed arcs.
+      Hand.blinkEye(canvas, lEye, eyeR, _inkSoft, width: 3.8);
+      Hand.blinkEye(canvas, rEye, eyeR, _inkSoft, width: 3.8);
+    } else if (expr == PetExpression.happy) {
+      // ^_^ — blinkEye flipped into an upward happy squint.
+      _09HappyEye(canvas, lEye, eyeR, _inkSoft);
+      _09HappyEye(canvas, rEye, eyeR, _inkSoft);
+    } else if (expr == PetExpression.focused) {
+      // Calm narrowed eyes — short level lines.
+      _09NarrowEye(canvas, lEye, eyeR, _inkSoft);
+      _09NarrowEye(canvas, rEye, eyeR, _inkSoft);
+    } else {
+      // Open glossy dot eyes — neutral / eating / curious / excited.
+      final er = expr == PetExpression.excited ? eyeR * 1.14 : eyeR;
+      Hand.dotEye(canvas, lEye, er, _inkSoft);
+      Hand.dotEye(canvas, rEye, er, _inkSoft);
+      if (expr == PetExpression.excited) {
+        // A tiny glint up-right of the eyes.
+        _09Sparkle(canvas, Offset(eyeDx * 1.42, eyeY - eyeR * 2.3), rx * 0.11);
+      }
+    }
+
+    // --- Cheeks — earthy soil-toned blush; fuller/brighter for some moods. --
+    var blushR = rx * 0.15;
+    var blushOp = 0.6;
+    if (expr.eyesHappy) {
+      // happy / excited → slightly stronger blush.
+      blushR = rx * 0.16;
+      blushOp = 0.72;
+    } else if (expr == PetExpression.eating) {
+      // Fuller cheeks while munching.
+      blushR = rx * 0.20;
+      blushOp = 0.7;
+    }
+    final cheekY = baseEyeY + eyeR * 1.5;
+    Hand.blush(canvas, Offset(-eyeDx * 1.16, cheekY), blushR, _blush,
+        opacity: blushOp);
+    Hand.blush(canvas, Offset(eyeDx * 1.16, cheekY), blushR, _blush,
+        opacity: blushOp);
+
+    // --- Mouth --------------------------------------------------------------
+    final mouthAt = Offset(0, baseEyeY + eyeR * 2.1);
+    switch (expr) {
+      case PetExpression.eating:
+        // Small open round 'o' — a warm little munch.
+        final mr = rx * 0.10;
+        canvas.drawCircle(mouthAt, mr, Hand.fill(_mouth));
+        canvas.drawCircle(mouthAt, mr, Hand.outline(_inkSoft, 3.0));
+        break;
+      case PetExpression.excited:
+        // Open happy smile.
+        _09OpenSmile(canvas, mouthAt, rx * 0.34, rx * 0.22);
+        break;
+      case PetExpression.happy:
+        // A bigger grin.
+        Hand.smile(canvas, mouthAt, rx * 0.34, rx * 0.20, _inkSoft, width: 3.6);
+        break;
+      case PetExpression.sleepy:
+        // A tiny sleepy mouth.
+        Hand.smile(canvas, mouthAt, rx * 0.13, rx * 0.06, _inkSoft, width: 3.0);
+        break;
+      case PetExpression.focused:
+        // A small set mouth — a short level line.
+        canvas.drawLine(mouthAt - Offset(rx * 0.09, 0),
+            mouthAt + Offset(rx * 0.09, 0), Hand.outline(_inkSoft, 3.2));
+        break;
+      case PetExpression.curious:
+        // A gentle, near-neutral little smile.
+        Hand.smile(canvas, mouthAt, rx * 0.22, rx * 0.11, _inkSoft, width: 3.2);
+        break;
+      case PetExpression.neutral:
+        // The warm default grin.
+        Hand.smile(canvas, mouthAt, rx * 0.26, rx * 0.15, _inkSoft, width: 3.4);
+        break;
+    }
+
+    // --- Sleepy 'zzz' drifting off the head, bobbing with the idle loop -----
+    if (expr == PetExpression.sleepy) {
+      _09Zzz(canvas, Offset(eyeDx * 1.5, -ry * 0.72), rx * 0.16);
+    }
+  }
+
+  /// Happy ^_^ eye — an upward dome arc (Hand.blinkEye flipped vertically).
+  void _09HappyEye(Canvas c, Offset at, double r, Color ink,
+      {double width = 3.8}) {
+    final rect = Rect.fromCircle(center: at, radius: r);
+    c.drawArc(
+        rect, math.pi * 1.15, math.pi * 0.7, false, Hand.outline(ink, width));
+  }
+
+  /// Calm narrowed eye — a short level line (focused look).
+  void _09NarrowEye(Canvas c, Offset at, double r, Color ink,
+      {double width = 3.8}) {
+    c.drawLine(at - Offset(r * 0.72, 0), at + Offset(r * 0.72, 0),
+        Hand.outline(ink, width));
+  }
+
+  /// A tiny warm sparkle glint — a soft plus (excited look).
+  void _09Sparkle(Canvas c, Offset at, double s) {
+    final p = Hand.outline(const Color(0xFFF4B740), math.max(2.0, s * 0.34));
+    c.drawLine(at - Offset(s, 0), at + Offset(s, 0), p);
+    c.drawLine(at - Offset(0, s), at + Offset(0, s), p);
+  }
+
+  /// An open happy smile — a filled arc mouth (excited look).
+  void _09OpenSmile(Canvas c, Offset at, double w, double depth) {
+    final path = Path()
+      ..moveTo(at.dx - w / 2, at.dy)
+      ..quadraticBezierTo(at.dx, at.dy + depth, at.dx + w / 2, at.dy)
+      ..close();
+    c.drawPath(path, Hand.fill(_mouth));
+    c.drawPath(path, Hand.outline(_inkSoft, 3.4));
+  }
+
+  /// Three little 'z's drifting up off the head, bobbing with the idle phase.
+  void _09Zzz(Canvas c, Offset at, double s) {
+    const steps = <List<double>>[
+      [0.0, 0.0, 0.95],
+      [0.9, -1.0, 1.2],
+      [2.0, -2.3, 1.5],
+    ];
+    for (final z in steps) {
+      final tp = TextPainter(
+        text: TextSpan(
+          text: 'z',
+          style: TextStyle(
+            color: _inkSoft.withValues(alpha: 0.78),
+            fontSize: s * z[2],
+            fontWeight: FontWeight.w700,
+            height: 1.0,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      // Gentle per-letter bob so the little zzz breathes with the idle loop.
+      final bob = math.sin((f.t + z[0] * 0.2) * math.pi * 2) * s * 0.18;
+      final pos = at +
+          Offset(z[0] * s * 0.7, z[1] * s + bob) -
+          Offset(tp.width / 2, tp.height / 2);
+      tp.paint(c, pos);
+    }
+  }
+
   @override
-  bool shouldRepaint(_P09 old) => old.f.t != f.t;
+  bool shouldRepaint(_P09 old) => old.f.t != f.t || old.expr != expr;
 }
