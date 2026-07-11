@@ -131,12 +131,16 @@ async def mark_viewed(
         session, user_id, doodle_id, for_update=True
     )
 
+    # receipt 행에는 FOR UPDATE 를 걸지 않는다. 위의 낙서 행 잠금이 같은 낙서의
+    # 확인을 이미 직렬화하므로 여기서 필요 없고, 존재하지 않는 (doodle_id,user_id)
+    # 키에 FOR UPDATE 를 걸면 REPEATABLE READ 에서 유니크 인덱스에 갭 잠금이 생겨,
+    # 서로 다른 낙서를 동시에 처음 확인하는 두 트랜잭션이 데드락(1213)에 빠진다.
     receipt = (
         await session.execute(
             select(DoodleReceipt).where(
                 DoodleReceipt.doodle_id == doodle_id,
                 DoodleReceipt.user_id == user_id,
-            ).with_for_update()
+            )
         )
     ).scalar_one_or_none()
 

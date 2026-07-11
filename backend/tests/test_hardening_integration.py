@@ -392,6 +392,28 @@ async def run() -> None:
                 str([v.json() for v in views]),
             )
 
+            # 서로 다른 낙서를 두 사람이 동시에 처음 확인해도 receipt 유니크 인덱스
+            # 갭 잠금 데드락(1213)이 없어야 한다. 낙서 행 잠금만으로 직렬화된다.
+            cross_x = await client.post(
+                "/v1/doodles",
+                data={"mode": "ephemeral", "content_type": "text", "text_body": "X"},
+                headers=auth_a,
+            )
+            cross_y = await client.post(
+                "/v1/doodles",
+                data={"mode": "ephemeral", "content_type": "text", "text_body": "Y"},
+                headers=auth_b,
+            )
+            cross_views = await asyncio.gather(
+                client.post(f"/v1/doodles/{cross_x.json()['id']}/view", headers=auth_b),
+                client.post(f"/v1/doodles/{cross_y.json()['id']}/view", headers=auth_a),
+            )
+            check(
+                "서로 다른 낙서 동시 최초확인 데드락 없음",
+                all(item.status_code == 200 for item in cross_views),
+                str([v.status_code for v in cross_views]),
+            )
+
             await services.expire_doodle(int(ephemeral_id))
             check(
                 "만료 후 widget_refresh는 두 기기",
