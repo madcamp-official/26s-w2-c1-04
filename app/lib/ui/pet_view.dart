@@ -6,6 +6,7 @@
 
 import 'package:flutter/material.dart';
 
+import '../charlab/items/item_art.dart';
 import '../charlab/roster.dart';
 import '../charlab/toolkit.dart';
 import '../core/models.dart';
@@ -32,6 +33,7 @@ class PetView extends StatelessWidget {
     this.size = 150,
     this.frozenT,
     this.expression = PetExpression.neutral,
+    this.equippedItemIds = const <String>[],
   });
 
   final String speciesId;
@@ -39,13 +41,26 @@ class PetView extends StatelessWidget {
   final double? frozenT;
   final PetExpression expression;
 
+  /// Catalog ids of worn items, drawn over the pet at species anchors.
+  final List<String> equippedItemIds;
+
   @override
   Widget build(BuildContext context) {
     final PetCharacter c = speciesById(speciesId).character;
     return SizedBox(
       width: size,
       height: size,
-      child: c.build(context, frozenT: frozenT, expression: expression),
+      child: Stack(
+        children: [
+          c.build(context, frozenT: frozenT, expression: expression),
+          if (equippedItemIds.isNotEmpty)
+            PetItemLayer(
+              speciesId: speciesId,
+              itemIds: equippedItemIds,
+              box: size,
+            ),
+        ],
+      ),
     );
   }
 }

@@ -21,6 +21,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/app_state.dart';
 import '../../core/models.dart';
+import '../../charlab/items/item_art.dart';
 import '../components.dart';
 import '../theme.dart';
 
@@ -322,11 +323,7 @@ class _StoreCard extends StatelessWidget {
                     color: equipped ? cpEucA(0.10) : cpDim,
                     borderRadius: BorderRadius.circular(cpRadiusSmall),
                   ),
-                  child: Icon(
-                    _categoryIcon(item.category),
-                    size: 38,
-                    color: equipped ? cpEuc : cpInkA(0.45),
-                  ),
+                  child: ItemThumb(item.id, size: 56),
                 ),
               ),
             ),
@@ -515,13 +512,7 @@ class _ItemSheetState extends State<_ItemSheet> {
                     mat: 20,
                     child: SizedBox(
                       height: 96,
-                      child: Center(
-                        child: Icon(
-                          _categoryIcon(_item.category),
-                          size: 46,
-                          color: cpInkA(0.5),
-                        ),
-                      ),
+                      child: Center(child: ItemThumb(_item.id, size: 76)),
                     ),
                   ),
                   const SizedBox(height: 20),

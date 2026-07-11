@@ -169,6 +169,9 @@ class _HomeBodyState extends State<_HomeBody> {
                         _HouseScene(
                           speciesId: appState.petSpecies,
                           expression: expressionForActivity(activity),
+                          equippedItemIds: [
+                            for (final e in pet.equippedItems) e.itemId,
+                          ],
                           pressed: _pressed,
                           onPat: _pat,
                           onPressChanged: (v) => setState(() => _pressed = v),
@@ -423,6 +426,7 @@ class _HouseScene extends StatelessWidget {
   const _HouseScene({
     required this.speciesId,
     required this.expression,
+    required this.equippedItemIds,
     required this.pressed,
     required this.onPat,
     required this.onPressChanged,
@@ -430,6 +434,7 @@ class _HouseScene extends StatelessWidget {
 
   final String speciesId;
   final PetExpression expression;
+  final List<String> equippedItemIds;
   final bool pressed;
   final Future<void> Function() onPat;
   final ValueChanged<bool> onPressChanged;
@@ -461,6 +466,7 @@ class _HouseScene extends StatelessWidget {
                   speciesId: speciesId,
                   size: 168,
                   expression: expression,
+                  equippedItemIds: equippedItemIds,
                 ),
               ),
             ],
