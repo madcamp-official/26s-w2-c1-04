@@ -472,7 +472,7 @@ async def generate_diary(pet_id: int, entry_date: date) -> int | None:
         activities = [a.activity.value for a in rows]
         style = await _active_style(session, group_id)
 
-        caption = await gpu.get_llm_client().diary_caption(activities)
+        caption = await gpu.get_llm_client().diary_caption(activities, pet.name)
         image = await gpu.get_image_client().diary_image(
             group_id=group_id,
             entry_date=entry_date.isoformat(),

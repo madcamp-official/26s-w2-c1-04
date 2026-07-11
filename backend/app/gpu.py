@@ -67,7 +67,7 @@ class GroupContext:
 
 class LlmClient(Protocol):
     async def pet_activity(self, ctx: GroupContext) -> PetActivity: ...
-    async def diary_caption(self, activities: list[str]) -> str: ...
+    async def diary_caption(self, activities: list[str], pet_name: str) -> str: ...
     async def health(self) -> bool: ...
 
 
@@ -97,8 +97,8 @@ class StubLlmClient:
         activity = random.choice(ACTIVITIES)
         return PetActivity(activity, _STUB_UTTERANCES[activity], self.model)
 
-    async def diary_caption(self, activities: list[str]) -> str:
-        return f"오늘은 {', '.join(activities) or '아무것도 안'} 했다."
+    async def diary_caption(self, activities: list[str], pet_name: str) -> str:
+        return f"오늘 나 {pet_name}는 {', '.join(activities) or '아무것도 안'} 했어."
 
     async def health(self) -> bool:
         return True
@@ -163,10 +163,14 @@ class HttpLlmClient:
             logger.warning("LLM 펫 활동 생성 실패. 스텁으로 열화한다.", exc_info=True)
             return await self._fallback.pet_activity(ctx)
 
-    async def diary_caption(self, activities: list[str]) -> str:
+    async def diary_caption(self, activities: list[str], pet_name: str) -> str:
+        # 펫 이름을 넘기지 않으면 모델이 이름을 지어낸다(브루노·햇님이…). 1인칭·한국어를
+        # 강제하고 이름을 박아 넣으면 지어내기·외국어 토큰이 크게 줄어든다(실측).
         prompt = (
-            "반려 펫의 하루를 한 문장짜리 일기로 써라. 활동: "
-            + (", ".join(activities) or "없음")
+            f"너는 '{pet_name}'라는 이름의 반려 펫이야. 오늘 한 활동: "
+            f"{', '.join(activities) or '없음'}.\n"
+            "이걸 바탕으로 한국어로만, 40자 안팎의 짧고 귀여운 한 문장짜리 일기를 1인칭으로 써.\n"
+            "다른 이름을 지어내지 말고, 외국어나 이상한 글자를 섞지 마."
         )
         try:
             data = await self._chat(
@@ -177,16 +181,19 @@ class HttpLlmClient:
                     "required": ["caption"],
                     "additionalProperties": False,
                 },
+                temperature=0.4,  # 자유도를 낮춰 외국어·환각 토큰을 줄인다
             )
             return data["caption"]
         except Exception:
             logger.warning("LLM 캡션 생성 실패. 스텁으로 열화한다.", exc_info=True)
-            return await self._fallback.diary_caption(activities)
+            return await self._fallback.diary_caption(activities, pet_name)
 
-    async def _chat(self, prompt: str, schema: dict) -> dict:
+    async def _chat(
+        self, prompt: str, schema: dict, temperature: float | None = None
+    ) -> dict:
         import json
 
-        payload = {
+        payload: dict[str, object] = {
             "model": self._model,
             "messages": [{"role": "user", "content": prompt}],
             "max_tokens": 256,
@@ -199,6 +206,8 @@ class HttpLlmClient:
                 },
             },
         }
+        if temperature is not None:
+            payload["temperature"] = temperature
         async with httpx.AsyncClient(timeout=self._timeout) as client:
             resp = await client.post(f"{self._base}/v1/chat/completions", json=payload)
             resp.raise_for_status()
