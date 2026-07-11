@@ -7,12 +7,16 @@
 
 torch==2.9.0        # requires Python>=3.10
 diffusers==0.39.0   # 2026-07-03 최신. SD 1.5 파이프라인
+fastapi==0.139.0
+uvicorn[standard]==0.51.0
+pydantic-settings==2.14.2
+pillow==12.3.0
 
-# --- 아래는 버전 미확정. pip 해석에 맡기고 동작 확인 후 pip freeze 로 고정할 것. ---
-transformers        # diffusers 의 텍스트 인코더 의존
-accelerate          # 학습/추론 런처
-peft                # LoRA 학습·로딩
-bitsandbytes        # 8-bit Adam. LoRA 학습에서 VRAM 을 아낀다
+# SD 1.5 P1 실행 경로. transformers 5.x 전환 리스크를 피하려고 검증된 4.x 끝 버전을 고정한다.
+transformers==4.57.6
+accelerate==1.12.0
+
+# peft·bitsandbytes는 LoRA(PT-5/PT-6b, P2)에서만 필요하므로 P1 환경에 섞지 않는다.
 
 # VRAM (docs/STACK.md 2절, 검증됨. 카드는 실측 24GB):
 #   SD 1.5 추론 (512px, fp16, 1장)              4~6GB   -> 상주 LLM 켠 채로 가능

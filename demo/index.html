@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Memory Pager Backend Lab</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark">MP</span>
+        <div>
+          <strong>Memory Pager</strong>
+          <span>Backend Lab</span>
+        </div>
+      </div>
+      <div class="connection-strip">
+        <span id="api-status" class="status status-idle">API 대기</span>
+        <span id="socket-status" class="status status-idle">소켓 대기</span>
+      </div>
+    </header>
+
+    <main>
+      <section class="control-band" aria-label="데모 연결 설정">
+        <label class="api-field">
+          <span>API 주소</span>
+          <input id="api-base" value="http://127.0.0.1:8000/v1" spellcheck="false" />
+        </label>
+        <button id="boot-button" class="primary-button" type="button">
+          <i data-lucide="play"></i>
+          2인 데모 시작
+        </button>
+        <button id="refresh-button" class="icon-button" type="button" title="전체 새로고침" disabled>
+          <i data-lucide="refresh-cw"></i>
+        </button>
+      </section>
+
+      <section class="workspace" aria-label="2인 상호작용 검증">
+        <article class="actor-panel" data-actor="a">
+          <header class="actor-header">
+            <span class="actor-index actor-a">A</span>
+            <div>
+              <h2 id="name-a">사용자 A</h2>
+              <p id="identity-a">연결되지 않음</p>
+            </div>
+            <span id="socket-a" class="socket-dot" title="Socket.IO 연결 상태"></span>
+          </header>
+
+          <form class="composer" data-composer="a">
+            <textarea id="message-a" rows="3" maxlength="4000" placeholder="상대에게 보낼 메시지"></textarea>
+            <div class="composer-row">
+              <div class="segmented" role="radiogroup" aria-label="A 전송 모드">
+                <label><input type="radio" name="mode-a" value="normal" checked /><span>일반</span></label>
+                <label><input type="radio" name="mode-a" value="ephemeral" /><span>5초</span></label>
+              </div>
+              <button class="send-button" type="submit" disabled>
+                <i data-lucide="send"></i>
+                보내기
+              </button>
+            </div>
+          </form>
+
+          <div class="actor-actions">
+            <button class="secondary-button poke-button" data-from="a" type="button" disabled>
+              <i data-lucide="bell-ring"></i>
+              B 찌르기
+            </button>
+            <button class="secondary-button pat-button" data-actor="a" type="button" disabled>
+              <i data-lucide="hand"></i>
+              펫 쓰다듬기
+            </button>
+          </div>
+        </article>
+
+        <section class="shared-panel">
+          <header class="shared-header">
+            <div>
+              <span class="eyebrow">SHARED SPACE</span>
+              <h1 id="group-name">그룹을 연결하세요</h1>
+            </div>
+            <div id="pet-stats" class="pet-stats" aria-label="펫 상태">
+              <span>Lv. -</span><span>EXP -</span><span>Coin -</span>
+            </div>
+          </header>
+
+          <div id="pet-response" class="pet-response" aria-live="polite">
+            <div class="pet-face" aria-hidden="true"><span></span></div>
+            <p>상호작용 결과가 여기에 표시됩니다.</p>
+          </div>
+
+          <div class="timeline-toolbar">
+            <h2>공유 타임라인</h2>
+            <button id="report-button" class="secondary-button" type="button" disabled>
+              <i data-lucide="bar-chart-3"></i>
+              이번 달 레포트
+            </button>
+          </div>
+          <div id="timeline" class="timeline" aria-live="polite">
+            <div class="empty-state">데모를 시작하면 두 사용자의 메시지가 표시됩니다.</div>
+          </div>
+        </section>
+
+        <article class="actor-panel" data-actor="b">
+          <header class="actor-header">
+            <span class="actor-index actor-b">B</span>
+            <div>
+              <h2 id="name-b">사용자 B</h2>
+              <p id="identity-b">연결되지 않음</p>
+            </div>
+            <span id="socket-b" class="socket-dot" title="Socket.IO 연결 상태"></span>
+          </header>
+
+          <form class="composer" data-composer="b">
+            <textarea id="message-b" rows="3" maxlength="4000" placeholder="상대에게 보낼 메시지"></textarea>
+            <div class="composer-row">
+              <div class="segmented" role="radiogroup" aria-label="B 전송 모드">
+                <label><input type="radio" name="mode-b" value="normal" checked /><span>일반</span></label>
+                <label><input type="radio" name="mode-b" value="ephemeral" /><span>5초</span></label>
+              </div>
+              <button class="send-button" type="submit" disabled>
+                <i data-lucide="send"></i>
+                보내기
+              </button>
+            </div>
+          </form>
+
+          <div class="actor-actions">
+            <button class="secondary-button poke-button" data-from="b" type="button" disabled>
+              <i data-lucide="bell-ring"></i>
+              A 찌르기
+            </button>
+            <button class="secondary-button pat-button" data-actor="b" type="button" disabled>
+              <i data-lucide="hand"></i>
+              펫 쓰다듬기
+            </button>
+          </div>
+        </article>
+      </section>
+
+      <section class="event-band" aria-label="실시간 이벤트 로그">
+        <header>
+          <div>
+            <span class="eyebrow">LIVE TRANSPORT</span>
+            <h2>이벤트 로그</h2>
+          </div>
+          <button id="clear-log" class="icon-button" type="button" title="로그 지우기">
+            <i data-lucide="trash-2"></i>
+          </button>
+        </header>
+        <ol id="event-log" class="event-log">
+          <li><time>--:--:--</time><span class="event-system">system</span><p>데모 시작을 기다리는 중</p></li>
+        </ol>
+      </section>
+    </main>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+    <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>
