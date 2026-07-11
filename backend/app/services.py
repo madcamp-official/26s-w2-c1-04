@@ -159,7 +159,17 @@ async def mark_viewed(
     if arm:
         doodle.expires_at = viewed_at + timedelta(seconds=ttl)
 
-    await session.commit()
+    try:
+        await session.commit()
+    except IntegrityError:
+        # UNIQUE(doodle_id,user_id) 경합: 같은 사용자의 REST·소켓 확인이 거의 동시에
+        # 들어와 둘 다 first_view 로 INSERT 했다. REPEATABLE READ 스냅샷 탓에 낙서
+        # 행을 잠가도 진 쪽의 평문 읽기는 승자의 receipt 를 못 본다. 승자가 이미
+        # receipt·expires_at 을 커밋하고 타이머도 걸었으니, 멱등하게 승자의 값만
+        # 되돌려준다 (타이머 재예약 없음).
+        await session.rollback()
+        winner = await session.get(Doodle, doodle_id)
+        return winner.expires_at if winner is not None else None
 
     if arm:
         # DATETIME(6)에 저장한 expires_at까지 남은 실제 시간으로 건다. API의
