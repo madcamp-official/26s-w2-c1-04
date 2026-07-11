@@ -1,0 +1,17 @@
+[Unit]
+Description=Memory Pager Stable Diffusion 1.5 worker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# gpu.sd_worker 를 임포트하려면 레포 루트가 cwd 여야 한다.
+WorkingDirectory=/root/26s-w2-c1-04
+# HF_HOME 은 vLLM 과 공유한다.
+Environment=HF_HOME=/data/hf
+Environment=TMPDIR=/data/tmp
+ExecStart=/root/envs/sd/bin/uvicorn gpu.sd_worker:app --host 0.0.0.0 --port 8200
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,24 @@
+[Unit]
+Description=Memory Pager vLLM (EXAONE 3.5 7.8B AWQ)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# HF_HOME 은 sd 워커와 공유해 가중치를 두 번 받지 않는다.
+Environment=HF_HOME=/data/hf
+Environment=TMPDIR=/data/tmp
+# 없으면 /sleep·/is_sleeping 이 404 다 (LoRA 학습 전 GPU 비우기용).
+Environment=VLLM_SERVER_DEV_MODE=1
+# 없으면 FlashInfer top-k/top-p 샘플러가 런타임에 nvcc(CUDA 툴킷)를 찾다 죽는다.
+# 여긴 드라이버만 있고 툴킷은 없다. 이 env 로 기본 PyTorch 샘플링 경로를 쓴다. (docs/SETUP.md ②-4)
+Environment=VLLM_USE_FLASHINFER_SAMPLER=0
+# --trust-remote-code 없으면 EXAONE 커스텀 모델링 코드 때문에 ModelConfig 검증에서 죽는다.
+# --gpu-memory-utilization 0.4 -> 약 9.8GB 상한. SD 1.5 와 24GB 안에서 공존.
+ExecStart=/root/envs/vllm/bin/vllm serve LGAI-EXAONE/EXAONE-3.5-7.8B-Instruct-AWQ --gpu-memory-utilization 0.4 --max-model-len 8192 --max-num-seqs 16 --trust-remote-code --enable-sleep-mode --host 0.0.0.0 --port 8100
+Restart=on-failure
+RestartSec=10
+# 첫 부팅에서 모델(~5GB)을 받는 동안 기동이 오래 걸린다.
+TimeoutStartSec=0
+
+[Install]
+WantedBy=multi-user.target

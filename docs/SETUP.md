@@ -453,9 +453,10 @@ curl -X POST localhost:8100/wake_up         # 3~6초
 | MySQL 스키마 | `bash backend/tests/test_schema_mysql.sh` | 17 passed | ✅ |
 | 라우터 | `DATABASE_URL=... python backend/tests/test_groups_integration.py` | 28 passed | ✅ |
 | API 로컬 | `curl localhost:8000/v1/health` | `db: ok` | ✅ |
-| **API 외부** | 노트북에서 `curl.exe https://anjonghwa.madcamp-kaist.org/v1/health` | 우리 JSON | ⬜ 터널을 앱 VM으로 옮겨야 함 (7-7) |
+| **API 외부** | 노트북에서 `curl.exe https://anjonghwa.madcamp-kaist.org/v1/health` | 우리 JSON | ✅ `gpu:ok` 포함 (2026-07-11) |
 | GPU 드라이버 | `nvidia-smi` | 뜨면 OK (570+ 권장) | ✅ 595.71.05 / RTX 3090 24GB |
-| vLLM 점유 | `nvidia-smi` | **약 8GB** (18GB면 실패) | ⬜ |
-| vLLM sleep | `curl localhost:8100/is_sleeping` | 404 아님 | ⬜ |
+| vLLM 점유 | `nvidia-smi` | **약 8~10GB** (18GB면 실패) | ✅ ~9.8GB (SD 합 ~17GB) |
+| vLLM sleep | `curl localhost:8100/is_sleeping` | 404 아님 | ✅ `is_sleeping:false` |
+| GPU 실추론 E2E | 앱 VM에서 펫활동·캡션(LLM)+그림일기(SD) | 실제 출력 | ✅ EXAONE JSON + 512px PNG |
 
 > **PowerShell에서는 `curl`이 `Invoke-WebRequest`의 별칭이다.** 진짜 curl은 `curl.exe`로 부른다. VM 안(리눅스 셸)에서는 그냥 `curl`이 맞다.
