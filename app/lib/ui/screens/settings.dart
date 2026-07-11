@@ -15,7 +15,9 @@ import '../../core/app_state.dart';
 import '../../core/models.dart';
 import '../components.dart';
 import '../theme.dart';
+import '../pet_view.dart';
 import 'onboarding.dart';
+import 'pet_picker.dart';
 
 /// Muted group backgrounds. Wire format is 6-hex uppercase without '#'.
 const List<String> _swatches = <String>[
@@ -154,6 +156,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 CpEyebrow('배경 색상', size: 9),
                 const SizedBox(height: 14),
                 _swatchRow(g?.backgroundColor),
+                const SizedBox(height: 30),
+                const CpHair(),
+                const SizedBox(height: 22),
+
+                const CpSectionHeader(eyebrow: '펫', title: '펫 캐릭터'),
+                const SizedBox(height: 14),
+                _petRow(context),
                 const SizedBox(height: 26),
 
                 if (g != null) _inviteRow(g),
@@ -239,6 +248,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
       ],
+    );
+  }
+
+  Widget _petRow(BuildContext context) {
+    return GestureDetector(
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute<void>(builder: (_) => const PetPickerScreen()),
+      ),
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: cpPrint,
+          borderRadius: BorderRadius.circular(2),
+          border: Border.all(color: cpInkA(0.10), width: 0.5),
+        ),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 52,
+              height: 52,
+              child: PetView(
+                  speciesId: appState.petSpecies, size: 52, frozenT: 0.25),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text('펫 캐릭터 바꾸기',
+                  style: cpSans(size: 14, weight: FontWeight.w500)),
+            ),
+            Icon(Icons.chevron_right, size: 20, color: cpInkA(0.4)),
+          ],
+        ),
+      ),
     );
   }
 

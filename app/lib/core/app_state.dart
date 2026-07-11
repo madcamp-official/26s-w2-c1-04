@@ -22,6 +22,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart'; // also re-exports Uint8List
 
+import '../charlab/roster.dart';
 import 'api/mock_repository.dart';
 import 'api/repository.dart';
 import 'models.dart';
@@ -110,6 +111,20 @@ class AppState extends ChangeNotifier {
 
   PetActivityKind? currentActivity;
   String? currentUtterance;
+
+  // -- Pet species (which drawn character renders as the pet) ---------------
+  //
+  // The couple picks their pet's look from the roster. The backend `Pet` has no
+  // species column yet (ERD/API), so this is an honest CLIENT-LOCAL preference
+  // for now — it changes the drawing, never any server-owned data. When the
+  // backend adds a species field this reads through to it unchanged.
+
+  String petSpecies = kDefaultSpecies;
+
+  void setPetSpecies(String id) {
+    petSpecies = id;
+    notifyListeners();
+  }
 
   // -- Transient banners ----------------------------------------------------
 

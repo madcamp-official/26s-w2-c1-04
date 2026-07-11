@@ -135,6 +135,12 @@ class _HomeState extends State<_Home> {
       builder: (context, _) {
         final params = Uri.base.queryParameters;
         final route = params['route'];
+        // QA deep-link: preview a chosen pet species (?species=hamster).
+        final wantSpecies = params['species'];
+        if (wantSpecies != null && wantSpecies != appState.petSpecies) {
+          WidgetsBinding.instance.addPostFrameCallback(
+              (_) => appState.setPetSpecies(wantSpecies));
+        }
         final onboarded = appState.me != null && appState.group != null;
 
         if (!onboarded || route == 'onboarding') {

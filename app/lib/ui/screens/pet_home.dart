@@ -11,6 +11,7 @@ import 'package:flutter/material.dart';
 import '../../core/app_state.dart';
 import '../../core/models.dart';
 import '../components.dart';
+import '../pet_view.dart';
 import '../theme.dart';
 import 'monthly_report.dart';
 import 'pet_diary.dart';
@@ -94,7 +95,7 @@ class _PetHomeBodyState extends State<_PetHomeBody> {
               _Header(pet: pet),
               const SizedBox(height: 30),
               _Portrait(
-                mood: _moodGlyph(activity),
+                speciesId: appState.petSpecies,
                 pressed: _pressed,
                 onPat: _pat,
                 onPressChanged: (v) => setState(() => _pressed = v),
@@ -201,13 +202,13 @@ class _LvBadge extends StatelessWidget {
 
 class _Portrait extends StatelessWidget {
   const _Portrait({
-    required this.mood,
+    required this.speciesId,
     required this.pressed,
     required this.onPat,
     required this.onPressChanged,
   });
 
-  final String mood;
+  final String speciesId;
   final bool pressed;
   final Future<void> Function() onPat;
   final ValueChanged<bool> onPressChanged;
@@ -222,18 +223,18 @@ class _Portrait extends StatelessWidget {
         onTapUp: (_) => onPressChanged(false),
         onTapCancel: () => onPressChanged(false),
         child: AnimatedScale(
-          scale: pressed ? 0.97 : 1.0,
+          scale: pressed ? 0.96 : 1.0,
           duration: const Duration(milliseconds: 110),
           curve: Curves.easeOut,
           child: SizedBox(
             width: 220,
             child: CpMatted(
-              mat: 26,
+              mat: 20,
               inset: 0,
               child: SizedBox(
-                height: 150,
+                height: 180,
                 child: Center(
-                  child: Text(mood, style: const TextStyle(fontSize: 76)),
+                  child: PetView(speciesId: speciesId, size: 170),
                 ),
               ),
             ),
