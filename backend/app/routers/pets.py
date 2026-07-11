@@ -13,7 +13,7 @@ from typing import Annotated
 
 from .. import services
 from ..deps import CurrentUser, SessionDep
-from ..errors import ApiError
+from ..errors import ApiError, parse_id
 from ..models import Item, Pet, PetDiary, PetItem, StyleModel
 from ..schemas import (
     ActivityOut,
@@ -128,7 +128,7 @@ async def list_diaries(
 
     stmt = select(PetDiary).where(PetDiary.pet_id == pet_id)
     if before:
-        stmt = stmt.where(PetDiary.id < int(before))
+        stmt = stmt.where(PetDiary.id < parse_id(before, "before"))
     rows = list(
         (await session.execute(stmt.order_by(PetDiary.id.desc()).limit(limit))).scalars()
     )

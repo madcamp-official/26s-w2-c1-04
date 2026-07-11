@@ -7,13 +7,15 @@ from datetime import date as date_type
 from typing import Annotated, Any
 
 from fastapi import APIRouter, File, Form, Query, UploadFile
+from pydantic import ValidationError
 from sqlalchemy import func, select
 
-from .. import media, realtime, services
+from .. import media, notifications, realtime, services
+from ..config import get_settings
 from ..deps import CurrentUser, SessionDep
-from ..errors import ApiError
+from ..errors import ApiError, parse_id
 from ..models import ContentType, Doodle, DoodleMode, DoodleReceipt
-from ..schemas import DoodleListOut, DoodleOut, ViewOut
+from ..schemas import DoodleListOut, DoodleOut, StrokeData, ViewOut
 
 router = APIRouter(tags=["doodles"])
 
@@ -21,10 +23,15 @@ _ISO = "%Y-%m-%dT%H:%M:%SZ"
 
 
 def _iso(dt: Any) -> str | None:
-    return dt.strftime(_ISO) if dt else None
+    if not dt:
+        return None
+    if dt.microsecond:
+        return dt.isoformat(timespec="microseconds") + "Z"
+    return dt.strftime(_ISO)
 
 
 def _to_out(d: Doodle, *, reply_count: int, viewed_by_me: bool) -> DoodleOut:
+    locked = d.mode is DoodleMode.EPHEMERAL and not viewed_by_me
     return DoodleOut(
         id=str(d.id),
         group_id=str(d.group_id),
@@ -32,15 +39,37 @@ def _to_out(d: Doodle, *, reply_count: int, viewed_by_me: bool) -> DoodleOut:
         parent_id=str(d.parent_id) if d.parent_id else None,
         mode=d.mode.value,
         content_type=d.content_type.value,
-        photo_url=d.photo_url,
-        drawing_url=d.drawing_url,
-        thumb_url=media.thumb_url(d.group_id, d.id),
-        text_body=d.text_body,
+        photo_url=None if locked else d.photo_url,
+        drawing_url=None if locked else d.drawing_url,
+        thumb_url=None if locked else media.thumb_url(d.group_id, d.id),
+        text_body=None if locked else d.text_body,
         reply_count=reply_count,
         viewed_by_me=viewed_by_me,
         expires_at=_iso(d.expires_at),
         created_at=_iso(d.created_at) or "",
     )
+
+
+async def _read_image(
+    upload: UploadFile, *, field: str, allowed_formats: set[str]
+) -> bytes:
+    settings = get_settings()
+    data = await upload.read(settings.max_upload_bytes + 1)
+    if len(data) > settings.max_upload_bytes:
+        raise ApiError(
+            413,
+            "payload_too_large",
+            f"{field} 파일은 {settings.max_upload_bytes // (1024 * 1024)}MB 이하여야 합니다",
+        )
+    try:
+        media.validate_image_bytes(
+            data,
+            allowed_formats=allowed_formats,
+            max_dimension=settings.max_image_dimension,
+        )
+    except ValueError as exc:
+        raise ApiError(422, "unprocessable", f"{field}: {exc}") from None
+    return data
 
 
 async def _decorate(session, user_id: int, doodles: list[Doodle]) -> list[DoodleOut]:
@@ -68,7 +97,11 @@ async def _decorate(session, user_id: int, doodles: list[Doodle]) -> list[Doodle
         ).scalars()
     )
     return [
-        _to_out(d, reply_count=counts.get(d.id, 0), viewed_by_me=d.id in seen)
+        _to_out(
+            d,
+            reply_count=counts.get(d.id, 0),
+            viewed_by_me=d.sender_id == user_id or d.id in seen,
+        )
         for d in doodles
     ]
 
@@ -80,8 +113,8 @@ async def _decorate(session, user_id: int, doodles: list[Doodle]) -> list[Doodle
 async def create_doodle(
     user: CurrentUser,
     session: SessionDep,
-    mode: Annotated[str, Form()] = "normal",
-    content_type: Annotated[str, Form()] = "drawing",
+    mode: Annotated[str, Form()],
+    content_type: Annotated[str, Form()],
     parent_id: Annotated[str | None, Form()] = None,
     text_body: Annotated[str | None, Form()] = None,
     stroke_data: Annotated[str | None, Form()] = None,
@@ -106,17 +139,45 @@ async def create_doodle(
         raise ApiError(422, "unprocessable", "drawing 파일과 stroke_data 가 필요합니다")
     if ctype_e is ContentType.TEXT and not text_body:
         raise ApiError(422, "unprocessable", "text_body 가 필요합니다")
+    if text_body is not None and len(text_body) > get_settings().max_text_length:
+        raise ApiError(
+            422,
+            "unprocessable",
+            f"text_body 는 {get_settings().max_text_length}자 이하여야 합니다",
+        )
+
+    photo_bytes = (
+        await _read_image(photo, field="photo", allowed_formats={"JPEG", "PNG"})
+        if ctype_e is ContentType.PHOTO and photo is not None
+        else None
+    )
+    drawing_bytes = (
+        await _read_image(drawing, field="drawing", allowed_formats={"PNG"})
+        if ctype_e is ContentType.DRAWING and drawing is not None
+        else None
+    )
 
     strokes = None
     if stroke_data:
+        if len(stroke_data.encode("utf-8")) > get_settings().max_stroke_bytes:
+            raise ApiError(413, "payload_too_large", "stroke_data 가 너무 큽니다")
         try:
-            strokes = json.loads(stroke_data)
+            raw_strokes = json.loads(stroke_data)
+            strokes = StrokeData.model_validate(raw_strokes).model_dump(mode="json")
         except json.JSONDecodeError:
             raise ApiError(400, "invalid_request", "stroke_data 가 JSON 이 아닙니다") from None
+        except ValidationError as exc:
+            raise ApiError(
+                422,
+                "unprocessable",
+                f"stroke_data 형식이 잘못됐습니다: {exc.errors()[:2]}",
+            ) from None
 
     parent = None
     if parent_id:
-        parent = await services.load_visible_doodle(session, user.id, int(parent_id))
+        parent = await services.load_visible_doodle(
+            session, user.id, parse_id(parent_id, "parent_id")
+        )
         if parent.group_id != group_id:
             raise ApiError(403, "forbidden", "다른 그룹의 낙서에는 답장할 수 없습니다")
 
@@ -130,22 +191,40 @@ async def create_doodle(
         stroke_data=strokes,
     )
     session.add(doodle)
-    await session.flush()  # 파일명에 doodle.id 가 필요하다
+    levelup = None
+    photo_name = drawing_name = ""
+    try:
+        await session.flush()  # 파일명에 doodle.id 가 필요하다
 
-    if photo is not None:
-        doodle.photo_url = media.save_bytes(group_id, f"{doodle.id}_photo.jpg", await photo.read())
-    if drawing is not None:
-        doodle.drawing_url = media.save_bytes(group_id, f"{doodle.id}_draw.png", await drawing.read())
+        if photo_bytes is not None:
+            # PNG 업로드도 URL 계약은 photo.jpg지만 실제 바이트 확장자 불일치를 피한다.
+            extension = "png" if photo_bytes.startswith(b"\x89PNG") else "jpg"
+            photo_name = f"{doodle.id}_photo.{extension}"
+            doodle.photo_url = media.save_bytes(group_id, photo_name, photo_bytes)
+        if drawing_bytes is not None:
+            drawing_name = f"{doodle.id}_draw.png"
+            doodle.drawing_url = media.save_bytes(group_id, drawing_name, drawing_bytes)
 
-    # 썸네일은 어떤 유형이든 null 이 되지 않는다 (docs/API.md 4절)
-    if ctype_e is ContentType.PHOTO:
-        media.make_thumbnail(group_id, doodle.id, f"{doodle.id}_photo.jpg")
-    elif ctype_e is ContentType.DRAWING:
-        media.make_thumbnail(group_id, doodle.id, f"{doodle.id}_draw.png")
-    else:
-        media.render_text_thumbnail(group_id, doodle.id, text_body or "")
+        # 썸네일 파일은 모든 유형에 만든다. 미열람 사라지기 응답에서만 URL을 숨긴다.
+        if ctype_e is ContentType.PHOTO:
+            media.make_thumbnail(group_id, doodle.id, photo_name)
+        elif ctype_e is ContentType.DRAWING:
+            media.make_thumbnail(group_id, doodle.id, drawing_name)
+        else:
+            media.render_text_thumbnail(group_id, doodle.id, text_body or "")
 
-    await session.commit()
+        reward = (
+            get_settings().pet_reply_exp
+            if parent is not None
+            else get_settings().pet_doodle_exp
+        )
+        levelup = await services.award_pet_exp(session, group_id, reward)
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        if doodle.id is not None:
+            media.delete_doodle_files(group_id, doodle.id)
+        raise
     await session.refresh(doodle)
 
     payload: dict[str, Any] = {
@@ -162,7 +241,15 @@ async def create_doodle(
     if doodle.mode is DoodleMode.NORMAL:
         payload["thumb_url"] = media.thumb_url(group_id, doodle.id)
     await realtime.emit_doodle_new(group_id, payload)
-    # TODO: FCM `doodle_received` 푸시 (SD-8). Firebase 프로젝트가 생기면.
+    if levelup is not None:
+        await realtime.emit_pet_levelup(group_id, levelup.pet_id, levelup.level)
+    await notifications.send_doodle_received(
+        session,
+        group_id=group_id,
+        sender_id=user.id,
+        doodle_id=doodle.id,
+        is_ephemeral=doodle.mode is DoodleMode.EPHEMERAL,
+    )
 
     return _to_out(doodle, reply_count=0, viewed_by_me=True)
 
@@ -184,7 +271,7 @@ async def list_doodles(
         Doodle.group_id == group_id, Doodle.deleted_at.is_(None)
     )
     if before:
-        stmt = stmt.where(Doodle.id < int(before))
+        stmt = stmt.where(Doodle.id < parse_id(before, "before"))
     if content_type:
         try:
             stmt = stmt.where(Doodle.content_type == ContentType(content_type))

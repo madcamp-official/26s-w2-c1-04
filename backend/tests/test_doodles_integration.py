@@ -19,6 +19,7 @@ import sys
 import tempfile
 import time
 import warnings
+from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -177,14 +178,37 @@ def main() -> int:
         check("사라지기 낙서 전송 201", r.status_code == 201)
         check("전송 직후 expires_at 은 null", eph["expires_at"] is None)
 
+        locked = c.get(f"/v1/doodles/{eid}", headers=B).json()
+        check("미열람 사라지기 단건은 내용을 숨김",
+              locked["drawing_url"] is None and locked["thumb_url"] is None,
+              str(locked))
+        locked_list = c.get(f"/v1/groups/{gid}/doodles", headers=B).json()
+        locked_item = next(item for item in locked_list["items"] if item["id"] == eid)
+        check("미열람 사라지기 목록도 내용을 숨김",
+              locked_item["drawing_url"] is None and locked_item["thumb_url"] is None,
+              str(locked_item))
+
         # 보낸 사람이 열어도 타이머가 걸리면 안 된다
         r = c.post(f"/v1/doodles/{eid}/view", headers=A)
         check("보낸 사람이 열면 expires_at 없음", r.json()["expires_at"] is None, str(r.json()))
 
         # 수신자 최초 확인 -> 타이머 무장
+        view_started = datetime.now(timezone.utc)
         r = c.post(f"/v1/doodles/{eid}/view", headers=B)
+        view_finished = datetime.now(timezone.utc)
         exp1 = r.json()["expires_at"]
         check("수신자 최초 확인 -> expires_at 세팅", exp1 is not None, str(r.json()))
+        expires = datetime.fromisoformat(exp1.replace("Z", "+00:00"))
+        from_start = (expires - view_started).total_seconds()
+        from_finish = (expires - view_finished).total_seconds()
+        check("만료 시각은 실제 열람 후 정확히 TTL",
+              TTL - 0.05 <= from_start <= TTL + 0.5
+              and TTL - 0.5 <= from_finish <= TTL + 0.05,
+              f"start={from_start:.3f}s finish={from_finish:.3f}s")
+        revealed = c.get(f"/v1/doodles/{eid}", headers=B).json()
+        check("열람 뒤 사라지기 내용 공개",
+              bool(revealed["drawing_url"]) and bool(revealed["thumb_url"]),
+              str(revealed))
 
         # ★ 재확인이 타이머를 리셋하면 안 된다
         time.sleep(0.4)

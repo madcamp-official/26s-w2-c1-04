@@ -16,9 +16,10 @@ from datetime import datetime, timezone
 
 import socketio
 from fastapi import APIRouter, FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from . import db, gpu, realtime, scheduler, services, state
+from . import db, gpu, notifications, realtime, scheduler, services, state
 from .config import get_settings
 from .ephemeral import ExpiryScheduler
 from .errors import install_error_handlers
@@ -46,6 +47,7 @@ async def _resolve_socket_token(token: str) -> tuple[int, int | None] | None:
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     settings.media_root.mkdir(parents=True, exist_ok=True)
+    notifications.init_push(settings)
 
     expiry = ExpiryScheduler(services.expire_doodle)
     state.set_expiry(expiry)
@@ -84,6 +86,15 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(title="Memory Pager", version="0.1.0", lifespan=lifespan)
 install_error_handlers(app)
+
+cors_origins = get_settings().parsed_cors_origins()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"] if cors_origins == "*" else cors_origins,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    allow_credentials=False,
+)
 
 v1 = APIRouter(prefix="/v1")
 

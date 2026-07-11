@@ -86,6 +86,10 @@ q "INSERT INTO doodles (id,group_id,sender_id,mode,content_type,created_at)
 expect_ok    "수신자 최초 확인" "INSERT INTO doodle_receipts (doodle_id,user_id) VALUES (100,2);"
 expect_errno "같은 사람의 두 번째 확인은 거부 (1062)" \
   "INSERT INTO doodle_receipts (doodle_id,user_id) VALUES (100,2);" 1062
+expect_eq "expires_at 마이크로초 정밀도" \
+  "SELECT DATETIME_PRECISION FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='doodles' AND COLUMN_NAME='expires_at';" "6"
+expect_eq "viewed_at 마이크로초 정밀도" \
+  "SELECT DATETIME_PRECISION FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='doodle_receipts' AND COLUMN_NAME='viewed_at';" "6"
 
 echo
 echo "--- 인덱스 ---"

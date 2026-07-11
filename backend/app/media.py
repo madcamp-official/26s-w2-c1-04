@@ -1,6 +1,7 @@
 """미디어 파일 저장. 앱 VM 파일시스템에 둔다 (SPEC 7절 ②).
 
-썸네일은 **어떤 유형이든 `null`이 되지 않는다** (docs/API.md 4절).
+썸네일 파일은 **어떤 유형이든 생성한다** (docs/API.md 4절). 미열람 사라지기
+응답에서는 내용 보호를 위해 URL만 숨긴다.
 
 | content_type | 썸네일 원본 |
 |---|---|
@@ -14,8 +15,10 @@
 
 from __future__ import annotations
 
+import io
 import logging
 from pathlib import Path
+from uuid import uuid4
 
 from PIL import Image, ImageDraw, ImageFont
 
@@ -38,14 +41,44 @@ def url_of(group_id: int, filename: str) -> str:
 
 
 def thumb_url(group_id: int, doodle_id: int) -> str:
-    """`thumb_url` 은 DB 컬럼이 아니라 규칙으로 유도한다. 어떤 유형이든 null 이 아니다."""
+    """`thumb_url`은 DB 컬럼이 아니라 저장 규칙으로 유도한다."""
     return url_of(group_id, f"{doodle_id}_thumb.jpg")
 
 
 def save_bytes(group_id: int, filename: str, data: bytes) -> str:
     path = group_dir(group_id) / filename
-    path.write_bytes(data)
+    # 프로세스가 쓰기 중 죽어도 정적 서버가 반쪽 파일을 보지 않게 같은 디렉터리에서
+    # 임시 파일을 완성한 뒤 원자적으로 교체한다.
+    temporary = path.with_name(f".{path.name}.{uuid4().hex}.tmp")
+    try:
+        temporary.write_bytes(data)
+        temporary.replace(path)
+    finally:
+        temporary.unlink(missing_ok=True)
     return url_of(group_id, filename)
+
+
+def validate_image_bytes(
+    data: bytes, *, allowed_formats: set[str], max_dimension: int
+) -> tuple[str, tuple[int, int]]:
+    """확장자·Content-Type 대신 실제 이미지 바이트를 검사한다."""
+    if not data:
+        raise ValueError("빈 이미지입니다")
+    try:
+        with Image.open(io.BytesIO(data)) as image:
+            detected = (image.format or "").upper()
+            size = image.size
+            image.verify()
+    except Exception as exc:
+        raise ValueError("손상되었거나 지원하지 않는 이미지입니다") from exc
+
+    if detected not in {item.upper() for item in allowed_formats}:
+        expected = ", ".join(sorted(allowed_formats))
+        raise ValueError(f"이미지 형식은 {expected}만 허용됩니다")
+    width, height = size
+    if width < 1 or height < 1 or width > max_dimension or height > max_dimension:
+        raise ValueError(f"이미지 크기는 최대 {max_dimension}x{max_dimension}이어야 합니다")
+    return detected, size
 
 
 def _flatten(img: Image.Image) -> Image.Image:
@@ -100,3 +133,15 @@ def delete_doodle_files(group_id: int, doodle_id: int) -> int:
         except OSError:
             logger.warning("미디어 삭제 실패: %s", path, exc_info=True)
     return removed
+
+
+def delete_file(group_id: int, filename: str) -> bool:
+    path = get_settings().media_root / f"g{group_id}" / filename
+    try:
+        path.unlink()
+        return True
+    except FileNotFoundError:
+        return False
+    except OSError:
+        logger.warning("미디어 삭제 실패: %s", path, exc_info=True)
+        return False

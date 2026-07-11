@@ -1,0 +1,10 @@
+-r requirements.txt
+
+# 실제 MySQL 통합 테스트의 동기 검증 쿼리
+pymysql==1.2.0
+
+# test_realtime_e2e.py의 python-socketio 비동기 클라이언트 transport
+aiohttp==3.14.1
+
+# 정적 검사와 신규 파일 포맷 확인
+ruff==0.15.21

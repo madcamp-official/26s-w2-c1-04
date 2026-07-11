@@ -13,13 +13,16 @@ FastAPI + Socket.IO + MySQL 8. 설계 근거는 [../docs/SPEC.md](../docs/SPEC.m
 | `app/db.py` | 작성 완료. 엔진은 lifespan에서 지연 생성한다 |
 | `app/ephemeral.py` | 작성 완료. 사라지기 모드 타이머. **테스트 7/7 통과** |
 | `app/gpu.py` | 작성 완료. 스텁 ↔ 실물을 같은 인터페이스 뒤에 둠 |
+| `app/notifications.py` | 작성 완료. FCM data-only 푸시 + 자격 증명 없는 개발 폴백 |
 | `app/realtime.py` | 작성 완료. Socket.IO 서버, ack 포함 |
 | `app/main.py` | 작성 완료. `/v1/health` 동작 확인 |
 | `app/scheduler.py` | 작성 완료. 활동 갱신·자정 일기·**월간 레포트** 배치 |
 | 라우터 `auth`·`groups`·`devices` | 작성 완료. 온보딩·그룹·기기 등록 |
 | 라우터 `doodles`·`pokes`·`widget` | 작성 완료. 낙서·사라지기·찌르기·위젯 |
 | 라우터 `pets` | 작성 완료. 쓰다듬기·그림 일기 |
-| 라우터 `reports` | 작성 완료. 월간 레포트(MR-1~4). **테스트 39/39 통과** |
+| 라우터 `reports` | 작성 완료. 월간 레포트(MR-1~4). **테스트 45/45 통과** |
+| `../gpu/sd_worker.py` | 작성 완료. SD 1.5 기본 그림체 일기 + 로컬 스텁 계약 |
+| `../demo/` | 작성 완료. 두 사용자 REST·Socket.IO·5초 만료 검증 화면 |
 
 ## 실행
 
@@ -54,17 +57,36 @@ pip install -r backend/requirements.txt
 ```bash
 python tests/test_ephemeral.py    # 의존성 없이 돈다
 python tests/test_security.py     # 의존성 없이 돈다
+python tests/test_validation.py   # ID·월·KST 배치 날짜
+python tests/test_gpu_clients.py  # vLLM 0.24·sd-worker HTTP 계약
 
 # 실제 MySQL 이 필요하다. schema.sql 을 먼저 적용할 것.
 bash tests/test_schema_mysql.sh                    # 트리거·CHECK·에러 우선순위
 export DATABASE_URL='mysql+asyncmy://root:root@127.0.0.1:3306/memory_pager?charset=utf8mb4'
 python tests/test_groups_integration.py            # 온보딩~정원 초과 전체 흐름 (28)
-python tests/test_doodles_integration.py           # 낙서·사라지기·찌르기 (31)
+python tests/test_doodles_integration.py           # 낙서·사라지기·찌르기 (35)
 python tests/test_pets_integration.py              # 펫·그림 일기·위젯 (33)
-python tests/test_reports_integration.py           # 월간 레포트·최고의 낙서 (39)
+python tests/test_reports_integration.py           # 월간 레포트·최고의 낙서 (45)
+python tests/test_hardening_integration.py         # FCM 대상·동시성·입력 경계 (28)
+
+# 실행 중인 서버의 실제 WebSocket E2E (7)
+E2E_BASE_URL=http://127.0.0.1:8000 python tests/test_realtime_e2e.py
+
+# GPU 없이 sd-worker 요청/PNG 계약 (6)
+SD_STUB=true python ../gpu/tests/test_sd_worker.py
 ```
 
-**MySQL 8.0.40에서 실제로 확인했다.** `schema.sql`이 그대로 걸리고(16 테이블, 트리거 3개), 트리거가 3번째 가입을 거부하며, `UNIQUE(user_id)`가 유저의 두 번째 그룹 가입을 막고, `AFTER INSERT/DELETE`가 `member_count`를 유지한다. 라우터 통합 테스트 **131항목**(그룹 28 · 낙서 31 · 펫 33 · 레포트 39)이 전부 통과한다.
+**MySQL 8.0.40에서 실제로 확인했다.** `schema.sql`이 그대로 걸리고(16 테이블, 트리거 3개), 트리거가 3번째 가입을 거부하며, `UNIQUE(user_id)`가 유저의 두 번째 그룹 가입을 막고, `AFTER INSERT/DELETE`가 `member_count`를 유지한다. 기존 라우터 통합 테스트 **141항목**(그룹 28 · 낙서 35 · 펫 33 · 레포트 45)과 동시성·FCM·입력 경계 28항목이 통과한다. 실제 WebSocket E2E 7항목은 실행 중인 서버에 별도로 붙는다.
+
+## 데모 프론트
+
+백엔드를 `:8000`에 실행한 뒤 저장소 루트에서 다음을 실행한다.
+
+```bash
+python -m http.server 4173 --directory demo
+```
+
+브라우저에서 `http://127.0.0.1:4173`을 열고 **2인 데모 시작**을 누른다. 고유한 두 유저를 만들고 같은 그룹에 가입시킨 뒤 WebSocket 두 개를 연결한다. 일반·사라지기 메시지, 찌르기, 쓰다듬기, 월간 레포트를 실제 API로 확인할 수 있다.
 
 ### 실측으로 알아낸 것 — 에러 우선순위
 

@@ -113,13 +113,14 @@ async def create_group(
     body: CreateGroupIn, user: CurrentUser, session: SessionDep
 ) -> CreateGroupOut:
     """부수 효과가 둘 있다. 펫 1마리와 기본 그림체 행이 함께 생긴다."""
-    if await group_id_of(session, user.id) is not None:
+    user_id = user.id
+    if await group_id_of(session, user_id) is not None:
         raise ApiError(409, "already_in_group", "이미 그룹에 속해 있습니다")
 
     # UNIQUE(invite_code) 충돌은 사실상 안 나지만, 나면 다시 뽑는다.
     for attempt in range(5):
         group = Group(
-            name=body.name, invite_code=_invite_code(), owner_user_id=user.id
+            name=body.name, invite_code=_invite_code(), owner_user_id=user_id
         )
         session.add(group)
         try:
@@ -132,7 +133,7 @@ async def create_group(
     else:  # pragma: no cover
         raise ApiError(500, "error", "초대 코드 발급 실패")
 
-    session.add(GroupMember(group_id=group.id, user_id=user.id, role=MemberRole.OWNER))
+    session.add(GroupMember(group_id=group.id, user_id=user_id, role=MemberRole.OWNER))
     pet = Pet(group_id=group.id, name=body.pet_name)
     session.add(pet)
     session.add(
@@ -144,7 +145,15 @@ async def create_group(
             weights_path=DEFAULT_STYLE_WEIGHTS,
         )
     )
-    await session.commit()
+    try:
+        await session.commit()
+    except IntegrityError:
+        # 동일 유저의 그룹 생성 요청 두 개가 동시에 선검사를 통과한 경우
+        # UNIQUE(group_members.user_id)가 마지막 방어선이다.
+        await session.rollback()
+        if await group_id_of(session, user_id) is not None:
+            raise ApiError(409, "already_in_group", "이미 그룹에 속해 있습니다") from None
+        raise
 
     # member_count 는 AFTER INSERT 트리거가 올린다. 우리 쪽 객체는 모른다.
     await session.refresh(group)

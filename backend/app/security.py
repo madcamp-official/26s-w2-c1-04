@@ -15,6 +15,7 @@ import secrets
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from .errors import MAX_BIGINT_ID
 from .models import AuthIdentity, AuthProvider, GroupMember, User
 
 TOKEN_PREFIX = "mp_"
@@ -35,7 +36,8 @@ def parse_user_id(token: str) -> int | None:
     head, sep, _ = rest.partition("_")
     if not sep or not head.isdigit():
         return None
-    return int(head)
+    user_id = int(head)
+    return user_id if 0 < user_id <= MAX_BIGINT_ID else None
 
 
 async def user_from_token(session: AsyncSession, token: str) -> User | None:

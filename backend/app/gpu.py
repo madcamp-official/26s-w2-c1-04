@@ -3,21 +3,22 @@
 **앱과 백엔드 작업이 GPU 환경 구성에 막히면 안 된다.** `GPU_ENABLED=false`(기본)면
 스텁이 그럴듯한 값을 돌려주고, GPU 서버가 준비되면 환경변수 하나로 갈아끼운다.
 
-GPU 서버가 죽어도 앱은 살아야 한다. 그래서 실물 클라이언트도 실패 시 예외를 던지지 않고
-스텁 값으로 열화(degrade)한다. 펫은 무슨 일이 있어도 말을 해야 한다.
+GPU 서버가 죽어도 앱은 살아야 한다. LLM 실패는 스텁 대사로 열화한다. 이미지 실패는
+빈 PNG를 일기로 위장하지 않고 그날 일기 생성을 건너뛴다.
 
 내부 API 명세는 docs/API.md 11절.
 """
 
 from __future__ import annotations
 
-import base64
+import io
 import logging
 import random
 from dataclasses import dataclass
 from typing import Protocol
 
 import httpx
+from PIL import Image, ImageDraw, ImageFont
 
 from .config import Settings, get_settings
 
@@ -36,11 +37,6 @@ PET_ACTIVITY_SCHEMA = {
     "required": ["activity", "utterance"],
     "additionalProperties": False,
 }
-
-# 1x1 투명 PNG. 스텁 이미지이자 실물 실패 시의 폴백.
-_BLANK_PNG = base64.b64decode(
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
-)
 
 _STUB_UTTERANCES = {
     "eating": "밥 먹는 중! 오늘 뭐 했어?",
@@ -77,7 +73,14 @@ class LlmClient(Protocol):
 
 class ImageClient(Protocol):
     async def diary_image(
-        self, *, activities: list[str], caption: str, weights_path: str | None
+        self,
+        *,
+        group_id: int,
+        entry_date: str,
+        activities: list[str],
+        caption: str,
+        style_kind: str,
+        weights_path: str | None,
     ) -> bytes: ...
     async def health(self) -> bool: ...
 
@@ -101,9 +104,27 @@ class StubLlmClient:
         return True
 
 
+class ImageGenerationError(RuntimeError):
+    pass
+
+
 class StubImageClient:
-    async def diary_image(self, **_: object) -> bytes:
-        return _BLANK_PNG
+    async def diary_image(self, **kwargs: object) -> bytes:
+        """GPU가 없는 개발 환경에서도 눈으로 확인 가능한 512px PNG를 만든다."""
+        activities = kwargs.get("activities")
+        labels = ", ".join(activities) if isinstance(activities, list) else "waiting"
+        image = Image.new("RGB", (512, 512), (246, 244, 238))
+        draw = ImageDraw.Draw(image)
+        font = ImageFont.load_default(size=22)
+        draw.rounded_rectangle((72, 80, 440, 432), radius=28, fill=(255, 255, 255))
+        draw.ellipse((166, 130, 346, 310), fill=(245, 173, 88), outline=(45, 45, 45), width=4)
+        draw.ellipse((202, 195, 222, 215), fill=(45, 45, 45))
+        draw.ellipse((290, 195, 310, 215), fill=(45, 45, 45))
+        draw.arc((225, 205, 287, 255), start=10, end=170, fill=(45, 45, 45), width=4)
+        draw.text((96, 350), labels[:34], fill=(45, 45, 45), font=font)
+        output = io.BytesIO()
+        image.save(output, "PNG")
+        return output.getvalue()
 
     async def health(self) -> bool:
         return True
@@ -169,9 +190,14 @@ class HttpLlmClient:
             "model": self._model,
             "messages": [{"role": "user", "content": prompt}],
             "max_tokens": 256,
-            # TODO(docs/API.md 13절): vLLM 0.24.0 의 구조화 출력 파라미터 이름을
-            # 실제로 띄워 보고 확정한다. guided_json 인지 response_format 인지.
-            "guided_json": schema,
+            # vLLM 0.24.0의 OpenAI 호환 JSON Schema 형식.
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "memory_pager_response",
+                    "schema": schema,
+                },
+            },
         }
         async with httpx.AsyncClient(timeout=self._timeout) as client:
             resp = await client.post(f"{self._base}/v1/chat/completions", json=payload)
@@ -196,13 +222,22 @@ class HttpImageClient:
         self._timeout = settings.gpu_timeout_seconds
 
     async def diary_image(
-        self, *, activities: list[str], caption: str, weights_path: str | None
+        self,
+        *,
+        group_id: int,
+        entry_date: str,
+        activities: list[str],
+        caption: str,
+        style_kind: str,
+        weights_path: str | None,
     ) -> bytes:
         payload = {
+            "group_id": str(group_id),
+            "entry_date": entry_date,
             "activities": activities,
             "caption": caption,
             "style": {
-                "kind": "learned" if weights_path else "default",
+                "kind": style_kind,
                 "weights_path": weights_path,
             },
         }
@@ -210,10 +245,17 @@ class HttpImageClient:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
                 resp = await client.post(f"{self._base}/generate/diary", json=payload)
                 resp.raise_for_status()
+            if not resp.headers.get("content-type", "").lower().startswith("image/png"):
+                raise ValueError("sd-worker가 image/png가 아닌 응답을 반환했습니다")
+            with Image.open(io.BytesIO(resp.content)) as image:
+                if image.format != "PNG":
+                    raise ValueError("sd-worker 응답이 유효한 PNG가 아닙니다")
+                image.verify()
             return resp.content
-        except Exception:
-            logger.warning("일기 그림 생성 실패. 빈 이미지로 열화한다.", exc_info=True)
-            return _BLANK_PNG
+        except Exception as exc:
+            # image_url/caption이 NOT NULL인 일기에 1x1 빈 이미지를 저장하지 않는다.
+            logger.warning("일기 그림 생성 실패. 그날 일기를 생성하지 않는다.", exc_info=True)
+            raise ImageGenerationError("sd-worker 일기 이미지 생성 실패") from exc
 
     async def health(self) -> bool:
         try:

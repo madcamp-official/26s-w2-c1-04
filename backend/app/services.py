@@ -7,16 +7,19 @@ REST 는 항상 되는 길이고 소켓은 빠른 길이다 (docs/API.md 9절).
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, timedelta, timezone
+import re
+from dataclasses import dataclass
+from datetime import date, datetime, time, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from . import gpu, media, realtime, state
+from . import gpu, media, notifications, realtime, state
 from .config import get_settings
 from .db import session_factory
-from .errors import ApiError
+from .errors import ApiError, parse_id
 from .models import (
     BestDoodleRule,
     ContentType,
@@ -35,6 +38,7 @@ from .models import (
 )
 
 logger = logging.getLogger(__name__)
+_KST = ZoneInfo("Asia/Seoul")
 
 
 def _real_now() -> datetime:
@@ -50,6 +54,16 @@ def _now() -> datetime:
     재확인 응답(DB 값)이 1초 어긋났다. 저장 전에 잘라내면 둘이 같아진다.
     """
     return _real_now().replace(microsecond=0)
+
+
+def _kst_day_range(entry_date: date) -> tuple[datetime, datetime]:
+    """KST 달력 날짜를 MySQL에 저장된 naive UTC 반개구간으로 바꾼다."""
+    local_start = datetime.combine(entry_date, time.min, tzinfo=_KST)
+    local_end = local_start + timedelta(days=1)
+    return (
+        local_start.astimezone(timezone.utc).replace(tzinfo=None),
+        local_end.astimezone(timezone.utc).replace(tzinfo=None),
+    )
 
 
 async def require_member(session: AsyncSession, user_id: int, group_id: int) -> None:
@@ -76,10 +90,17 @@ async def my_group_id(session: AsyncSession, user_id: int) -> int:
 
 
 async def load_visible_doodle(
-    session: AsyncSession, user_id: int, doodle_id: int
+    session: AsyncSession, user_id: int, doodle_id: int, *, for_update: bool = False
 ) -> Doodle:
     """404(없는 id)와 410(만료됨)을 갈라 쓴다. soft delete 라 행은 남는다."""
-    doodle = await session.get(Doodle, doodle_id)
+    if for_update:
+        doodle = (
+            await session.execute(
+                select(Doodle).where(Doodle.id == doodle_id).with_for_update()
+            )
+        ).scalar_one_or_none()
+    else:
+        doodle = await session.get(Doodle, doodle_id)
     if doodle is None:
         raise ApiError(404, "not_found", "낙서가 없습니다")
     await require_member(session, user_id, doodle.group_id)
@@ -104,19 +125,22 @@ async def mark_viewed(
 
     기준 시각은 `now` 가 아니라 **`viewed_at`** 이다.
     """
-    doodle = await load_visible_doodle(session, user_id, doodle_id)
+    # 같은 사용자의 REST와 Socket.IO 확인이 동시에 들어와도 receipt INSERT가
+    # 경합하지 않게 낙서 행 하나로 직렬화한다.
+    doodle = await load_visible_doodle(
+        session, user_id, doodle_id, for_update=True
+    )
 
     receipt = (
         await session.execute(
             select(DoodleReceipt).where(
                 DoodleReceipt.doodle_id == doodle_id,
                 DoodleReceipt.user_id == user_id,
-            )
+            ).with_for_update()
         )
     ).scalar_one_or_none()
 
-    real = _real_now()
-    viewed_at = real.replace(microsecond=0)
+    viewed_at = _real_now()
 
     first_view = receipt is None
     if first_view:
@@ -134,10 +158,9 @@ async def mark_viewed(
     await session.commit()
 
     if arm:
-        # 타이머는 **저장된 expires_at 까지 남은 실제 시간**으로 건다.
-        # ttl 을 그대로 쓰면 소수점을 버린 만큼 실제 삭제가 늦어져,
-        # 앱이 카운트다운을 끝냈는데 낙서가 아직 남아 있게 된다.
-        delay = max((doodle.expires_at - real).total_seconds(), 0.0)
+        # DATETIME(6)에 저장한 expires_at까지 남은 실제 시간으로 건다. API의
+        # 카운트다운과 삭제 시점이 같은 값을 기준으로 움직인다.
+        delay = max((doodle.expires_at - _real_now()).total_seconds(), 0.0)
         state.get_expiry().schedule(doodle_id, delay)
         logger.info("낙서 %s 만료 예약 (%.2fs)", doodle_id, delay)
 
@@ -156,6 +179,11 @@ async def expire_doodle(doodle_id: int) -> None:
 
     removed = media.delete_doodle_files(group_id, doodle_id)
     await realtime.emit_doodle_expired(group_id, doodle_id)
+    try:
+        async with session_factory()() as session:
+            await notifications.send_widget_refresh(session, group_id)
+    except Exception:
+        logger.exception("낙서 %s 만료 후 위젯 푸시 실패", doodle_id)
     logger.info("낙서 %s 만료 완료 (파일 %d개 삭제)", doodle_id, removed)
 
 
@@ -187,10 +215,20 @@ async def send_poke(session: AsyncSession, user_id: int, to_user_id: int) -> Non
     session.add(
         Poke(group_id=group_id, from_user_id=user_id, to_user_id=to_user_id, created_at=now)
     )
+    levelup = await award_pet_exp(
+        session, group_id, get_settings().pet_poke_exp
+    )
     await session.commit()
 
     await realtime.emit_poke(group_id, user_id, now.isoformat() + "Z")
-    # TODO: FCM `poke` 푸시. Firebase 프로젝트가 생기면.
+    if levelup is not None:
+        await realtime.emit_pet_levelup(group_id, levelup.pet_id, levelup.level)
+    await notifications.send_poke(
+        session,
+        group_id=group_id,
+        from_user_id=user_id,
+        to_user_id=to_user_id,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -200,6 +238,47 @@ async def send_poke(session: AsyncSession, user_id: int, to_user_id: int) -> Non
 # GPU 가 죽어도 펫은 말을 해야 한다.
 DEFAULT_UTTERANCE = "…아직 잠에서 덜 깼어."
 DEFAULT_ACTIVITY = "waiting"
+
+
+@dataclass(frozen=True)
+class LevelUp:
+    pet_id: int
+    level: int
+
+
+async def award_pet_exp(
+    session: AsyncSession, group_id: int, amount: int
+) -> LevelUp | None:
+    """그룹 펫의 누적 exp를 올리고 레벨 경계를 원자적으로 넘긴다.
+
+    같은 순간 낙서·찌르기·쓰다듬기가 들어와도 `FOR UPDATE`로 손실 갱신을 막는다.
+    exp는 누적값이고 `level = exp // PET_EXP_PER_LEVEL + 1`이다.
+    """
+    if amount <= 0:
+        return None
+    pet = (
+        await session.execute(
+            select(Pet)
+            .where(Pet.group_id == group_id)
+            .with_for_update()
+            # load_pet()이 같은 트랜잭션 초기에 읽은 객체가 identity map에 있어도
+            # 잠금을 얻은 시점의 최신 exp/level로 덮어쓴다.
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+    if pet is None:
+        return None
+
+    settings = get_settings()
+    old_level = pet.level
+    pet.exp += amount
+    calculated = pet.exp // max(settings.pet_exp_per_level, 1) + 1
+    if calculated <= old_level:
+        return None
+
+    pet.level = calculated
+    pet.coins += (calculated - old_level) * max(settings.pet_levelup_coins, 0)
+    return LevelUp(pet_id=pet.id, level=pet.level)
 
 
 async def load_pet(session: AsyncSession, user_id: int, pet_id: int) -> Pet:
@@ -233,14 +312,17 @@ async def pat_pet(session: AsyncSession, user_id: int, pet_id: int) -> dict:
     pet = await load_pet(session, user_id, pet_id)
     act = await current_activity(session, pet_id)
 
-    # exp 증가 규칙은 아직 미확정이다 (docs/API.md 13절). 일단 1.
-    pet.exp += 1
+    exp_gained = get_settings().pet_pat_exp
+    levelup = await award_pet_exp(session, pet.group_id, exp_gained)
     await session.commit()
+
+    if levelup is not None:
+        await realtime.emit_pet_levelup(pet.group_id, levelup.pet_id, levelup.level)
 
     return {
         "activity": act.activity.value if act else DEFAULT_ACTIVITY,
         "utterance": act.utterance if act else DEFAULT_UTTERANCE,
-        "exp_gained": 1,
+        "exp_gained": exp_gained,
     }
 
 
@@ -357,12 +439,14 @@ async def generate_diary(pet_id: int, entry_date: date) -> int | None:
         if exists:
             return exists  # UNIQUE(pet_id, entry_date). 하루 한 장.
 
+        day_start, day_end = _kst_day_range(entry_date)
         rows = (
             await session.execute(
                 select(PetActivity)
                 .where(
                     PetActivity.pet_id == pet_id,
-                    func.date(PetActivity.started_at) == entry_date,
+                    PetActivity.started_at >= day_start,
+                    PetActivity.started_at < day_end,
                 )
                 .order_by(PetActivity.id)
             )
@@ -376,7 +460,12 @@ async def generate_diary(pet_id: int, entry_date: date) -> int | None:
 
         caption = await gpu.get_llm_client().diary_caption(activities)
         image = await gpu.get_image_client().diary_image(
-            activities=activities, caption=caption, weights_path=style.weights_path
+            group_id=group_id,
+            entry_date=entry_date.isoformat(),
+            activities=activities,
+            caption=caption,
+            style_kind=style.kind.value,
+            weights_path=style.weights_path,
         )
 
         diary = PetDiary(
@@ -387,12 +476,36 @@ async def generate_diary(pet_id: int, entry_date: date) -> int | None:
             caption=caption,
         )
         session.add(diary)
-        await session.flush()
-        diary.image_url = media.save_bytes(group_id, f"diary_{diary.id}.png", image)
+        filename: str | None = None
+        try:
+            await session.flush()
+            filename = f"diary_{diary.id}.png"
+            diary.image_url = media.save_bytes(group_id, filename, image)
 
-        for a in rows:
-            a.diary_id = diary.id
-        await session.commit()
+            for a in rows:
+                a.diary_id = diary.id
+            await session.commit()
+        except IntegrityError:
+            # 자정 잡이 중복 실행돼도 하루 한 장 불변식과 파일 정합성을 지킨다.
+            await session.rollback()
+            if filename is not None:
+                media.delete_file(group_id, filename)
+            existing = (
+                await session.execute(
+                    select(PetDiary.id).where(
+                        PetDiary.pet_id == pet_id,
+                        PetDiary.entry_date == entry_date,
+                    )
+                )
+            ).scalar_one_or_none()
+            if existing is not None:
+                return existing
+            raise
+        except Exception:
+            await session.rollback()
+            if filename is not None:
+                media.delete_file(group_id, filename)
+            raise
         diary_id, style_kind = diary.id, style.kind.value
 
     await realtime.emit_diary_new(group_id, diary_id, entry_date.isoformat(), style_kind)
@@ -404,13 +517,15 @@ async def generate_diary(pet_id: int, entry_date: date) -> int | None:
 # 월간 레포트 (MR-1 ~ MR-4) — docs/API.md 6절, SPEC 6.5
 # ---------------------------------------------------------------------------
 
-import re
-
 _MONTH_RE = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
 
 
 def validate_month(report_month: str) -> None:
     if not _MONTH_RE.match(report_month):
+        raise ApiError(400, "invalid_request", "report_month 는 YYYY-MM 이어야 합니다")
+    # 0000과 9999-12는 datetime 범위 밖의 인접 월을 만들 수 있다.
+    year = int(report_month[:4])
+    if year < 1 or year > 9998:
         raise ApiError(400, "invalid_request", "report_month 는 YYYY-MM 이어야 합니다")
 
 
@@ -436,7 +551,9 @@ def _stroke_count(stroke_data: object) -> int:
     return 0
 
 
-async def generate_report(group_id: int, report_month: str) -> int:
+async def generate_report(
+    group_id: int, report_month: str, *, notify: bool = False
+) -> int:
     """그 달의 활동을 집계해 monthly_reports 한 행으로 굳힌다 (MR-3).
 
     데모용 수동 트리거와 월 1회 배치가 같은 이 함수를 부른다. 이미 있으면 덮어쓴다.
@@ -524,6 +641,15 @@ async def generate_report(group_id: int, report_month: str) -> int:
         except IntegrityError:
             await session.rollback()
             report_id = await _upsert_report(session, group_id, report_month, values)
+
+    if notify:
+        try:
+            async with session_factory()() as push_session:
+                await notifications.send_monthly_report(
+                    push_session, group_id, report_month
+                )
+        except Exception:
+            logger.exception("그룹 %s 월간 레포트 푸시 실패", group_id)
 
     logger.info(
         "그룹 %s %s 레포트 생성: 사진 %d 그림 %d 글 %d 찌르기 %d 최고=%s(%s)",
@@ -627,11 +753,12 @@ async def sock_doodle_viewed(user_id: int, payload: dict) -> dict:
     doodle_id = payload.get("doodle_id")
     if doodle_id is None:
         return {"error": {"code": "invalid_request", "message": "doodle_id 가 없습니다"}}
-    async with session_factory()() as session:
-        try:
-            expires_at = await mark_viewed(session, user_id, int(doodle_id))
-        except ApiError as e:
-            return _ack_error(e)
+    try:
+        parsed_id = parse_id(doodle_id, "doodle_id")
+        async with session_factory()() as session:
+            expires_at = await mark_viewed(session, user_id, parsed_id)
+    except ApiError as e:
+        return _ack_error(e)
     return {"expires_at": expires_at.isoformat() + "Z" if expires_at else None}
 
 
@@ -639,9 +766,10 @@ async def sock_poke_send(user_id: int, payload: dict) -> dict:
     to_user_id = payload.get("to_user_id")
     if to_user_id is None:
         return {"error": {"code": "invalid_request", "message": "to_user_id 가 없습니다"}}
-    async with session_factory()() as session:
-        try:
-            await send_poke(session, user_id, int(to_user_id))
-        except ApiError as e:
-            return _ack_error(e)
+    try:
+        parsed_id = parse_id(to_user_id, "to_user_id")
+        async with session_factory()() as session:
+            await send_poke(session, user_id, parsed_id)
+    except ApiError as e:
+        return _ack_error(e)
     return {"ok": True}

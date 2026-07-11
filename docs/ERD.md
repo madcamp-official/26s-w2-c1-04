@@ -96,7 +96,7 @@ erDiagram
         varchar drawing_url "nullable"
         json stroke_data "펜 종류 색상 좌표 획별 타임스탬프"
         text text_body "nullable"
-        datetime expires_at "ephemeral 전용"
+        datetime(6) expires_at "ephemeral 전용"
         datetime created_at
         datetime deleted_at "soft delete"
     }
@@ -105,7 +105,7 @@ erDiagram
         bigint id PK
         bigint doodle_id FK
         bigint user_id FK
-        datetime viewed_at "최초 확인 시각"
+        datetime(6) viewed_at "최초 확인 시각"
     }
 
     pokes {

@@ -321,7 +321,7 @@ cloudflared service install eyJhIjoi...
 
 ## 1. 드라이버 — 여기서 막히면 위가 다 무의미하다
 
-GPU 하드웨어는 있는데 드라이버가 없는 상태에서 시작한다.
+GPU 하드웨어와 드라이버 설치를 확인했다(2026-07-11). `nvidia-smi` 기준 Driver 595.71.05, CUDA 13.2, RTX 3090 24GB다. 아래 설치 절차는 VM을 다시 만들 때의 복구용으로 남긴다.
 
 ```bash
 nvidia-smi                       # "command not found" 면 아래로
@@ -414,7 +414,10 @@ curl -s localhost:8100/is_sleeping      # 404 가 나오면 VLLM_SERVER_DEV_MODE
 ```bash
 source ~/envs/sd/bin/activate
 pip install -r gpu/requirements-sd.txt
+uvicorn gpu.sd_worker:app --host 0.0.0.0 --port 8200
 ```
+
+다른 셸에서 `curl http://127.0.0.1:8200/health`를 확인한다. 모델을 받지 않고 계약만 검사할 때는 `SD_STUB=true`로 실행한다. 실제 모드는 모델을 백그라운드에서 읽는 동안 `/health`가 503 `loading`, 완료 후 200 `ok`를 반환한다.
 
 **SDXL은 쓰지 않는다.** 24GB에서 상주 LLM과 겨우 공존은 하나(합 21~23GB) 헤드룸이 없어 OOM 위험이 있다. SD 1.5는 추론 4~6GB, LoRA 학습 6~8GB라 여유 있게 LLM을 켠 채로 돌아간다.
 
@@ -437,7 +440,7 @@ curl -X POST localhost:8100/wake_up         # 3~6초
 | 라우터 | `DATABASE_URL=... python backend/tests/test_groups_integration.py` | 28 passed | ✅ |
 | API 로컬 | `curl localhost:8000/v1/health` | `db: ok` | ✅ |
 | **API 외부** | 노트북에서 `curl.exe https://anjonghwa.madcamp-kaist.org/v1/health` | 우리 JSON | ⬜ 터널을 앱 VM으로 옮겨야 함 (7-7) |
-| GPU 드라이버 | `nvidia-smi` | 뜨면 OK (570+ 권장) | ⬜ 설치 중 |
+| GPU 드라이버 | `nvidia-smi` | 뜨면 OK (570+ 권장) | ✅ 595.71.05 / RTX 3090 24GB |
 | vLLM 점유 | `nvidia-smi` | **약 8GB** (18GB면 실패) | ⬜ |
 | vLLM sleep | `curl localhost:8100/is_sleeping` | 404 아님 | ⬜ |
 

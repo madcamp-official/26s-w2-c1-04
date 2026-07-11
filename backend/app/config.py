@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     # --- 미디어 (앱 VM 파일시스템) -------------------------------------------
     media_root: Path = Path("./media")
     media_url_prefix: str = "/media"
+    max_upload_bytes: int = 10 * 1024 * 1024
+    max_image_dimension: int = 8192
+    max_text_length: int = 4000
+    max_stroke_bytes: int = 512 * 1024
 
     # --- GPU 서버 ------------------------------------------------------------
     # 기본은 스텁이다. GPU 환경이 준비되기 전에도 앱·백엔드가 굴러가야 한다.
@@ -43,10 +47,24 @@ class Settings(BaseSettings):
     activity_interval_minutes: int = 180   # 펫이 하루 몇 번 활동을 바꾸나 (API.md 13절: 미확정)
     diary_hour_utc: int = 15               # 자정 KST = 15시 UTC
 
+    # --- 펫 성장 -----------------------------------------------------------
+    # exp는 누적값이다. API 예시의 level=4, exp=320과 같은 규칙이다.
+    pet_exp_per_level: int = 100
+    pet_doodle_exp: int = 10
+    pet_reply_exp: int = 5
+    pet_poke_exp: int = 2
+    pet_pat_exp: int = 1
+    pet_levelup_coins: int = 50
+
     # --- 푸시 ---------------------------------------------------------------
     fcm_credentials_path: Path | None = None
 
     cors_origins: str = "*"
+
+    def parsed_cors_origins(self) -> str | list[str]:
+        if self.cors_origins.strip() == "*":
+            return "*"
+        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
 
 @lru_cache(maxsize=1)

@@ -38,6 +38,7 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.dialects.mysql import DATETIME as MYSQL_DATETIME
 from sqlalchemy.sql.elements import quoted_name
 
 
@@ -299,7 +300,9 @@ class Doodle(Base):
     drawing_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     stroke_data: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
     text_body: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    expires_at: Mapped[Optional[datetime]] = mapped_column(
+        MYSQL_DATETIME(fsp=6), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
@@ -331,7 +334,9 @@ class DoodleReceipt(Base):
     user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), index=True
     )
-    viewed_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    viewed_at: Mapped[datetime] = mapped_column(
+        MYSQL_DATETIME(fsp=6), server_default=func.now()
+    )
 
     doodle: Mapped[Doodle] = relationship(back_populates="receipts")
 

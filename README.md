@@ -37,15 +37,15 @@
 
 ## 기획안
 
-- **산출물 주제:**
-- **제작 목적:**
-- **선택 옵션:**
+- **산출물 주제:** Memory Pager — 두 사람이 낙서·사진·짧은 글과 함께 펫을 키우는 폐쇄형 커플 공간
+- **제작 목적:** 앱을 열어 둔 상태와 백그라운드 모두에서 가벼운 소통이 이어지고, 그룹 활동이 펫의 말과 그림 일기로 축적되는 경험 구현
+- **선택 옵션:** 실시간 인터랙션(주 옵션) + LLM Wrapper(부 옵션)
 - **핵심 구현 요소:**
-  -
-  -
-  -
-- **사용 / 시연 시나리오:**
-- **팀원별 역할:**
+  - Socket.IO 룸 기반 낙서·찌르기와 확인 후 5초 만료
+  - FCM data-only 푸시와 Android 홈 위젯 갱신 계약
+  - 자체 GPU의 한국어 LLM 대사·캡션과 SD 1.5 그림 일기
+- **사용 / 시연 시나리오:** 두 사용자가 초대 코드로 매칭 → 일반/사라지기 낙서 왕복 → 찌르기·쓰다듬기 → 펫 성장·그림 일기·월간 레포트 확인
+- **팀원별 역할:** 이종혁 — Flutter/Android, 안종화 — FastAPI/MySQL/Socket.IO/GPU
 
 ### 개발 일정
 
@@ -67,16 +67,17 @@
 
 | 구현 요소 | 설명 | 우선순위 |
 |---|---|---|
-|  |  | 필수 |
-|  |  | 필수 |
-|  |  | 선택 |
-|  |  | 선택 |
+| 2인 그룹·낙서 | 초대 코드, 정원 강제, 사진/손그림/텍스트, 답장·사진첩 | 필수 |
+| 실시간 소통 | Socket.IO, 찌르기, 5초 만료, FCM, 위젯 계약 | 필수 |
+| AI 펫 | 활동·대사 캐시, 쓰다듬기, SD 1.5 그림 일기 | 필수 |
+| 월간 레포트 | 유형 분포, 성장, 규칙 기반 최고의 낙서 | 선택 |
+| LoRA·스토어·탐색 | 사용자 그림체, 펫 꾸미기, 다른 그룹 탐색 | P2 미구현 |
 
 ---
 
 ## 아키텍처
 
-<!-- 실시간 인터랙션: WebSocket/SSE/WebRTC 구조도 / LLM Wrapper: API 연동 흐름도 / Cross-Platform: 플랫폼 구성도 -->
+Android 앱은 Cloudflare Tunnel을 통해 앱 VM의 FastAPI REST·Socket.IO에 연결한다. 앱 VM은 MySQL과 미디어 파일을 소유하고, 사설망으로 GPU VM의 vLLM(`:8100`)과 SD worker(`:8200`)를 호출한다. 상세 구조는 [docs/SPEC.md](docs/SPEC.md), API 계약은 [docs/API.md](docs/API.md), 배포 절차는 [docs/SETUP.md](docs/SETUP.md)를 따른다.
 
 ---
 
@@ -102,33 +103,36 @@
 
 ## 산출물 및 실행 방법
 
-- **산출물 설명:**
-- **실행 환경:**
-- **실행 방법:**
+- **산출물 설명:** Android 앱 + FastAPI 실시간 백엔드 + MySQL + 자체 GPU 추론 worker
+- **실행 환경:** Ubuntu 22.04 앱 VM, Ubuntu 22.04 RTX 3090 GPU VM, Android(Galaxy)
+- **실행 방법:** 아래 백엔드 실행 또는 [backend/README.md](backend/README.md) 참고
 - **시연 영상 / 이미지:** (선택)
 
 ### 실행 방법
 
 ```bash
-# 환경 설정
-cp .env.example .env
+# 앱 VM 백엔드
+python3 -m venv ~/envs/api
+source ~/envs/api/bin/activate
+pip install -r backend/requirements.txt
+cp backend/.env.example backend/.env
+cd backend
+uvicorn app.main:asgi --host 0.0.0.0 --port 8000
 
-# 의존성 설치
-npm install   # 또는 pip install -r requirements.txt 등
-
-# 실행
-npm run dev   # 또는 python main.py 등
+# 선택: 두 사용자 통합 데모
+cd ..
+python -m http.server 4173 --directory demo
 ```
 
 ### 기술 구성
 
 | 분류 | 사용 기술 |
 |---|---|
-| 핵심 기술 |  |
-| 실행 환경 |  |
-| 데이터 저장 |  |
-| 외부 API / 서비스 |  |
-| 기타 |  |
+| 핵심 기술 | FastAPI, Socket.IO, Flutter, FCM, vLLM, Stable Diffusion 1.5 |
+| 실행 환경 | Android, Ubuntu 22.04 앱 VM, RTX 3090 GPU VM |
+| 데이터 저장 | MySQL 8, 앱 VM 파일시스템 미디어 |
+| 외부 API / 서비스 | Cloudflare Tunnel, Firebase Cloud Messaging |
+| 기타 | APScheduler, SQLAlchemy async, Pillow |
 
 ---
 

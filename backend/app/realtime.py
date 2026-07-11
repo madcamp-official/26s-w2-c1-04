@@ -29,7 +29,7 @@ NAMESPACE = "/rt"
 
 sio = socketio.AsyncServer(
     async_mode="asgi",
-    cors_allowed_origins=get_settings().cors_origins,
+    cors_allowed_origins=get_settings().parsed_cors_origins(),
 )
 
 
@@ -71,8 +71,8 @@ def set_service_handlers(
 
 @sio.event(namespace=NAMESPACE)
 async def connect(sid: str, environ: dict, auth: dict | None = None) -> bool:
-    token = (auth or {}).get("token")
-    if not token or _resolve_token is None:
+    token = auth.get("token") if isinstance(auth, dict) else None
+    if not isinstance(token, str) or not token or _resolve_token is None:
         logger.info("소켓 연결 거부: 토큰 없음 (sid=%s)", sid)
         return False
 
@@ -119,9 +119,27 @@ async def _dispatch(
 ) -> dict[str, Any]:
     if handler is None:
         return {"error": {"code": "not_ready", "message": f"{event} 핸들러 미등록"}}
-    session = await sio.get_session(sid, namespace=NAMESPACE)
+    if not isinstance(data, dict):
+        return {
+            "error": {
+                "code": "invalid_request",
+                "message": f"{event} 페이로드는 객체여야 합니다",
+            }
+        }
     try:
-        return await handler(session["user_id"], data or {})
+        session = await sio.get_session(sid, namespace=NAMESPACE)
+    except Exception:
+        logger.info("%s 세션 없음 (sid=%s)", event, sid)
+        return {
+            "error": {"code": "unauthorized", "message": "연결 세션이 없습니다"}
+        }
+    user_id = session.get("user_id")
+    if not isinstance(user_id, int):
+        return {
+            "error": {"code": "unauthorized", "message": "연결 세션이 없습니다"}
+        }
+    try:
+        return await handler(user_id, data or {})
     except Exception:
         logger.exception("%s 처리 실패", event)
         return {"error": {"code": "internal", "message": "처리 실패"}}
@@ -133,7 +151,12 @@ async def _dispatch(
 
 
 async def _emit(group_id: int, event: str, payload: dict[str, Any]) -> None:
-    await sio.emit(event, payload, room=group_room(group_id), namespace=NAMESPACE)
+    try:
+        await sio.emit(event, payload, room=group_room(group_id), namespace=NAMESPACE)
+    except Exception:
+        # DB 커밋 뒤의 보조 경로다. 소켓 장애가 성공한 REST 요청을 500으로 바꾸면
+        # 클라이언트 재시도로 중복 데이터가 생긴다.
+        logger.exception("소켓 이벤트 전송 실패: %s (group=%s)", event, group_id)
 
 
 async def emit_doodle_new(group_id: int, payload: dict[str, Any]) -> None:

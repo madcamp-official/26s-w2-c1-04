@@ -164,7 +164,7 @@ CREATE TABLE doodles (
     stroke_data   JSON         NULL
                   COMMENT '펜 종류·색상·좌표·획별 타임스탬프. 타임스탬프는 그리기 소요 시간용',
     text_body     TEXT         NULL,
-    expires_at    DATETIME     NULL COMMENT 'ephemeral 전용. 최초 확인 + 5초',
+    expires_at    DATETIME(6)  NULL COMMENT 'ephemeral 전용. 최초 확인 + 5초',
     created_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted_at    DATETIME     NULL COMMENT 'soft delete',
     PRIMARY KEY (id),
@@ -186,7 +186,7 @@ CREATE TABLE doodle_receipts (
     id         BIGINT   NOT NULL AUTO_INCREMENT,
     doodle_id  BIGINT   NOT NULL,
     user_id    BIGINT   NOT NULL,
-    viewed_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '최초 확인 시각. 갱신하지 않는다',
+    viewed_at  DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT '최초 확인 시각. 갱신하지 않는다',
     PRIMARY KEY (id),
     UNIQUE KEY uq_receipts (doodle_id, user_id),
     KEY ix_receipts_user (user_id),

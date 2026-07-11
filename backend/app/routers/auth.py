@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 from sqlalchemy import select
+from sqlalchemy.exc import DBAPIError
 
 from ..deps import CurrentUser, SessionDep
+from ..errors import MYSQL_DEADLOCK_ERRNO, MYSQL_DUPLICATE_ERRNO, mysql_errno
 from ..models import AuthIdentity, AuthProvider, Group, GroupMember, User
 from ..schemas import GroupBrief, MeOut, RegisterIn, RegisterOut, UpdateMeIn, UserOut
 from ..security import hash_token, issue_token
@@ -26,7 +28,7 @@ async def register(body: RegisterIn, session: SessionDep) -> RegisterOut:
             select(AuthIdentity).where(
                 AuthIdentity.provider == AuthProvider.DEVICE,
                 AuthIdentity.provider_uid == body.device_uid,
-            )
+            ).with_for_update()
         )
     ).scalar_one_or_none()
 
@@ -46,7 +48,29 @@ async def register(body: RegisterIn, session: SessionDep) -> RegisterOut:
 
     token = issue_token(user.id)
     identity.secret_hash = hash_token(token)
-    await session.commit()
+    try:
+        await session.commit()
+    except DBAPIError as exc:
+        if mysql_errno(exc) not in (MYSQL_DUPLICATE_ERRNO, MYSQL_DEADLOCK_ERRNO):
+            raise
+        # 동일 device_uid 최초 등록 두 건이 동시에 none을 읽고 INSERT한 경우.
+        # 진 요청의 임시 user/identity는 rollback하고 승자의 identity에 새 토큰을 발급한다.
+        await session.rollback()
+        identity = (
+            await session.execute(
+                select(AuthIdentity)
+                .where(
+                    AuthIdentity.provider == AuthProvider.DEVICE,
+                    AuthIdentity.provider_uid == body.device_uid,
+                )
+                .with_for_update()
+            )
+        ).scalar_one()
+        user = await session.get(User, identity.user_id)
+        assert user is not None
+        token = issue_token(user.id)
+        identity.secret_hash = hash_token(token)
+        await session.commit()
 
     return RegisterOut(
         token=token, user=UserOut(id=str(user.id), display_name=user.display_name)

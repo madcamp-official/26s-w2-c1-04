@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+import math
+
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -94,6 +96,33 @@ class UpdateNicknameIn(BaseModel):
     nickname: str = Field(min_length=1, max_length=32)
 
 
+class StrokeCanvas(BaseModel):
+    w: int = Field(gt=0, le=8192)
+    h: int = Field(gt=0, le=8192)
+
+
+class Stroke(BaseModel):
+    pen: str = Field(min_length=1, max_length=32)
+    color: str = Field(pattern=r"^[0-9A-Fa-f]{6}$")
+    width: float = Field(gt=0, le=100)
+    points: list[tuple[float, float, int]] = Field(min_length=1, max_length=10000)
+
+    @field_validator("points")
+    @classmethod
+    def valid_points(
+        cls, points: list[tuple[float, float, int]]
+    ) -> list[tuple[float, float, int]]:
+        if any(not math.isfinite(x) or not math.isfinite(y) or elapsed < 0 for x, y, elapsed in points):
+            raise ValueError("좌표는 유한수이고 경과 시간은 0 이상이어야 합니다")
+        return points
+
+
+class StrokeData(BaseModel):
+    canvas: StrokeCanvas
+    duration_ms: int = Field(ge=0, le=86_400_000)
+    strokes: list[Stroke] = Field(min_length=1, max_length=5000)
+
+
 class DoodleOut(BaseModel):
     id: str
     group_id: str
@@ -103,8 +132,8 @@ class DoodleOut(BaseModel):
     content_type: str
     photo_url: str | None
     drawing_url: str | None
-    # 어떤 유형이든 null 이 되지 않는다 (docs/API.md 4절)
-    thumb_url: str
+    # 미열람 사라지기 낙서는 내용을 숨기므로 null이다. 그 외에는 항상 채워진다.
+    thumb_url: str | None
     text_body: str | None
     # 아래 둘은 DB 컬럼이 아니라 계산 필드다
     reply_count: int
