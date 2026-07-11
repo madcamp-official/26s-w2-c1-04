@@ -392,13 +392,25 @@ cd ~/26s-w2-c1-04
 source ~/envs/vllm/bin/activate
 pip install -r gpu/requirements-vllm.txt
 
-VLLM_SERVER_DEV_MODE=1 vllm serve LGAI-EXAONE/EXAONE-3.5-7.8B-Instruct-AWQ \
-  --gpu-memory-utilization 0.35 \
+# 두 값은 실측으로 확인됨(2026-07-11). 빼면 부팅이 크래시 루프에 빠진다.
+VLLM_SERVER_DEV_MODE=1 VLLM_USE_FLASHINFER_SAMPLER=0 \
+  vllm serve LGAI-EXAONE/EXAONE-3.5-7.8B-Instruct-AWQ \
+  --trust-remote-code \
+  --gpu-memory-utilization 0.4 \
   --max-model-len 8192 --max-num-seqs 16 \
   --enable-sleep-mode --port 8100
 ```
 
-`--gpu-memory-utilization`은 24GB의 비율이다. `0.35`면 약 8.4GB로 상한이 고정된다.
+**`--trust-remote-code` 는 필수다.** EXAONE 3.5 는 커스텀 모델링 코드를 포함해서, 이게 없으면
+`ModelConfig` 검증에서 `trust_remote_code=True` 를 요구하며 죽는다(pydantic ValidationError).
+
+**`VLLM_USE_FLASHINFER_SAMPLER=0` 도 필수다.** FlashInfer 의 top-k/top-p 샘플러가 런타임에
+CUDA 커널을 JIT 컴파일하려고 `nvcc`(CUDA 툴킷)를 찾는데, 여기엔 드라이버만 있고 툴킷은 없다
+(`Could not find nvcc ... /usr/local/cuda`). 툴킷을 깔지 않는다(torch·SD 가 런타임을 번들). 대신
+이 환경변수로 FlashInfer 샘플러를 꺼 vLLM 기본 PyTorch 샘플링 경로를 쓰게 한다.
+
+`--gpu-memory-utilization`은 24GB의 비율이다. `0.4`면 약 9.8GB 상한. SD(~3GB)와 합쳐도 24GB에 든다.
+(SD가 이미 떠 있으면 vLLM 가중치 로드까지 약 8.4GB 점유가 관찰된다.)
 
 **두 가지를 반드시 확인한다.**
 
@@ -407,7 +419,9 @@ nvidia-smi                              # 점유가 약 8GB대 여야 한다
 curl -s localhost:8100/is_sleeping      # 404 가 나오면 VLLM_SERVER_DEV_MODE 가 안 먹은 것
 ```
 
-기본값(0.9)으로 뜨면 약 22GB를 선점해 SD가 못 올라온다. 반드시 `0.35`가 들어갔는지 확인한다.
+기본값(0.9)으로 뜨면 약 22GB를 선점해 SD가 못 올라온다. 반드시 `0.4`(또는 그 이하)가 들어갔는지 확인한다.
+
+> **실제 배포는 systemd 로 돈다.** `mp-vllm.service`(EXAONE)와 `mp-sd.service`(SD 1.5)가 부팅 시 자동 기동된다. 앱 VM `.env` 는 `GPU_ENABLED=true`, `GPU_LLM_URL=http://192.168.0.20:8100`, `GPU_SD_URL=http://192.168.0.20:8200`, `LLM_MODEL=LGAI-EXAONE/EXAONE-3.5-7.8B-Instruct-AWQ`. GPU 사설 IP 는 `192.168.0.20`(앱 VM 은 같은 /24 의 `192.168.0.213`) — `10.x` 대가 아니다. 헬스는 `GET /v1/health` 의 `"gpu":"ok"` 로 확인(vLLM·SD 둘 다 200 이어야 ok).
 
 ## 5. Stable Diffusion 1.5
 
