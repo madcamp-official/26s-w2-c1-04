@@ -291,7 +291,8 @@ class _ViewerScreenState extends State<ViewerScreen> {
                   child: Text(
                     d.textBody!,
                     textAlign: TextAlign.center,
-                    style: cpSans(size: 17, height: 1.5),
+                    // The letter's own voice — handwriting, like the home card.
+                    style: cpHand(size: 26, color: cpInkA(0.85), height: 1.5),
                   ),
                 )
               else
@@ -310,7 +311,8 @@ class _ViewerScreenState extends State<ViewerScreen> {
             padding: const EdgeInsets.all(12),
             color: cpPrint.withValues(alpha: 0.86),
             child: Text(d.textBody!,
-                textAlign: TextAlign.center, style: cpSans(size: 14)),
+                textAlign: TextAlign.center,
+                style: cpHand(size: 19, color: cpInkA(0.85))),
           ),
         ),
       );

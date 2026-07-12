@@ -4,7 +4,7 @@
 // LETTER is the hero object and the pet is a small companion beside it.
 //
 //   top bar     coins · serif wordmark · bell · poke
-//   couple      상대 ♥ 나 (serif, small — no D-day per frontend.md D2)
+//   couple      상대-하트-나 (serif, small — no D-day per frontend.md D2)
 //   LETTER      the partner's newest doodle, shown BIG like a letter/polaroid
 //               (real strokes/photo/text; sealed face for unopened ephemeral;
 //               an honest quiet placeholder when nothing has arrived)
@@ -248,7 +248,7 @@ class _TopBar extends StatelessWidget {
 }
 
 // ===========================================================================
-// Couple line — 상대 ♥ 나, in a quiet serif (no D-day)
+// Couple line — 상대-하트-나, in a quiet serif (no D-day)
 // ===========================================================================
 
 class _CoupleLine extends StatelessWidget {
