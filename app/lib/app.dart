@@ -316,10 +316,12 @@ class _NotificationsBanner extends StatelessWidget {
         if (appState.notifications.isEmpty) return const SizedBox.shrink();
         final n = appState.notifications.first;
         // A line icon, never an emoji: a poke rings the bell, a new doodle
-        // arrives as a letter.
-        final icon = n.kind == NotificationKind.pokeReceived
-            ? Icons.notifications_none
-            : Icons.mail_outline;
+        // arrives as a letter, a reward is a snack for the pet.
+        final icon = switch (n.kind) {
+          NotificationKind.pokeReceived => Icons.notifications_none,
+          NotificationKind.doodleNew => Icons.mail_outline,
+          NotificationKind.reward => Icons.cookie_outlined,
+        };
         return Padding(
           padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
           child: GestureDetector(

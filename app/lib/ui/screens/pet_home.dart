@@ -27,6 +27,9 @@ import '../components.dart';
 import '../pet_view.dart';
 import '../theme.dart';
 import 'draw_send.dart';
+import 'pet_house.dart';
+import 'pet_picker.dart';
+import 'pet_store.dart';
 import 'viewer.dart';
 
 class PetHomeScreen extends StatelessWidget {
@@ -171,8 +174,11 @@ class _HomeBodyState extends State<_HomeBody> {
                 utterance: utterance,
                 seq: _patSeq,
                 pressed: _pressed,
+                level: pet.level,
+                exp: pet.exp,
                 onPat: _pat,
                 onPressChanged: (v) => setState(() => _pressed = v),
+                onInfo: () => _showPetSheet(context, pet),
               ),
               const SizedBox(height: 14),
               CpPrimaryButton(
@@ -523,8 +529,11 @@ class _PetCompanion extends StatelessWidget {
     required this.utterance,
     required this.seq,
     required this.pressed,
+    required this.level,
+    required this.exp,
     required this.onPat,
     required this.onPressChanged,
+    required this.onInfo,
   });
 
   final String speciesId;
@@ -533,8 +542,13 @@ class _PetCompanion extends StatelessWidget {
   final String? utterance;
   final int seq;
   final bool pressed;
+  final int level;
+  final int exp;
   final Future<void> Function() onPat;
   final ValueChanged<bool> onPressChanged;
+
+  /// Opens the pet sheet (growth, the exchange→snack loop, store/house links).
+  final VoidCallback onInfo;
 
   @override
   Widget build(BuildContext context) {
@@ -592,7 +606,39 @@ class _PetCompanion extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: 10),
+        // Growth at a glance — letters feed the pet. Tap for the full story.
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onInfo,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Lv.$level',
+                style: cpSans(
+                    size: 10.5, color: cpInkA(0.55), weight: FontWeight.w600),
+              ),
+              const SizedBox(height: 3),
+              SizedBox(
+                width: 44,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(2),
+                  child: Stack(
+                    children: [
+                      Container(height: 3, color: cpInkA(0.08)),
+                      FractionallySizedBox(
+                        widthFactor: ((exp % 100) / 100).clamp(0.0, 1.0),
+                        child: Container(height: 3, color: cpEucA(0.8)),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 10),
         Expanded(
           child: Align(
             alignment: Alignment.centerLeft,
@@ -635,4 +681,143 @@ String _two(int n) => n < 10 ? '0$n' : '$n';
 String _stamp(DateTime utc) {
   final t = utc.toLocal();
   return '${t.month}/${t.day} ${_two(t.hour)}:${_two(t.minute)}';
+}
+
+// ===========================================================================
+// Pet sheet — the exchange→snack→growth loop, spelled out
+// ===========================================================================
+
+void _showPetSheet(BuildContext context, Pet pet) {
+  showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    builder: (sheetCtx) => _PetSheet(pet: pet),
+  );
+}
+
+class _PetSheet extends StatelessWidget {
+  const _PetSheet({required this.pet});
+
+  final Pet pet;
+
+  void _go(BuildContext context, Widget screen) {
+    Navigator.of(context).pop(); // close the sheet first
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => screen),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final into = ((pet.exp % 100) + 100) % 100;
+    return Container(
+      decoration: const BoxDecoration(
+        color: cpMist,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: const EdgeInsets.fromLTRB(24, 12, 24, 28),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 36,
+            height: 4,
+            decoration: BoxDecoration(
+              color: cpInkA(0.15),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 16),
+          PetView(
+            speciesId: appState.petSpecies,
+            size: 110,
+            equippedItemIds: [for (final e in pet.equippedItems) e.itemId],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(pet.name, style: cpSerif(size: 18, style: FontStyle.normal)),
+              const SizedBox(width: 8),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: cpEucA(0.10),
+                  borderRadius: BorderRadius.circular(cpRadiusPill),
+                  border: Border.all(color: cpEucA(0.4)),
+                ),
+                child: Text(
+                  'Lv.${pet.level}',
+                  style: cpSans(
+                      size: 11, color: cpEuc, weight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // Growth toward the next level — fed by the couple's exchange.
+          Row(
+            children: [
+              Text('간식 $into / 100',
+                  style: cpSans(size: 11.5, color: cpInkA(0.55))),
+              const Spacer(),
+              CpCoins(pet.coins),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(3),
+            child: Stack(
+              children: [
+                Container(height: 6, color: cpInkA(0.08)),
+                FractionallySizedBox(
+                  widthFactor: (into / 100).clamp(0.0, 1.0),
+                  child: Container(height: 6, color: cpEucA(0.85)),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            '둘이 편지를 주고받을 때마다 ${pet.name}이(가) 간식을 받아요.\n'
+            '배불리 먹고 레벨이 오르면 코인이 생기고, 상점에서 꾸밀 수 있어요.',
+            textAlign: TextAlign.center,
+            style: cpSans(size: 12.5, color: cpInkA(0.55), height: 1.6),
+          ),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              Expanded(
+                child: CpPrimaryButton(
+                  label: '상점 가기',
+                  onTap: () => _go(context, const PetStoreScreen()),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: CpPrimaryButton(
+                  label: '집 꾸미기',
+                  filled: false,
+                  onTap: () => _go(context, const PetHouseScreen()),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => _go(context, const PetPickerScreen()),
+            child: Padding(
+              padding: const EdgeInsets.all(6),
+              child: Text(
+                '펫 캐릭터 바꾸기',
+                style: cpSans(size: 12, color: cpInkA(0.45)),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

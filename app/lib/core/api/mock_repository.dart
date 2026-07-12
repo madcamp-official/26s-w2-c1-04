@@ -205,6 +205,10 @@ class MockRepository implements Repository {
   /// Fired when a viewed ephemeral doodle self-destructs (`doodle:expired`).
   void Function(String doodleId)? onExpired;
 
+  /// Fired when the pet levels up (`pet:levelup`). Mirrors the server's growth
+  /// rule (API.md §5): exchanging letters feeds the pet.
+  void Function(String petId, int level)? onLevelUp;
+
   // The signed-in user ("me"). The demo is 종혁 (id '1').
   static const String _meId = '1';
   static const String _token = 'mp_demo_token_1';
@@ -697,6 +701,11 @@ class MockRepository implements Repository {
 
     final doodle = _toDoodle(row);
     onNewDoodle?.call(doodle); // mirror server's doodle:new broadcast.
+
+    // Exchange feeds the pet (server rule §5): a letter +10, a reply +5.
+    final pet = _myPet;
+    if (pet != null) _grantExp(pet, parentId == null ? 10 : 5);
+
     return doodle;
   }
 
@@ -774,6 +783,9 @@ class MockRepository implements Repository {
   @override
   Future<void> poke(String groupId, String toUserId) async {
     _pokes.add(_PokeRow(groupId, _meId, toUserId, _now()));
+    // A poke is a tiny exchange too — +2 exp (server rule §5).
+    final pet = _myPet;
+    if (pet != null) _grantExp(pet, 2);
   }
 
   // ===========================================================================
@@ -800,8 +812,27 @@ class MockRepository implements Repository {
         : _defaultUtterance(activity);
 
     const gained = 1;
-    p.exp += gained;
+    _grantExp(p, gained);
     return PatResult(activity: activity, utterance: line, expGained: gained);
+  }
+
+  /// The server's growth rule (API.md §5): exp accrues from the couple's
+  /// exchange (낙서 +10 · 답장 +5 · 찌르기 +2 · 쓰다듬기 +1),
+  /// `level = exp ~/ 100 + 1`, and each level gained pays 50 coins.
+  void _grantExp(_PetRow p, int amount) {
+    p.exp += amount;
+    final newLevel = p.exp ~/ 100 + 1;
+    if (newLevel > p.level) {
+      p.coins += 50 * (newLevel - p.level);
+      p.level = newLevel;
+      onLevelUp?.call(p.id, p.level);
+    }
+  }
+
+  /// The current group's pet row (the growth target for exchange rewards).
+  _PetRow? get _myPet {
+    final g = _groups[_currentGroupId];
+    return g == null ? null : _pets[g.petId];
   }
 
   @override

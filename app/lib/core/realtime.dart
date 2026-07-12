@@ -181,6 +181,8 @@ class MockRealtime implements Realtime {
     // for BOTH my own sends and the partner's pushes; state dedupes by id.
     _repo.onNewDoodle = (Doodle d) => _add(DoodleNew.fromDoodle(d));
     _repo.onExpired = (String id) => _add(DoodleExpired(id));
+    _repo.onLevelUp = (String petId, int level) =>
+        _add(PetLevelUp(petId: petId, level: level));
   }
 
   final MockRepository _repo;
@@ -284,6 +286,7 @@ class MockRealtime implements Realtime {
     // Release the repo hooks we own.
     _repo.onNewDoodle = null;
     _repo.onExpired = null;
+    _repo.onLevelUp = null;
     _controller.close();
   }
 }

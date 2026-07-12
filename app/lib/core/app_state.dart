@@ -40,7 +40,7 @@ import 'realtime.dart';
 // ---------------------------------------------------------------------------
 
 /// What a banner is about.
-enum NotificationKind { doodleNew, pokeReceived }
+enum NotificationKind { doodleNew, pokeReceived, reward }
 
 /// A transient banner item — an incoming poke or a partner's new doodle. Not
 /// persisted; lives only in [AppState.notifications] until dismissed.
@@ -350,6 +350,18 @@ class AppState extends ChangeNotifier {
     );
     // Insert immediately; the echoed `doodle:new` will dedupe by id.
     if (!album.any((x) => x.id == d.id)) album.insert(0, d);
+
+    // The core loop made visible: exchanging letters FEEDS the pet (§5).
+    // The server owns the numbers; we re-read the pet and say what happened.
+    _pushNotification(
+      kind: NotificationKind.reward,
+      text: parentId == null
+          ? '편지를 보냈어요 · ${pet?.name ?? '펫'}이(가) 간식을 받았어요'
+          : '답장을 보냈어요 · ${pet?.name ?? '펫'}이(가) 간식을 받았어요',
+      at: d.createdAt,
+    );
+    unawaited(refreshPet());
+
     notifyListeners();
     return d;
   }
@@ -405,6 +417,7 @@ class AppState extends ChangeNotifier {
     if (g == null) return;
     await repo.poke(g.id, toUserId); // REST (always works)
     rt.emitPokeSend(toUserId); // socket-fast twin; mock schedules the poke-back
+    unawaited(refreshPet()); // a poke feeds the pet a little too (§5)
     notifyListeners();
   }
 
@@ -574,7 +587,17 @@ class AppState extends ChangeNotifier {
         }
       case final PetLevelUp ev:
         final p = pet;
-        if (p != null && ev.petId == p.id) pet = _petWith(p, level: ev.level);
+        if (p != null && ev.petId == p.id) {
+          pet = _petWith(p, level: ev.level);
+          _pushNotification(
+            kind: NotificationKind.reward,
+            text: '${p.name} Lv.${ev.level} 달성 · 상점에서 쓸 코인을 받았어요',
+            at: album.isNotEmpty
+                ? album.first.createdAt
+                : DateTime.utc(2026, 7, 10),
+          );
+          unawaited(refreshPet()); // coins changed server-side
+        }
       case DiaryNew():
         // Only id/date/style arrive; REST is truth, so re-read the list.
         if (pet != null) unawaited(loadDiaries(reset: true));
