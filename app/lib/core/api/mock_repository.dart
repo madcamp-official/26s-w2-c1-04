@@ -532,6 +532,8 @@ class MockRepository implements Repository {
       bestDoodle: BestDoodle(
         id: '704',
         rule: BestDoodleRule.mostReplies,
+        contentType: ContentType.drawing,
+        thumbUrl: '/media/g7/704_thumb.png',
         drawingUrl: '/media/g7/704_draw.png',
         createdAt: DateTime.utc(2026, 6, 14, 21, 11),
       ),
@@ -930,10 +932,24 @@ class MockRepository implements Repository {
     return BestDoodle(
       id: r.id,
       rule: rule,
-      drawingUrl: r.drawingUrl,
+      // v0.2: winner can be photo/drawing/text — render by content_type, and
+      // fill exactly the matching url/body (the others stay null).
+      contentType: r.contentType,
+      thumbUrl: _bestThumb(r),
+      textBody: r.textBody,
       photoUrl: r.photoUrl,
+      drawingUrl: r.drawingUrl,
       createdAt: r.createdAt,
     );
+  }
+
+  /// A BestDoodle always carries a renderable thumb (BestDoodleOut.thumb_url is
+  /// non-null), regardless of content type. Photos reuse the photo->thumb
+  /// rename; drawings and text get a synthesized thumb path in the same folder.
+  String _bestThumb(_DoodleRow r) {
+    final photo = r.photoUrl;
+    if (photo != null) return _thumb(photo);
+    return '/media/g${r.groupId}/${r.id}_thumb.png';
   }
 
   // ===========================================================================
@@ -952,6 +968,9 @@ class MockRepository implements Repository {
     final isEph = r.mode == SendMode.ephemeral;
     return WidgetData(
       doodleId: r.id,
+      // v0.2: carry the latest doodle's kind so the widget picks the right glyph
+      // without fetching. This is metadata, not the content — safe for ephemeral.
+      contentType: r.contentType,
       // Ephemeral: no thumbnail (showing it would count as a view).
       thumbUrl: isEph ? null : (r.photoUrl == null ? null : _thumb(r.photoUrl!)),
       senderNickname: _nicknameOf(r.senderId, groupId),
@@ -1236,7 +1255,10 @@ class MockRepository implements Repository {
   String _monthOf(DateTime d) =>
       '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}';
 
-  ContentType _dominant(int photo, int drawing, int text) {
+  /// v0.2: `dominant_type` is `str | None`. A month with no doodles at all has
+  /// no dominant kind — return null (an empty state), never a fabricated type.
+  ContentType? _dominant(int photo, int drawing, int text) {
+    if (photo + drawing + text == 0) return null;
     if (drawing >= photo && drawing >= text) return ContentType.drawing;
     if (photo >= text) return ContentType.photo;
     return ContentType.text;

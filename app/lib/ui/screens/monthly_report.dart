@@ -197,10 +197,16 @@ class _MonthlyReportScreenState extends State<MonthlyReportScreen> {
         CpSectionHeader(
           eyebrow: '낙서 유형',
           title: '$total개의 낙서',
-          trailing: Text(
-            '주로 ${_typeLabel(r.dominantType)}',
-            style: cpSans(size: 11, color: cpEuc, weight: FontWeight.w600),
-          ),
+          // `dominant_type` is null for a month with no doodles (v0.2:
+          // `str | None`). Show the "주로 X" note only when there's a real
+          // dominant kind — never coerce null into a fake type.
+          trailing: r.dominantType == null
+              ? null
+              : Text(
+                  '주로 ${_typeLabel(r.dominantType!)}',
+                  style:
+                      cpSans(size: 11, color: cpEuc, weight: FontWeight.w600),
+                ),
         ),
         const SizedBox(height: 18),
         _Bar(label: '그림 위주', value: r.drawingCount, total: total),
@@ -372,21 +378,7 @@ class _BestDoodle extends StatelessWidget {
           inset: 8,
           child: SizedBox(
             height: 190,
-            child: strokes != null && strokes.strokes.isNotEmpty
-                ? CustomPaint(
-                    painter: CpDoodlePainter(strokes, background: cpPrint),
-                    size: Size.infinite,
-                  )
-                : Center(
-                    // No strokes to paint (photo, or a drawing without cached
-                    // strokes / behind a network URL we can't load offline). Show
-                    // an honest content-type line icon, never a faked drawing.
-                    child: Icon(
-                      _bestIcon(b),
-                      size: 40,
-                      color: cpInkA(0.3),
-                    ),
-                  ),
+            child: _bestPreview(b, strokes),
           ),
         ),
         const SizedBox(height: 14),
@@ -404,6 +396,38 @@ class _BestDoodle extends StatelessWidget {
         Text(_stamp(b.createdAt),
             style: cpSans(size: 11, color: cpInkA(0.45))),
       ],
+    );
+  }
+
+  /// Render the winning doodle by its own [ContentType] (v0.2: the winner can be
+  /// a photo, drawing, or text). Cached strokes paint the real drawing; a text
+  /// winner shows its real `text_body`; anything else (a photo, or a drawing
+  /// behind a network URL we can't load offline) falls back to an honest
+  /// content-type line icon — never a faked drawing.
+  Widget _bestPreview(BestDoodle b, StrokeData? strokes) {
+    if (strokes != null && strokes.strokes.isNotEmpty) {
+      return CustomPaint(
+        painter: CpDoodlePainter(strokes, background: cpPrint),
+        size: Size.infinite,
+      );
+    }
+    if (b.contentType == ContentType.text &&
+        (b.textBody?.trim().isNotEmpty ?? false)) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Text(
+            b.textBody!,
+            textAlign: TextAlign.center,
+            maxLines: 6,
+            overflow: TextOverflow.ellipsis,
+            style: cpSans(size: 15, color: cpInkA(0.78), height: 1.5),
+          ),
+        ),
+      );
+    }
+    return Center(
+      child: Icon(_bestIcon(b), size: 40, color: cpInkA(0.3)),
     );
   }
 }
@@ -444,14 +468,14 @@ String _typeLabel(ContentType c) => switch (c) {
     };
 
 /// The content-type line icon for a best doodle that can't be stroke-painted.
-/// Branches honestly on the doodle's own fields — a photo shows the image glyph,
-/// a drawing the brush glyph — and falls back to the neutral image glyph. A
-/// vector Material outlined icon, never an emoji.
-IconData _bestIcon(BestDoodle b) {
-  if (b.photoUrl != null) return Icons.image_outlined;
-  if (b.drawingUrl != null) return Icons.brush_outlined;
-  return Icons.image_outlined;
-}
+/// Branches on the winner's own [ContentType] (v0.2) — a photo shows the image
+/// glyph, a drawing the brush glyph, text the notes glyph. A vector Material
+/// outlined icon, never an emoji.
+IconData _bestIcon(BestDoodle b) => switch (b.contentType) {
+      ContentType.photo => Icons.image_outlined,
+      ContentType.drawing => Icons.brush_outlined,
+      ContentType.text => Icons.notes_outlined,
+    };
 
 /// Tolerates a rule the app has never heard of (future vision selection).
 String _ruleLabel(BestDoodleRule r) => switch (r) {

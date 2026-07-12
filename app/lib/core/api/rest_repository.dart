@@ -1,6 +1,6 @@
 // Memory Pager — the real HTTP client.
 //
-// A [Repository] over the tunnel API (docs/API.md §0). This is for later — the
+// A [Repository] over the tunnel API (docs/API.md §0, v0.2). This is for later — the
 // app ships against [MockRepository] first — but it compiles now and implements
 // the straightforward reads/writes so it can be swapped in without touching
 // callers. Every request carries `Authorization: Bearer <token>` except
@@ -10,7 +10,9 @@
 //   - Base URL ends in `/v1`; paths below are relative to it.
 //   - IDs are strings; the models parse them.
 //   - Errors arrive as `{ "error": { code, message } }` and become
-//     [ApiException] with the HTTP status, so callers split 404 from 410.
+//     [ApiException] with the HTTP status + code, so callers split 404 /
+//     410 (doodle_expired) / 409 (group_full…) / 413 / 422. When a bodyless
+//     error slips through (e.g. a proxy 413), the code is derived from status.
 //   - sendDoodle is `multipart/form-data`.
 //   - PATCHes that return an aggregate re-GET it (the API doesn't guarantee a
 //     response body on PATCH), which keeps this faithful to "REST가 진실이다".
@@ -391,28 +393,55 @@ class RestRepository implements Repository {
     return _decode(res);
   }
 
-  /// Decode a response, throwing [ApiException] on non-2xx.
+  /// Error `code` to synthesize when a non-2xx response carries no parseable
+  /// `{ "error": { code } }` envelope (a proxy 413, a bare 410, …), so the
+  /// 404 / 410 / 409 / 413 / 422 split from API.md §0 keeps working on `code`
+  /// as well as `status`. 409 stays generic — only the envelope disambiguates
+  /// group_full / already_member / already_in_group.
+  static const Map<int, String> _statusFallbackCodes = {
+    400: 'invalid_request',
+    401: 'unauthorized',
+    403: 'forbidden',
+    404: 'not_found',
+    409: 'conflict',
+    410: 'doodle_expired',
+    413: 'payload_too_large',
+    422: 'unprocessable',
+  };
+
+  String _fallbackCode(int status) =>
+      _statusFallbackCodes[status] ?? 'http_$status';
+
+  /// Decode a response body. Returns the parsed `Map`/`List` (or `null` for an
+  /// empty 2xx such as 204). Throws [ApiException] carrying the HTTP status and
+  /// error `code` on any non-2xx, so callers can split 404 from 410 from 409
+  /// from 413/422.
   Object? _decode(http.Response res) {
-    if (res.statusCode == 204 || res.body.isEmpty) {
-      if (res.statusCode >= 200 && res.statusCode < 300) return null;
-    }
+    final status = res.statusCode;
+    final ok = status >= 200 && status < 300;
 
     Object? parsed;
-    try {
-      parsed = res.body.isEmpty ? null : jsonDecode(res.body);
-    } catch (_) {
-      parsed = null;
+    if (res.body.isNotEmpty) {
+      try {
+        parsed = jsonDecode(res.body);
+      } catch (_) {
+        parsed = null;
+      }
     }
 
-    if (res.statusCode >= 200 && res.statusCode < 300) return parsed;
+    if (ok) return parsed;
 
-    // Error path — parse the `{ error: {...} }` envelope if present.
+    // Error path — prefer the `{ error: { code, message } }` envelope; fall
+    // back to a status-derived code when the body is absent/unparseable.
     if (parsed is Map<String, dynamic> && parsed['error'] is Map) {
-      throw ApiException.fromEnvelope(res.statusCode, parsed);
+      throw ApiException.fromEnvelope(status, parsed);
     }
     throw ApiException(
-      ApiError(code: 'http_${res.statusCode}', message: res.reasonPhrase ?? 'HTTP error'),
-      res.statusCode,
+      ApiError(
+        code: _fallbackCode(status),
+        message: res.reasonPhrase ?? 'HTTP $status',
+      ),
+      status,
     );
   }
 

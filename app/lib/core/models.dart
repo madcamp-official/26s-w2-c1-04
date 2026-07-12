@@ -1,6 +1,6 @@
 // Memory Pager — domain models.
 //
-// Mirrors the app<->server contract in docs/API.md (v0.1) and docs/ERD.md (v0.3).
+// Mirrors the app<->server contract in docs/API.md (v0.2) and docs/ERD.md (v0.3).
 // This file is the single Dart source of truth for API response shapes.
 //
 // Conventions (API.md §0):
@@ -57,6 +57,12 @@ enum ContentType {
     }
     return ContentType.text;
   }
+
+  /// Nullable parse: preserves a genuine `null` (empty month's `dominant_type`,
+  /// or a widget with no content_type) instead of coercing it to [text].
+  /// Used wherever the wire field is `str | None`.
+  static ContentType? fromJsonOrNull(Object? v) =>
+      v == null ? null : ContentType.fromJson(v);
 
   String toJson() => wire;
 }
@@ -718,7 +724,11 @@ class MonthlyReport {
   final int drawingCount;
   final int textCount;
   final int pokeCount;
-  final ContentType dominantType;
+
+  /// The month's most-common doodle kind, or `null` for a month with no
+  /// doodles at all (v0.2: `dominant_type: str | None`). Null means "no data",
+  /// not [ContentType.text] — callers must show an empty state, not a fake type.
+  final ContentType? dominantType;
   final int petLevelStart;
   final int petLevelEnd;
   final BestDoodle? bestDoodle;
@@ -729,7 +739,7 @@ class MonthlyReport {
         drawingCount: _int(json['drawing_count']),
         textCount: _int(json['text_count']),
         pokeCount: _int(json['poke_count']),
-        dominantType: ContentType.fromJson(json['dominant_type']),
+        dominantType: ContentType.fromJsonOrNull(json['dominant_type']),
         petLevelStart: _int(json['pet_level_start']),
         petLevelEnd: _int(json['pet_level_end']),
         bestDoodle: json['best_doodle'] == null
@@ -743,41 +753,62 @@ class MonthlyReport {
         'drawing_count': drawingCount,
         'text_count': textCount,
         'poke_count': pokeCount,
-        'dominant_type': dominantType.toJson(),
+        'dominant_type': dominantType?.toJson(),
         'pet_level_start': petLevelStart,
         'pet_level_end': petLevelEnd,
         'best_doodle': bestDoodle?.toJson(),
       };
 }
 
+/// The month's winning doodle (`best_doodle` in ReportOut, shape [BestDoodleOut]).
+/// v0.2 widened this beyond drawings: the winner can be a photo, drawing, or
+/// text, so the app branches on [contentType] to render it. [thumbUrl] is always
+/// present; exactly one of [textBody]/[photoUrl]/[drawingUrl] is filled to match
+/// [contentType].
 class BestDoodle {
   const BestDoodle({
     required this.id,
     required this.rule,
-    this.drawingUrl,
+    required this.contentType,
+    required this.thumbUrl,
+    this.textBody,
     this.photoUrl,
+    this.drawingUrl,
     required this.createdAt,
   });
 
   final String id;
   final BestDoodleRule rule;
-  final String? drawingUrl;
+
+  /// The winner's kind — render by this, not by assuming a drawing.
+  final ContentType contentType;
+
+  /// Non-null in [BestDoodleOut] (`thumb_url: str`); always renderable.
+  final String thumbUrl;
+  final String? textBody;
   final String? photoUrl;
+  final String? drawingUrl;
   final DateTime createdAt;
 
   factory BestDoodle.fromJson(Map<String, dynamic> json) => BestDoodle(
         id: _str(json['id']),
         rule: BestDoodleRule.fromJson(json['rule']),
-        drawingUrl: _strOrNull(json['drawing_url']),
+        contentType: ContentType.fromJson(json['content_type']),
+        thumbUrl: _str(json['thumb_url']),
+        textBody: _strOrNull(json['text_body']),
         photoUrl: _strOrNull(json['photo_url']),
+        drawingUrl: _strOrNull(json['drawing_url']),
         createdAt: _utc(json['created_at']),
       );
 
   Map<String, dynamic> toJson() => {
         'id': id,
         'rule': rule.toJson(),
-        'drawing_url': drawingUrl,
+        'content_type': contentType.toJson(),
+        'thumb_url': thumbUrl,
+        'text_body': textBody,
         'photo_url': photoUrl,
+        'drawing_url': drawingUrl,
         'created_at': _isoUtc(createdAt),
       };
 }
@@ -902,36 +933,46 @@ class ExplorePet {
 // Widget
 // ---------------------------------------------------------------------------
 
-/// Home-screen widget payload (`GET /widget/{group_id}`). When [isEphemeral]
-/// is true the widget must not show [thumbUrl] (showing it would count as a view).
+/// Home-screen widget payload (`GET /widget/{group_id}`, shape [WidgetOut]).
+/// Kept deliberately light — the widget runs under battery limits.
+///
+/// Every field except [isEphemeral] is nullable per WidgetOut (`... | None`),
+/// so a group with no latest doodle degrades to an empty widget instead of
+/// fabricating one. When [isEphemeral] is true the widget must not show
+/// [thumbUrl] (showing it would count as a view). [contentType] was added in
+/// v0.2 so the widget can pick the right glyph without fetching the doodle.
 class WidgetData {
   const WidgetData({
-    required this.doodleId,
+    this.doodleId,
+    this.contentType,
     this.thumbUrl,
-    required this.senderNickname,
-    required this.createdAt,
+    this.senderNickname,
+    this.createdAt,
     required this.isEphemeral,
   });
 
-  final String doodleId;
+  final String? doodleId;
+  final ContentType? contentType;
   final String? thumbUrl;
-  final String senderNickname;
-  final DateTime createdAt;
+  final String? senderNickname;
+  final DateTime? createdAt;
   final bool isEphemeral;
 
   factory WidgetData.fromJson(Map<String, dynamic> json) => WidgetData(
-        doodleId: _str(json['doodle_id']),
+        doodleId: _strOrNull(json['doodle_id']),
+        contentType: ContentType.fromJsonOrNull(json['content_type']),
         thumbUrl: _strOrNull(json['thumb_url']),
-        senderNickname: _str(json['sender_nickname']),
-        createdAt: _utc(json['created_at']),
+        senderNickname: _strOrNull(json['sender_nickname']),
+        createdAt: _utcOrNull(json['created_at']),
         isEphemeral: _bool(json['is_ephemeral']),
       );
 
   Map<String, dynamic> toJson() => {
         'doodle_id': doodleId,
+        'content_type': contentType?.toJson(),
         'thumb_url': thumbUrl,
         'sender_nickname': senderNickname,
-        'created_at': _isoUtc(createdAt),
+        'created_at': createdAt == null ? null : _isoUtc(createdAt!),
         'is_ephemeral': isEphemeral,
       };
 }

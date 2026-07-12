@@ -14,17 +14,24 @@
 // The demo boots *already onboarded*: [AppState.mock] wires a [MockRepository]
 // + [MockRealtime], registers the seeded returning user (종혁), loads their group
 // (우리집) and pet (삐삐), fills the album, and connects the live simulation — so
-// the app opens straight onto the pet home. A ready-made global [appState] does
-// exactly this. Determinism is inherited from the mock: no DateTime.now(), no
-// Random anywhere in this layer.
+// the app opens straight onto the pet home. Determinism is inherited from the
+// mock: no DateTime.now(), no Random anywhere in that layer.
+//
+// [AppState.rest] is the *real-backend* counterpart: a [RestRepository] over the
+// tunnel API plus a [SocketRealtime], booted through the honest flow (register
+// this device → GET /me) with no seeded user and no faked group. Which one the
+// global [appState] is depends on the compile-time `API_BASE` dart-define (see
+// the bottom of this file): unset → offline mock demo; set → real server.
 
 import 'dart:async';
 
 import 'package:flutter/foundation.dart'; // also re-exports Uint8List
+import 'package:uuid/uuid.dart';
 
 import '../charlab/roster.dart';
 import 'api/mock_repository.dart';
 import 'api/repository.dart';
+import 'api/rest_repository.dart';
 import 'models.dart';
 import 'realtime.dart';
 
@@ -79,14 +86,54 @@ class AppState extends ChangeNotifier {
     return state;
   }
 
+  /// Build the app against the REAL backend: a [RestRepository] over `<origin>/v1`
+  /// and a [SocketRealtime] on the API origin. [apiBase] may be passed with or
+  /// without a trailing `/v1` — the socket origin and the REST base (`origin/v1`)
+  /// are both derived from it so they point at the same server.
+  ///
+  /// Bootstraps via the honest flow (register this device → GET /me), NOT the
+  /// seeded mock user. If `/me` already has a group it loads pet + album + widget
+  /// and opens the socket; if not, [group] stays null so the UI drives onboarding
+  /// (no fabricated group). On a register/getMe failure it sets [bootstrapError]
+  /// and invents no session.
+  factory AppState.rest({required String apiBase}) {
+    var origin = apiBase;
+    while (origin.endsWith('/')) {
+      origin = origin.substring(0, origin.length - 1);
+    }
+    if (origin.endsWith('/v1')) {
+      origin = origin.substring(0, origin.length - '/v1'.length);
+    }
+    final repo = RestRepository(baseUrl: '$origin/v1');
+    // Token is empty until register lands; connect(token) sets it post-register.
+    final rt = SocketRealtime(origin, '');
+    final state = AppState(repo: repo, rt: rt);
+    state.deviceUid = const Uuid().v4();
+    state.bootstrapFuture = state._bootstrapRest();
+    return state;
+  }
+
   final Repository repo;
   final Realtime rt;
 
   late final StreamSubscription<RealtimeEvent> _sub;
 
-  /// Completes when [AppState.mock]'s initial load has finished (null on a
-  /// hand-built AppState). UI may await it before first paint.
+  /// Completes when the initial load ([AppState.mock] or [AppState.rest]) has
+  /// finished (null on a hand-built AppState). UI may await it before first
+  /// paint. It completes even when [AppState.rest] fails — inspect
+  /// [bootstrapError] rather than expecting it to throw.
   Future<void>? bootstrapFuture;
+
+  /// Set when [AppState.rest]'s bootstrap failed (register/getMe threw). Held so
+  /// the UI can surface an honest error instead of a fabricated session; null on
+  /// success and on the mock path.
+  Object? bootstrapError;
+
+  /// Device identity the real-backend session registered with — a random uuid v4
+  /// held only in memory for now (a persistent store is a later task), so it is
+  /// stable for the app's lifetime but yields a fresh user each cold start. Null
+  /// on the mock path.
+  String? deviceUid;
 
   // -- Session --------------------------------------------------------------
 
@@ -169,6 +216,38 @@ class AppState extends ChangeNotifier {
       await loadAlbum(reset: true);
       await loadWidget();
       rt.connect(token!); // start the live simulation
+    }
+    notifyListeners();
+  }
+
+  /// Real-backend boot. Registers THIS device (idempotent by [deviceUid]) with a
+  /// placeholder display name that the onboarding UI immediately lets the user
+  /// change — onboarding sees a non-null [me] and PATCHes the real name via
+  /// `updateMe`, so this never re-registers or overwrites the user. Then reads
+  /// `/me`: if it already has a group, load pet + album + widget and open the
+  /// socket to the group room; otherwise leave [group] null so the UI drives
+  /// onboarding. Never fabricates a user/group/pet — any failure lands in
+  /// [bootstrapError].
+  Future<void> _bootstrapRest() async {
+    try {
+      final auth = await repo.register(_kRestPlaceholderName, deviceUid!);
+      token = auth.token;
+
+      final m = await repo.getMe();
+      me = m.user;
+      group = m.group; // may be null -> UI drives onboarding, no fake group
+
+      final g = group;
+      if (g != null) {
+        final p = await repo.getPet(g.id);
+        pet = p;
+        currentActivity = p.currentActivity?.activity;
+        await loadAlbum(reset: true);
+        await loadWidget();
+        rt.connect(token!); // join the group room over the socket
+      }
+    } catch (e) {
+      bootstrapError = e; // honest failure — surface it, invent nothing
     }
     notifyListeners();
   }
@@ -604,7 +683,24 @@ class AppState extends ChangeNotifier {
 }
 
 // ---------------------------------------------------------------------------
-// Global — the seeded demo state (opens straight onto the pet home).
+// Global — the app's single AppState, selected at compile time.
+//
+// `--dart-define=API_BASE=<origin>` (e.g.
+//   flutter run --dart-define=API_BASE=https://anjonghwa.madcamp-kaist.org
+// ) builds the REAL-backend app: RestRepository over `<origin>/v1` + a
+// SocketRealtime on `<origin>`, booted through the honest register/getMe flow
+// (no seeded user, no faked group). No flag → the fully-seeded offline mock
+// demo that opens straight onto the pet home.
 // ---------------------------------------------------------------------------
 
-final AppState appState = AppState.mock();
+/// The API origin from `--dart-define=API_BASE`; empty when unset (offline mock).
+const String _apiBase = String.fromEnvironment('API_BASE');
+
+/// Placeholder display name the real-backend bootstrap registers with. A stand-in
+/// only: the onboarding screen pre-fills its name field from [AppState.me] and
+/// PATCHes the real name via `updateMe`, so it is replaced the moment the user
+/// finishes onboarding. Honest — a default label, never faked identity data.
+const String _kRestPlaceholderName = '나';
+
+final AppState appState =
+    _apiBase.isEmpty ? AppState.mock() : AppState.rest(apiBase: _apiBase);

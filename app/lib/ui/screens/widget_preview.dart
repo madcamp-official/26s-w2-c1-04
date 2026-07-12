@@ -241,16 +241,20 @@ class _WidgetFace extends StatelessWidget {
           ),
           child: Row(
             children: [
-              Flexible(
-                child: Text(
-                  data.senderNickname,
-                  overflow: TextOverflow.ellipsis,
-                  style: cpSans(size: 12, weight: FontWeight.w600),
+              // Nullable per WidgetOut — omit rather than fabricate a name.
+              if (data.senderNickname != null)
+                Flexible(
+                  child: Text(
+                    data.senderNickname!,
+                    overflow: TextOverflow.ellipsis,
+                    style: cpSans(size: 12, weight: FontWeight.w600),
+                  ),
                 ),
-              ),
               const Spacer(),
-              Text(_stamp(data.createdAt),
-                  style: cpSans(size: 10, color: cpInkA(0.45))),
+              // No created_at → no timestamp (never invent a date).
+              if (data.createdAt != null)
+                Text(_stamp(data.createdAt!),
+                    style: cpSans(size: 10, color: cpInkA(0.45))),
             ],
           ),
         ),
@@ -289,10 +293,14 @@ class _Thumb extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final repo = appState.repo;
-    final StrokeData? strokes =
-        repo is MockRepository ? repo.strokeDataFor(data.doodleId) : null;
-    final Uint8List? photo =
-        repo is MockRepository ? repo.photoBytesFor(data.doodleId) : null;
+    // doodleId is nullable per WidgetOut — no id means no local media to look up.
+    final id = data.doodleId;
+    final StrokeData? strokes = (id != null && repo is MockRepository)
+        ? repo.strokeDataFor(id)
+        : null;
+    final Uint8List? photo = (id != null && repo is MockRepository)
+        ? repo.photoBytesFor(id)
+        : null;
 
     if (photo != null) return Image.memory(photo, fit: BoxFit.cover);
     if (strokes != null && strokes.strokes.isNotEmpty) {
@@ -301,13 +309,29 @@ class _Thumb extends StatelessWidget {
         size: Size.infinite,
       );
     }
-    // No renderable media — say so, don't invent a picture.
+    // No renderable media locally — show an honest glyph for the reported
+    // content type (v0.2 widget field), don't invent a picture.
     return Container(
       color: cpPrint,
       child: Center(
-        child: Icon(Icons.image_outlined, size: 26, color: cpInkA(0.4)),
+        child: Icon(_glyphFor(data.contentType), size: 26, color: cpInkA(0.4)),
       ),
     );
+  }
+}
+
+/// Placeholder glyph for a widget whose media can't be rendered locally,
+/// picked from the server-reported [ContentType]. Honest: reflects the kind
+/// the server reported, never fabricates the picture itself.
+IconData _glyphFor(ContentType? type) {
+  switch (type) {
+    case ContentType.drawing:
+      return Icons.gesture;
+    case ContentType.text:
+      return Icons.text_fields;
+    case ContentType.photo:
+    case null:
+      return Icons.image_outlined;
   }
 }
 

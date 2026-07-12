@@ -292,9 +292,12 @@ class MockRealtime implements Realtime {
 // SocketRealtime — the real socket_io_client transport (compiles; used later).
 // ---------------------------------------------------------------------------
 
-/// The production realtime channel over Socket.IO. [url] must point at the
-/// `/rt` namespace endpoint (API.md §9); WebSocket transport is forced because
-/// native dart:io cannot do polling. Auth is sent as `auth: { token }`.
+/// The production realtime channel over Socket.IO. [url] is the API *origin*
+/// (e.g. `https://api.example.com`, the same base REST uses); [connect] joins
+/// the `/rt` namespace at that origin (API.md §9) over the default `/socket.io`
+/// engine path. WebSocket transport is forced because native dart:io cannot do
+/// polling. Auth is sent as `auth: { token }`; the server resolves the token to
+/// a user and auto-joins their `group:{group_id}` room.
 ///
 /// Maps every documented server→client event to a [RealtimeEvent] and the two
 /// client→server emits. This is not exercised by the offline demo but is kept
@@ -302,6 +305,8 @@ class MockRealtime implements Realtime {
 class SocketRealtime implements Realtime {
   SocketRealtime(this.url, this.token);
 
+  /// The API origin. The `/rt` namespace endpoint is derived from it in
+  /// [connect] (see [_rtEndpoint]).
   final String url;
   String token;
 
@@ -317,9 +322,14 @@ class SocketRealtime implements Realtime {
   void connect(String token) {
     this.token = token;
 
+    // A prior socket (e.g. a manual reconnect) must be torn down first so we
+    // don't leak the old engine + its listeners.
+    _socket?.dispose();
+
     final socket = sio.io(
-      url,
+      _rtEndpoint(url), // '<origin>/rt' — the /rt namespace at the API origin.
       sio.OptionBuilder()
+          .setPath('/socket.io') // engine mount path (API.md §9 default).
           .setTransports(['websocket']) // dart:io has no polling — required.
           .setAuth({'token': token}) // server joins us to our group room.
           .disableAutoConnect()
@@ -329,12 +339,15 @@ class SocketRealtime implements Realtime {
 
     socket.on('doodle:new', (data) {
       final m = _map(data);
+      final mode = SendMode.fromJson(m['mode']);
       _add(DoodleNew(
         doodleId: _s(m['doodle_id']),
         senderId: _s(m['sender_id']),
-        mode: SendMode.fromJson(m['mode']),
+        mode: mode,
         contentType: ContentType.fromJson(m['content_type']),
-        thumbUrl: m['thumb_url'] as String?,
+        // Ephemeral doodles must not leak a preview before they're opened, so
+        // the thumbnail is honored only for normal-mode sends (API.md §9).
+        thumbUrl: mode == SendMode.normal ? m['thumb_url'] as String? : null,
         createdAt: _utc(m['created_at']),
       ));
     });
@@ -395,7 +408,19 @@ class SocketRealtime implements Realtime {
     _controller.add(e);
   }
 
-  // -- wire parsing helpers (payloads arrive as dynamic Maps) ----------------
+  // -- endpoint + wire parsing helpers ---------------------------------------
+
+  /// Resolve the `/rt` namespace URL from the API [origin]. Idempotent: an
+  /// origin that already ends in `/rt` is returned as-is (minus any trailing
+  /// slash), so passing either `<origin>` or `<origin>/rt` both connect to the
+  /// documented namespace.
+  static String _rtEndpoint(String origin) {
+    var o = origin;
+    while (o.endsWith('/')) {
+      o = o.substring(0, o.length - 1);
+    }
+    return o.endsWith('/rt') ? o : '$o/rt';
+  }
 
   Map<String, dynamic> _map(dynamic d) =>
       d is Map ? d.cast<String, dynamic>() : <String, dynamic>{};
