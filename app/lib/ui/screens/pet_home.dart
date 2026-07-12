@@ -1,20 +1,26 @@
 // Memory Pager — Home (tab 0 · '홈').
 //
-// The Sumone home: ONE no-scroll screen where the grim-editing loop lives up
-// front and the pet is the calm companion at its center. Top→bottom: a quiet
-// top bar (coins · bell · poke), the couple line "상대  나" (no D-day), a
-// 받은 편지 indicator, the pet sitting inside a soft hand-drawn room (E4's
-// house-behind-pet, tap to pat), and a prominent "…와 함께 그림 그리기" CTA.
+// The couple's desk, not a nursery: ONE no-scroll screen where the RECEIVED
+// LETTER is the hero object and the pet is a small companion beside it.
 //
-// Renders inside the app shell's IndexedStack — it owns NO bottom nav and NO
-// back affordance (the shell provides both). State comes from the global
-// [appState]; every mutation goes through an [appState] action and REST stays
-// the truth. No emoji: chrome is Material outlined line icons, the pet is the
-// hand-drawn [PetView], the room is painted with tokens.
+//   top bar     coins · serif wordmark · bell · poke
+//   couple      상대 ♥ 나 (serif, small — no D-day per frontend.md D2)
+//   LETTER      the partner's newest doodle, shown BIG like a letter/polaroid
+//               (real strokes/photo/text; sealed face for unopened ephemeral;
+//               an honest quiet placeholder when nothing has arrived)
+//   turn line   내가 보낼 차례 / 답장을 기다리는 중 — derived from the album
+//   pet         small hand-drawn companion (tap to pat, handwriting bubble)
+//   CTA         "○○에게 마음 그리기"
+//
+// Renders inside the app shell's IndexedStack — no bottom nav here. State is
+// the global [appState]; REST stays the truth. No emoji anywhere.
+
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
 import '../../charlab/toolkit.dart';
+import '../../core/api/mock_repository.dart';
 import '../../core/app_state.dart';
 import '../../core/models.dart';
 import '../components.dart';
@@ -33,7 +39,7 @@ class PetHomeScreen extends StatelessWidget {
 }
 
 // ===========================================================================
-// Body — pat interaction, poke, and the no-scroll layout
+// Body — pat interaction, poke, and the no-scroll letter-first layout
 // ===========================================================================
 
 class _HomeBody extends StatefulWidget {
@@ -44,21 +50,17 @@ class _HomeBody extends StatefulWidget {
 }
 
 class _HomeBodyState extends State<_HomeBody> {
-  /// Bumped on every pat so the speech slip re-fades even when the pet repeats
-  /// the same cached line.
   int _patSeq = 0;
-
-  /// Quiet press feedback on the pet.
   bool _pressed = false;
 
   Future<void> _pat() async {
     if (appState.pet == null) return;
     try {
-      await appState.pat(); // currentUtterance + exp already reflected in state
+      await appState.pat();
       if (!mounted) return;
       setState(() => _patSeq++);
     } on ApiException catch (_) {
-      // Contract edge (e.g. 404 not_found): stay quiet, invent no reply.
+      // Contract edge: stay quiet, invent no reply.
     } on StateError catch (_) {
       // Pet vanished between guard and call — no-op.
     }
@@ -68,8 +70,6 @@ class _HomeBodyState extends State<_HomeBody> {
     try {
       await appState.poke(partner.userId);
       if (!mounted) return;
-      // The partner's poke-back arrives as the shell banner; confirm my own
-      // signal quietly here.
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(
@@ -83,14 +83,14 @@ class _HomeBodyState extends State<_HomeBody> {
               side: BorderSide(color: cpEucA(0.4)),
             ),
             content: Text(
-              '콕! 신호를 보냈어요',
+              '콕, 마음을 보냈어요',
               textAlign: TextAlign.center,
               style: cpSans(size: 13, weight: FontWeight.w500),
             ),
           ),
         );
     } catch (_) {
-      // REST poke is best-effort; a failure just skips the confirmation.
+      // Best-effort; a failure just skips the confirmation.
     }
   }
 
@@ -101,8 +101,6 @@ class _HomeBodyState extends State<_HomeBody> {
     }
     return null;
   }
-
-  String _display(Member m) => m.nickname ?? m.displayName;
 
   @override
   Widget build(BuildContext context) {
@@ -122,16 +120,16 @@ class _HomeBodyState extends State<_HomeBody> {
         final me = appState.me;
         final group = appState.group;
         final partner = _partnerOf(group, me);
-        final partnerName = partner == null ? null : _display(partner);
+        final partnerName =
+            partner == null ? null : (partner.nickname ?? partner.displayName);
         final myName = me?.displayName ?? '나';
 
-        // Prefer the socket fast-path activity; fall back to the REST snapshot.
         final activity =
             appState.currentActivity ?? pet.currentActivity?.activity;
         final utterance = appState.currentUtterance;
 
-        // Newest doodle the partner sent (album is newest-first). Honestly null
-        // when nothing has arrived — never a stand-in.
+        // Newest doodle the partner sent (album is newest-first). Honestly
+        // null when nothing has arrived — never a stand-in.
         Doodle? received;
         for (final d in appState.album) {
           if (me == null || d.senderId != me.id) {
@@ -142,7 +140,7 @@ class _HomeBodyState extends State<_HomeBody> {
 
         final p = partner;
         return Padding(
-          padding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
+          padding: const EdgeInsets.fromLTRB(24, 10, 24, 20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -150,44 +148,37 @@ class _HomeBodyState extends State<_HomeBody> {
                 coins: pet.coins,
                 onPoke: p == null ? null : () => _poke(p),
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 14),
               _CoupleLine(partnerName: partnerName, myName: myName),
-              const SizedBox(height: 18),
-              _ReceivedLetter(
-                received: received,
-                senderName: partnerName ?? '상대',
-              ),
+              const SizedBox(height: 16),
+              // ---- the hero: the received letter --------------------------
               Expanded(
-                child: Center(
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _SpeechArea(utterance: utterance, seq: _patSeq),
-                        const SizedBox(height: 10),
-                        _HouseScene(
-                          speciesId: appState.petSpecies,
-                          expression: expressionForActivity(activity),
-                          equippedItemIds: [
-                            for (final e in pet.equippedItems) e.itemId,
-                          ],
-                          pressed: _pressed,
-                          onPat: _pat,
-                          onPressChanged: (v) => setState(() => _pressed = v),
-                        ),
-                        const SizedBox(height: 10),
-                        CpEyebrow('탭하여 쓰다듬기', size: 10),
-                      ],
-                    ),
-                  ),
+                child: _LetterHero(
+                  received: received,
+                  senderName: partnerName ?? '상대',
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 12),
+              _TurnLine(myId: me?.id, partnerName: partnerName),
+              const SizedBox(height: 14),
+              // ---- the small companion ------------------------------------
+              _PetCompanion(
+                speciesId: appState.petSpecies,
+                expression: expressionForActivity(activity),
+                equippedItemIds: [
+                  for (final e in pet.equippedItems) e.itemId,
+                ],
+                utterance: utterance,
+                seq: _patSeq,
+                pressed: _pressed,
+                onPat: _pat,
+                onPressChanged: (v) => setState(() => _pressed = v),
+              ),
+              const SizedBox(height: 14),
               CpPrimaryButton(
                 label: partnerName == null
-                    ? '그림 그리기'
-                    : '$partnerName${_particleWa(partnerName)} 함께 그림 그리기',
+                    ? '마음 그리기'
+                    : '$partnerName에게 마음 그리기',
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute<void>(
                     builder: (_) => const DrawSendScreen(),
@@ -203,7 +194,7 @@ class _HomeBodyState extends State<_HomeBody> {
 }
 
 // ===========================================================================
-// Top bar — coins · bell · poke
+// Top bar — coins · wordmark · bell · poke
 // ===========================================================================
 
 class _TopBar extends StatelessWidget {
@@ -216,40 +207,48 @@ class _TopBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final hasNotif = appState.notifications.isNotEmpty;
     final pokeEnabled = onPoke != null;
-    return Row(
-      children: [
-        CpCoins(coins),
-        const Spacer(),
-        // Bell — a dot appears while banners are pending; tapping clears them.
-        Stack(
-          clipBehavior: Clip.none,
-          children: [
-            CpIconButton(
-              icon: Icons.notifications_none,
-              onTap: () {
-                if (hasNotif) appState.clearNotifications();
-              },
-            ),
-            if (hasNotif)
-              const Positioned(right: 3, top: 3, child: _Dot()),
-          ],
-        ),
-        const SizedBox(width: 10),
-        // Poke — disabled (dimmed) when there is no partner to reach.
-        Opacity(
-          opacity: pokeEnabled ? 1 : 0.4,
-          child: CpIconButton(
-            icon: Icons.touch_app_outlined,
-            onTap: onPoke ?? () {},
+    return SizedBox(
+      height: 40,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // The serif wordmark, centered like Sumone's.
+          Text('Memory Pager', style: cpSerif(size: 19, color: cpInkA(0.85))),
+          Row(
+            children: [
+              CpCoins(coins),
+              const Spacer(),
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  CpIconButton(
+                    icon: Icons.notifications_none,
+                    onTap: () {
+                      if (hasNotif) appState.clearNotifications();
+                    },
+                  ),
+                  if (hasNotif)
+                    const Positioned(right: 3, top: 3, child: _Dot()),
+                ],
+              ),
+              const SizedBox(width: 8),
+              Opacity(
+                opacity: pokeEnabled ? 1 : 0.4,
+                child: CpIconButton(
+                  icon: Icons.touch_app_outlined,
+                  onTap: onPoke ?? () {},
+                ),
+              ),
+            ],
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
 
 // ===========================================================================
-// Couple line — 상대  나 (no D-day)
+// Couple line — 상대 ♥ 나, in a quiet serif (no D-day)
 // ===========================================================================
 
 class _CoupleLine extends StatelessWidget {
@@ -264,10 +263,11 @@ class _CoupleLine extends StatelessWidget {
       return Text(
         '$myName님, 상대를 기다리는 중이에요',
         textAlign: TextAlign.center,
-        style: cpSans(size: 14, color: cpInkA(0.5)),
+        style: cpSans(size: 13, color: cpInkA(0.5)),
       );
     }
-    final nameStyle = cpSans(size: 16, weight: FontWeight.w600);
+    final nameStyle =
+        cpSerif(size: 15, style: FontStyle.normal, weight: FontWeight.w600);
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
@@ -275,21 +275,15 @@ class _CoupleLine extends StatelessWidget {
           child: Text(
             partnerName!,
             overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.end,
             style: nameStyle,
           ),
         ),
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 10),
-          child: Icon(Icons.favorite, size: 14, color: cpEuc),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 9),
+          child: Icon(Icons.favorite, size: 11, color: cpEucA(0.85)),
         ),
         Flexible(
-          child: Text(
-            myName,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.start,
-            style: nameStyle,
-          ),
+          child: Text(myName, overflow: TextOverflow.ellipsis, style: nameStyle),
         ),
       ],
     );
@@ -297,11 +291,11 @@ class _CoupleLine extends StatelessWidget {
 }
 
 // ===========================================================================
-// Received letter — the partner's newest doodle, or a calm empty line
+// Letter hero — the partner's newest doodle, big, like a kept letter
 // ===========================================================================
 
-class _ReceivedLetter extends StatelessWidget {
-  const _ReceivedLetter({required this.received, required this.senderName});
+class _LetterHero extends StatelessWidget {
+  const _LetterHero({required this.received, required this.senderName});
 
   final Doodle? received;
   final String senderName;
@@ -318,59 +312,167 @@ class _ReceivedLetter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final d = received;
-    if (d == null) {
-      // Honest empty state — a quiet line, never a faked letter.
-      return Text(
-        '아직 받은 편지가 없어요',
-        textAlign: TextAlign.center,
-        style: cpSans(size: 12.5, color: cpInkA(0.42)),
+    if (d == null) return const _NoLetterYet();
+
+    final sealed = d.mode == SendMode.ephemeral && !d.viewedByMe;
+    final unread = !d.viewedByMe;
+
+    return Center(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => _openViewer(context, d),
+        // The letter leans a hair, like something pinned to a desk.
+        child: Transform.rotate(
+          angle: -0.012,
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 300),
+            padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
+            decoration: BoxDecoration(
+              color: cpPrint,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: cpInkA(0.08)),
+              boxShadow: [
+                BoxShadow(
+                  color: cpInkA(0.10),
+                  blurRadius: 18,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: AspectRatio(
+                    aspectRatio: 4 / 3,
+                    child: sealed ? const _SealedFace() : _LetterFace(d: d),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        sealed
+                            ? '$senderName의 사라지는 편지'
+                            : '$senderName의 편지',
+                        overflow: TextOverflow.ellipsis,
+                        style: cpHand(size: 18, color: cpInkA(0.8)),
+                      ),
+                    ),
+                    Text(
+                      _stamp(d.createdAt),
+                      style: cpSans(size: 10.5, color: cpInkA(0.4)),
+                    ),
+                    if (unread) ...[
+                      const SizedBox(width: 6),
+                      const _Dot(),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The letter's face — the doodle's REAL content (strokes / photo / text).
+class _LetterFace extends StatelessWidget {
+  const _LetterFace({required this.d});
+
+  final Doodle d;
+
+  @override
+  Widget build(BuildContext context) {
+    final repo = appState.repo;
+    final StrokeData? strokes =
+        repo is MockRepository ? repo.strokeDataFor(d.id) : null;
+    final Uint8List? photo =
+        repo is MockRepository ? repo.photoBytesFor(d.id) : null;
+
+    final layers = <Widget>[Container(color: cpMist)];
+    if (photo != null) {
+      layers.add(Positioned.fill(child: Image.memory(photo, fit: BoxFit.cover)));
+    }
+    if (strokes != null && strokes.strokes.isNotEmpty) {
+      layers.add(Positioned.fill(
+        child: CustomPaint(painter: CpDoodlePainter(strokes)),
+      ));
+    }
+    if (photo == null && (strokes == null || strokes.strokes.isEmpty)) {
+      // Text letter — the words, in handwriting, centered on paper.
+      layers.add(
+        Center(
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Text(
+              (d.textBody ?? '').isEmpty ? '···' : d.textBody!,
+              textAlign: TextAlign.center,
+              maxLines: 4,
+              overflow: TextOverflow.ellipsis,
+              style: cpHand(size: 24, color: cpInkA(0.85)),
+            ),
+          ),
+        ),
       );
     }
-    final unread = !d.viewedByMe;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () => _openViewer(context, d),
-      child: CpMatted(
-        mat: 14,
-        matColor: cpEucA(0.10),
-        child: Row(
+    return Stack(fit: StackFit.expand, children: layers);
+  }
+}
+
+/// An unopened ephemeral letter — sealed; opening it starts the 5s fuse.
+class _SealedFace extends StatelessWidget {
+  const _SealedFace();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: cpDim,
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 44,
-              height: 44,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: cpPrint,
-                shape: BoxShape.circle,
-                border: Border.all(color: cpEucA(0.3)),
-              ),
-              child: const Icon(Icons.mail_outline, size: 20, color: cpEuc),
+            Icon(Icons.mail_lock_outlined, size: 30, color: cpInkA(0.5)),
+            const SizedBox(height: 8),
+            Text(
+              '열어보면 5초 뒤 사라져요',
+              style: cpHand(size: 17, color: cpInkA(0.6)),
             ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '$senderName에게서 편지가 왔어요',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: cpSans(size: 13.5, weight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    unread ? '아직 확인하지 않았어요' : '편지를 확인했어요',
-                    style: cpSans(size: 11.5, color: cpInkA(0.5)),
-                  ),
-                ],
-              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Honest empty state — a quiet paper card, never a faked letter.
+class _NoLetterYet extends StatelessWidget {
+  const _NoLetterYet();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 300),
+        padding: const EdgeInsets.symmetric(vertical: 44, horizontal: 24),
+        decoration: BoxDecoration(
+          color: cpPrint.withValues(alpha: 0.6),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: cpInkA(0.10)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.mail_outline, size: 26, color: cpInkA(0.35)),
+            const SizedBox(height: 10),
+            Text(
+              '아직 도착한 편지가 없어요',
+              style: cpHand(size: 18, color: cpInkA(0.55)),
             ),
-            if (unread) ...[
-              const SizedBox(width: 8),
-              const _Dot(),
-            ],
-            const SizedBox(width: 8),
-            Icon(Icons.chevron_right, size: 20, color: cpEucA(0.6)),
           ],
         ),
       ),
@@ -379,54 +481,47 @@ class _ReceivedLetter extends StatelessWidget {
 }
 
 // ===========================================================================
-// Speech — the pat utterance, faded via an AnimatedSwitcher
+// Turn line — whose move it is, read honestly off the album
 // ===========================================================================
 
-class _SpeechArea extends StatelessWidget {
-  const _SpeechArea({required this.utterance, required this.seq});
+class _TurnLine extends StatelessWidget {
+  const _TurnLine({required this.myId, required this.partnerName});
 
-  /// The pet's current line (from a pat or a socket activity change). Null until
-  /// the pet has spoken — then we honestly show a prompt, not a fake line.
-  final String? utterance;
-  final int seq;
+  final String? myId;
+  final String? partnerName;
 
   @override
   Widget build(BuildContext context) {
-    final Widget child = (utterance != null && utterance!.isNotEmpty)
-        ? CpSpeechSlip(utterance!, key: ValueKey('slip/$seq/$utterance'))
-        : Padding(
-            key: const ValueKey('prompt'),
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Text(
-              '펫을 쓰다듬어 인사를 나눠보세요',
-              textAlign: TextAlign.center,
-              style: cpSans(size: 13, color: cpInkA(0.4)),
-            ),
-          );
-
-    return SizedBox(
-      height: 56,
-      child: Center(
-        child: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 320),
-          switchInCurve: Curves.easeOut,
-          switchOutCurve: Curves.easeIn,
-          child: child,
-        ),
-      ),
+    final album = appState.album;
+    final String text;
+    if (partnerName == null) {
+      text = '초대 코드를 보내 상대를 기다려요';
+    } else if (album.isEmpty) {
+      text = '먼저 마음을 그려 보내볼까요?';
+    } else if (myId != null && album.first.senderId == myId) {
+      text = '$partnerName의 답장을 기다리는 중이에요';
+    } else {
+      text = '내가 답장할 차례예요';
+    }
+    return Text(
+      text,
+      textAlign: TextAlign.center,
+      style: cpSans(size: 12.5, color: cpInkA(0.48)),
     );
   }
 }
 
 // ===========================================================================
-// House scene — the pet sitting inside a soft hand-drawn room (E4)
+// Pet companion — small, beside its handwriting bubble (tap to pat)
 // ===========================================================================
 
-class _HouseScene extends StatelessWidget {
-  const _HouseScene({
+class _PetCompanion extends StatelessWidget {
+  const _PetCompanion({
     required this.speciesId,
     required this.expression,
     required this.equippedItemIds,
+    required this.utterance,
+    required this.seq,
     required this.pressed,
     required this.onPat,
     required this.onPressChanged,
@@ -435,144 +530,89 @@ class _HouseScene extends StatelessWidget {
   final String speciesId;
   final PetExpression expression;
   final List<String> equippedItemIds;
+  final String? utterance;
+  final int seq;
   final bool pressed;
   final Future<void> Function() onPat;
   final ValueChanged<bool> onPressChanged;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onPat,
-      onTapDown: (_) => onPressChanged(true),
-      onTapUp: (_) => onPressChanged(false),
-      onTapCancel: () => onPressChanged(false),
-      child: AnimatedScale(
-        scale: pressed ? 0.97 : 1.0,
-        duration: const Duration(milliseconds: 110),
-        curve: Curves.easeOut,
-        child: SizedBox(
-          width: 300,
-          height: 250,
-          child: Stack(
-            alignment: Alignment.bottomCenter,
-            children: [
-              const Positioned.fill(
-                child: CustomPaint(painter: _RoomPainter()),
-              ),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 34),
-                child: PetView(
+    final bubble = (utterance != null && utterance!.isNotEmpty)
+        ? Container(
+            key: ValueKey('u/$seq/$utterance'),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+            decoration: BoxDecoration(
+              color: cpPrint,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: cpEucA(0.35)),
+            ),
+            child: Text(
+              utterance!,
+              style: cpHand(size: 17, color: cpInkA(0.8)),
+            ),
+          )
+        : Text(
+            key: const ValueKey('prompt'),
+            '쓰다듬으면 인사해요',
+            style: cpHand(size: 16, color: cpInkA(0.4)),
+          );
+
+    return Row(
+      children: [
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onPat,
+          onTapDown: (_) => onPressChanged(true),
+          onTapUp: (_) => onPressChanged(false),
+          onTapCancel: () => onPressChanged(false),
+          child: AnimatedScale(
+            scale: pressed ? 0.95 : 1.0,
+            duration: const Duration(milliseconds: 110),
+            curve: Curves.easeOut,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                PetView(
                   speciesId: speciesId,
-                  size: 168,
+                  size: 104,
                   expression: expression,
                   equippedItemIds: equippedItemIds,
                 ),
-              ),
-            ],
+                // A single soft ground shadow — the whole "room".
+                Container(
+                  width: 56,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: cpInkA(0.06),
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
-      ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 320),
+              switchInCurve: Curves.easeOut,
+              switchOutCurve: Curves.easeIn,
+              child: bubble,
+            ),
+          ),
+        ),
+      ],
     );
   }
-}
-
-/// Paints a cozy warm room behind the pet: a soft rounded back wall, a warmer
-/// floor band with a hairline, a simple window, and a gentle rug under the pet.
-/// All warm tokens, no emoji — this is E4's house-behind-pet.
-class _RoomPainter extends CustomPainter {
-  const _RoomPainter();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final w = size.width;
-    final h = size.height;
-
-    final room = RRect.fromRectAndRadius(
-      Rect.fromLTWH(w * 0.06, h * 0.10, w * 0.88, h * 0.82),
-      const Radius.circular(28),
-    );
-
-    // Back wall.
-    canvas.drawRRect(
-      room,
-      Paint()
-        ..color = cpDim
-        ..isAntiAlias = true,
-    );
-
-    // Floor band (clipped to the room), a hair warmer than the wall.
-    canvas.save();
-    canvas.clipRRect(room);
-    final floorTop = h * 0.70;
-    canvas.drawRect(
-      Rect.fromLTWH(0, floorTop, w, h),
-      Paint()..color = Color.alphaBlend(cpPeach.withValues(alpha: 0.45), cpDim),
-    );
-    canvas.drawRect(
-      Rect.fromLTWH(0, floorTop, w, 1.5),
-      Paint()..color = cpInkA(0.06),
-    );
-    canvas.restore();
-
-    // A simple window on the wall.
-    final window = RRect.fromRectAndRadius(
-      Rect.fromLTWH(w * 0.155, h * 0.24, w * 0.21, h * 0.24),
-      const Radius.circular(10),
-    );
-    canvas.drawRRect(
-      window,
-      Paint()..color = cpPrint.withValues(alpha: 0.6),
-    );
-    final line = Paint()
-      ..color = cpInkA(0.12)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5
-      ..isAntiAlias = true;
-    canvas.drawRRect(window, line);
-    final wc = window.outerRect.center;
-    canvas.drawLine(
-      Offset(wc.dx, window.top + 6),
-      Offset(wc.dx, window.bottom - 6),
-      line,
-    );
-    canvas.drawLine(
-      Offset(window.left + 6, wc.dy),
-      Offset(window.right - 6, wc.dy),
-      line,
-    );
-
-    // A soft rug under the pet's feet.
-    canvas.drawOval(
-      Rect.fromCenter(
-        center: Offset(w * 0.5, h * 0.82),
-        width: w * 0.5,
-        height: h * 0.12,
-      ),
-      Paint()
-        ..color = cpEucA(0.08)
-        ..isAntiAlias = true,
-    );
-
-    // Quiet wall border.
-    canvas.drawRRect(
-      room,
-      Paint()
-        ..color = cpInkA(0.05)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _RoomPainter oldDelegate) => false;
 }
 
 // ===========================================================================
 // Small primitives / helpers
 // ===========================================================================
 
-/// A small accent dot — the unread/pending marker (bell badge, unread letter).
 class _Dot extends StatelessWidget {
   const _Dot();
 
@@ -590,13 +630,9 @@ class _Dot extends StatelessWidget {
   }
 }
 
-/// The Korean subject-ish particle 와/과 for a name, by its final jamo. Keeps
-/// the "…와 함께 그림 그리기" CTA reading naturally for either ending.
-String _particleWa(String name) {
-  if (name.isEmpty) return '와';
-  final code = name.codeUnitAt(name.length - 1);
-  if (code >= 0xAC00 && code <= 0xD7A3) {
-    return ((code - 0xAC00) % 28 == 0) ? '와' : '과';
-  }
-  return '와';
+String _two(int n) => n < 10 ? '0$n' : '$n';
+
+String _stamp(DateTime utc) {
+  final t = utc.toLocal();
+  return '${t.month}/${t.day} ${_two(t.hour)}:${_two(t.minute)}';
 }

@@ -287,9 +287,10 @@ class MockRepository implements Repository {
     _addItem('41', ItemCategory.prop, '빨간 공', 20);
     _addItem('42', ItemCategory.prop, '나비넥타이', 25);
 
-    // 삐삐 already owns + wears the party hat (matches the pet payload example).
+    // 삐삐 owns a couple of things but wears none — the pet greets you bare;
+    // dressing up is the couple's choice, not a default costume.
     _inventory['3'] = [
-      _PetItemRow(_nextId(), '12', isEquipped: true),
+      _PetItemRow(_nextId(), '12', isEquipped: false),
       _PetItemRow(_nextId(), '41', isEquipped: false),
     ];
 
@@ -1267,17 +1268,17 @@ class MockRepository implements Repository {
   String _defaultUtterance(PetActivityKind a) {
     switch (a) {
       case PetActivityKind.eating:
-        return '냠냠… 잘 먹고 있어!';
+        return '둘이 준 간식, 아껴 먹는 중이야.';
       case PetActivityKind.sleeping:
-        return '쿨쿨… 조금만 더 잘래.';
+        return '편지 기다리다 깜빡 잠들었어…';
       case PetActivityKind.walking:
-        return '산책 나왔어, 기분 좋다!';
+        return '산책하다가 둘 생각이 났어.';
       case PetActivityKind.playing:
-        return '같이 놀자! 신난다!';
+        return '어제 온 그림 옆에서 놀고 있어.';
       case PetActivityKind.drawing:
-        return '그림 그리는 중이야, 봐줄래?';
+        return '두 사람 그림체를 따라 그려보는 중.';
       case PetActivityKind.waiting:
-        return '가만히 너를 기다리고 있어.';
+        return '오늘의 편지를 기다리고 있어.';
     }
   }
 

@@ -19,11 +19,11 @@ import '../toolkit.dart';
 class _Ink {
   static const line = Color(0xFF6B5B47); // warm brown outline
   static const cream = Color(0xFFFFFDF7);
-  static const pink = Color(0xFFE4707E);
+  static const pink = Color(0xFFD98A93);
   static const gold = Color(0xFFC99A5B);
-  static const sage = Color(0xFF8FB08A);
-  static const sky = Color(0xFF7FA8C9);
-  static const straw = Color(0xFFE7C877);
+  static const sage = Color(0xFFA3B49E);
+  static const sky = Color(0xFF9FB4C4);
+  static const straw = Color(0xFFDCC9A3);
 }
 
 /// One drawable item.

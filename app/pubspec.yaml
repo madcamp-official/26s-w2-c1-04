@@ -62,6 +62,12 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
+  # Handwriting face for the "letter" voice (OFL: Nanum Pen Script).
+  fonts:
+    - family: NanumPen
+      fonts:
+        - asset: assets/fonts/NanumPenScript-Regular.ttf
+
   # To add assets to your application, add an assets section, like this:
   # assets:
   #   - images/a_dot_burr.jpeg

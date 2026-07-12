@@ -12,11 +12,11 @@
 import 'package:flutter/material.dart';
 
 // ------------------------------------------------------------------ palette
-/// Ground — the warm cream paper the whole app rests on.
-const Color cpMist = Color(0xFFFAF6EE);
+/// Ground — near-white warm paper (Sumone: airy, mostly whitespace).
+const Color cpMist = Color(0xFFFBF8F2);
 
 /// Dim ground — a hair deeper than [cpMist], for chips / pills / cards.
-const Color cpDim = Color(0xFFF1E9DB);
+const Color cpDim = Color(0xFFF2ECE1);
 
 /// Warm brown-ink — the primary text/line tone (never pure black).
 const Color cpInk = Color(0xFF473D33);
@@ -80,6 +80,21 @@ TextStyle cpSerif({
       letterSpacing: spacing,
       fontStyle: style,
       height: height,
+    );
+
+/// The handwriting voice — pet lines, letter captions, little love notes.
+/// Bundled Nanum Pen Script (OFL). Handwriting reads small, so default is 17.
+TextStyle cpHand({
+  double size = 17,
+  Color color = cpInk,
+  double height = 1.35,
+}) =>
+    TextStyle(
+      fontFamily: 'NanumPen',
+      fontSize: size,
+      color: color,
+      height: height,
+      letterSpacing: 0.2,
     );
 
 /// A soft label voice (replaces the old tracked-caps eyebrow). Gentle, small,

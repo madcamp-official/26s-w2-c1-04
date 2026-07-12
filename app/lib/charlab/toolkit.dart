@@ -41,10 +41,15 @@ double _hash(int i, int seed) {
 // ===========================================================================
 
 class Hand {
-  /// A warm, soft, thick outline paint (never pure black).
+  /// Global line-weight scale. The chunky-outline look read as a kids' mascot,
+  /// so every hand-drawn line (pets AND items) is thinned uniformly here —
+  /// closer to the Sumone egg's delicate pen line. Callers keep their widths.
+  static const double lineScale = 0.62;
+
+  /// A warm, soft outline paint (never pure black), thinned by [lineScale].
   static Paint outline(Color color, double width) => Paint()
     ..color = color
-    ..strokeWidth = width
+    ..strokeWidth = width * lineScale
     ..strokeCap = StrokeCap.round
     ..strokeJoin = StrokeJoin.round
     ..style = PaintingStyle.stroke
@@ -95,18 +100,20 @@ class Hand {
     return _smoothOpen(jittered);
   }
 
-  /// Soft cheek blush — a low-opacity radial dab.
+  /// Soft cheek blush — a low-opacity radial dab. Default calmed (0.45 → 0.30)
+  /// so the pets read grown-up, not baby-cheeked.
   static void blush(Canvas c, Offset at, double r, Color color,
-      {double opacity = 0.45}) {
+      {double opacity = 0.30}) {
     final shader = RadialGradient(
       colors: [color.withValues(alpha: opacity), color.withValues(alpha: 0)],
     ).createShader(Rect.fromCircle(center: at, radius: r));
     c.drawCircle(at, r, Paint()..shader = shader);
   }
 
-  /// A round dot eye (with an optional tiny catch-light).
+  /// A round dot eye. Catch-light now defaults OFF — big glossy eyes read as a
+  /// kids' mascot; quiet dot eyes read like the Sumone egg.
   static void dotEye(Canvas c, Offset at, double r, Color ink,
-      {bool glossy = true}) {
+      {bool glossy = false}) {
     c.drawCircle(at, r, fill(ink));
     if (glossy) {
       c.drawCircle(

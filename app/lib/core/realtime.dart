@@ -201,20 +201,20 @@ class MockRealtime implements Realtime {
 
   // Deterministic activity rotation (kind + fresh utterance).
   static const List<(PetActivityKind, String)> _activities = [
-    (PetActivityKind.eating, '냠냠 맛있다! 오늘 낙서도 그려줄 거지?'),
-    (PetActivityKind.playing, '심심해서 공 굴리는 중! 같이 놀자 '),
-    (PetActivityKind.drawing, '너희 그림체 따라서 슥슥 그려보는 중이야'),
-    (PetActivityKind.walking, '창밖 산책하면서 둘 생각했어'),
-    (PetActivityKind.sleeping, '졸려어… 잠깐만 눈 붙일게 zzz'),
-    (PetActivityKind.waiting, '언제 낙서 보내주려나~ 기다리는 중'),
+    (PetActivityKind.eating, '둘이 보내준 간식, 아껴 먹는 중이야'),
+    (PetActivityKind.playing, '어제 온 편지 옆에서 뒹굴뒹굴'),
+    (PetActivityKind.drawing, '두 사람 그림체를 조금씩 배우는 중'),
+    (PetActivityKind.walking, '산책하다가 둘 생각이 났어'),
+    (PetActivityKind.sleeping, '편지 기다리다 깜빡 잠들었나 봐…'),
+    (PetActivityKind.waiting, '오늘의 편지, 조용히 기다리는 중'),
   ];
 
   // Deterministic partner-doodle rotation (text bodies from 지민).
   static const List<String> _partnerLines = [
-    '지금 뭐해? 삐삐가 심심해한다 ㅋㅋ',
+    '오늘 하늘이 예뻐서 너 생각났어',
     '이거 봐봐, 방금 그린 거!',
-    '오늘 하루도 화이팅 ',
-    '보고싶다 ️',
+    '퇴근길에 그렸어. 잘 자',
+    '보고 싶다',
   ];
 
   @override
