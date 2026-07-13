@@ -248,11 +248,12 @@ class ReportScreen extends StatelessWidget {
         children: [
           Text('어떤 낙서가 많았을까?', style: sans(14, w: FontWeight.w800)),
           const SizedBox(height: 12),
-          _barRow('사진', mock.reportPhotos, 0.60, salmon),
+          _barRow('사진', mock.reportPhotos, _barFrac(mock.reportPhotos), salmon),
           const SizedBox(height: 9),
-          _barRow('그림', mock.reportDrawings, 0.40, const Color(0xFFFFC0B2)),
+          _barRow('그림', mock.reportDrawings, _barFrac(mock.reportDrawings),
+              const Color(0xFFFFC0B2)),
           const SizedBox(height: 9),
-          _barRow('텍스트', mock.reportTexts, 0.25, blush),
+          _barRow('텍스트', mock.reportTexts, _barFrac(mock.reportTexts), blush),
           const SizedBox(height: 14),
           Row(
             children: [
@@ -266,6 +267,13 @@ class ReportScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  // 세 유형 중 최댓값을 기준으로 막대 폭을 정한다(하드코딩 폭 대신 실데이터 비례).
+  double _barFrac(int count) {
+    final maxCount = [mock.reportPhotos, mock.reportDrawings, mock.reportTexts]
+        .fold<int>(1, (a, b) => b > a ? b : a);
+    return (count / maxCount).clamp(0.0, 1.0);
   }
 
   Widget _barRow(String label, int count, double pct, Color fill) {

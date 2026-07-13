@@ -528,8 +528,12 @@ class AppMock extends ChangeNotifier {
   }
 
   void rename(String v) {
-    if (v.isNotEmpty) myName = v;
+    if (v.isEmpty) return;
+    myName = v;
     notifyListeners();
+    if (real) {
+      api!.updateMe(v).catchError((_) {}); // 다른 편집 행과 동일하게 서버 반영
+    }
   }
 
   void setPartnerNick(String v) {
