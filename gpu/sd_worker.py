@@ -220,7 +220,13 @@ def _caption_image(data: bytes) -> str:
     if settings.device.startswith("cuda"):
         inputs["pixel_values"] = inputs["pixel_values"].to(torch.float16)
     with torch.no_grad():
-        out = model.generate(**inputs, max_new_tokens=30)
+        out = model.generate(
+            **inputs,
+            max_new_tokens=25,
+            num_beams=3,
+            repetition_penalty=1.8,
+            no_repeat_ngram_size=2,
+        )
     return processor.decode(out[0], skip_special_tokens=True).strip()
 
 
