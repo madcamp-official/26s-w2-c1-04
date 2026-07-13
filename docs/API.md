@@ -163,6 +163,30 @@ FCM 토큰 등록. 앱 시작 시, 토큰이 바뀔 때마다 호출한다.
 
 > 2인 그룹이라 "내가 상대에게 지어준 별명"과 "그룹 내 이 사람의 별명"이 같은 값이다. 그래서 `group_members.nickname` 한 컬럼으로 족하다. 자기 자신에게는 지을 수 없다 → `400`.
 
+### 오늘의 질문 (디자인 갭 E-1, 구현됨)
+
+매일 커플에게 **같은 질문 하나**가 내려가고 각자 답한다. **질문 텍스트는 서버가 날짜로 결정한다** — 앱과 서버가 같은 질문 풀·같은 규칙(`pool[(날짜 − 2026-01-01).days % len]`, KST 달력)을 쓰므로 항상 일치한다. DB엔 답변만 남긴다(`question_answers`).
+
+#### `GET /groups/{group_id}/question/today` 🔒
+
+```json
+{
+  "date": "2026-07-13",
+  "text": "요즘 상대에게 가장 고마웠던 일 하나는?",
+  "my_answer": "네가 챙겨준 아침",
+  "partner_answered": true
+}
+```
+
+아직 안 썼으면 `my_answer: null`. **상대 답변 원문은 노출하지 않는다** — 언제 공개할지(내가 먼저 답해야 보이는 방식 등) 미확정이라 우선 `partner_answered`(불리언)만 준다.
+
+#### `POST /groups/{group_id}/question/today` 🔒
+
+```json
+{ "answer": "네가 챙겨준 아침" }
+```
+→ 위 GET과 같은 모양. **재호출하면 수정된다**(하루 한 답, `UNIQUE(group_id, question_date, user_id)`). 빈 답변은 `400`.
+
 ---
 
 ## 4. 낙서 ⭐

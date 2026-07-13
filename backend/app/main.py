@@ -24,7 +24,17 @@ from .config import get_settings
 from .ephemeral import ExpiryScheduler
 from .errors import install_error_handlers
 from .realtime import sio
-from .routers import auth, devices, doodles, groups, pets, pokes, reports, widget
+from .routers import (
+    auth,
+    devices,
+    doodles,
+    groups,
+    pets,
+    pokes,
+    questions,
+    reports,
+    widget,
+)
 from .security import group_id_of, user_from_token
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -117,6 +127,7 @@ v1.include_router(pets.router)
 v1.include_router(pokes.router)
 v1.include_router(widget.router)
 v1.include_router(reports.router)
+v1.include_router(questions.router)
 v1.include_router(groups.router)
 
 app.include_router(v1)

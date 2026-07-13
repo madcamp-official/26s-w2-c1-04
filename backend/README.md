@@ -67,6 +67,7 @@ python tests/test_groups_integration.py            # 온보딩~정원 초과 전
 python tests/test_doodles_integration.py           # 낙서·사라지기·찌르기 (35)
 python tests/test_pets_integration.py              # 펫·그림 일기·위젯 (33)
 python tests/test_reports_integration.py           # 월간 레포트·최고의 낙서 (45)
+python tests/test_questions_integration.py          # 오늘의 질문 E-1 (17)
 python tests/test_hardening_integration.py         # FCM 대상·동시성·입력 경계 (28)
 
 # 실행 중인 서버의 실제 WebSocket E2E (7)
@@ -76,7 +77,9 @@ E2E_BASE_URL=http://127.0.0.1:8000 python tests/test_realtime_e2e.py
 SD_STUB=true python ../gpu/tests/test_sd_worker.py
 ```
 
-**MySQL 8.0.40에서 실제로 확인했다.** `schema.sql`이 그대로 걸리고(16 테이블, 트리거 3개), 트리거가 3번째 가입을 거부하며, `UNIQUE(user_id)`가 유저의 두 번째 그룹 가입을 막고, `AFTER INSERT/DELETE`가 `member_count`를 유지한다. 기존 라우터 통합 테스트 **141항목**(그룹 28 · 낙서 35 · 펫 33 · 레포트 45)과 동시성·FCM·입력 경계 28항목이 통과한다. 실제 WebSocket E2E 7항목은 실행 중인 서버에 별도로 붙는다.
+**MySQL 8.0.40에서 실제로 확인했다.** `schema.sql`이 그대로 걸리고(17 테이블, 트리거 3개), 트리거가 3번째 가입을 거부하며, `UNIQUE(user_id)`가 유저의 두 번째 그룹 가입을 막고, `AFTER INSERT/DELETE`가 `member_count`를 유지한다. 라우터 통합 테스트 **161항목**(그룹 31 · 낙서 35 · 펫 33 · 레포트 45 · 질문 17)과 동시성·FCM·입력 경계 29항목이 통과한다. 실제 WebSocket E2E 7항목은 실행 중인 서버에 별도로 붙는다.
+
+> **라이브 DB 마이그레이션(E-1).** `question_answers`는 새 테이블이라 배포 시 라이브 DB에 `CREATE TABLE`이 필요하다(`schema.sql`은 drop-recreate라 새 설치만 반영). SSH 복구되면 `mysql -uroot -proot memory_pager < ` 로 해당 CREATE 문만 적용한다. [[madcamp-infra-facts]]의 DATETIME(6) 마이그레이션 함정과 같은 부류다.
 
 ## 데모 프론트
 

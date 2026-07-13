@@ -70,6 +70,21 @@ class PetOut(BaseModel):
     coins: int
 
 
+# --- 오늘의 질문 (디자인 갭 E-1) ---
+
+
+class AnswerIn(BaseModel):
+    answer: str = Field(min_length=1, max_length=500)
+
+
+class QuestionOut(BaseModel):
+    date: str  # 'YYYY-MM-DD' (KST)
+    text: str
+    my_answer: str | None
+    # 상대가 오늘 답했는지. 원문은 아직 공개하지 않는다(공개 시점 미확정, API.md 디자인 갭)
+    partner_answered: bool
+
+
 class CreateGroupIn(BaseModel):
     name: str = Field(min_length=1, max_length=32)
     pet_name: str = Field(min_length=1, max_length=32)

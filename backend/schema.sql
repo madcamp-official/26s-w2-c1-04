@@ -18,6 +18,7 @@ CREATE DATABASE IF NOT EXISTS memory_pager
 USE memory_pager;
 
 SET FOREIGN_KEY_CHECKS = 0;
+DROP TABLE IF EXISTS question_answers;
 DROP TABLE IF EXISTS monthly_reports;
 DROP TABLE IF EXISTS pet_items;
 DROP TABLE IF EXISTS items;
@@ -212,6 +213,26 @@ CREATE TABLE pokes (
     CONSTRAINT fk_pokes_from FOREIGN KEY (from_user_id)
         REFERENCES users (id) ON DELETE CASCADE,
     CONSTRAINT fk_pokes_to FOREIGN KEY (to_user_id)
+        REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+
+-- 오늘의 질문 (디자인 갭 E-1). 질문 텍스트는 코드가 날짜로 결정하고, 여기엔 답변만 남긴다.
+-- question_date 는 KST 달력 날짜. 한 사람이 하루에 한 답(UNIQUE), 수정 가능.
+CREATE TABLE question_answers (
+    id            BIGINT   NOT NULL AUTO_INCREMENT,
+    group_id      BIGINT   NOT NULL,
+    question_date DATE     NOT NULL,
+    user_id       BIGINT   NOT NULL,
+    answer        TEXT     NOT NULL,
+    created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_question_answers (group_id, question_date, user_id),
+    KEY ix_qa_group_date (group_id, question_date),
+    CONSTRAINT fk_qa_group FOREIGN KEY (group_id)
+        REFERENCES `groups` (id) ON DELETE CASCADE,
+    CONSTRAINT fk_qa_user FOREIGN KEY (user_id)
         REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
