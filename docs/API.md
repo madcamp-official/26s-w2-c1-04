@@ -129,18 +129,21 @@ FCM 토큰 등록. 앱 시작 시, 토큰이 바뀔 때마다 호출한다.
   "group": {
     "id": "7", "name": "우리집", "invite_code": "K3M9QX2A",
     "background_color": "FFFFFF", "member_count": 1,
-    "members": [ { "user_id": "1", "display_name": "종화", "nickname": null, "role": "owner" } ]
+    "members": [ { "user_id": "1", "display_name": "종화", "nickname": null, "role": "owner" } ],
+    "created_at": "2026-07-13T09:00:00Z"
   },
   "pet": { "id": "3", "name": "삐삐", "level": 1, "exp": 0, "coins": 0 }
 }
 ```
+
+> `group.created_at`은 사귄 날 기준이라 앱이 홈 상단 **D-day**를 계산한다(디자인 갭 E-2, 구현됨).
 
 ### `POST /groups/join` 🔒 — ON-3
 
 ```json
 { "invite_code": "K3M9QX2A" }
 ```
-→ `200` + 위와 같은 그룹 객체. 정원 초과면 `409 group_full`, 이미 그 그룹 멤버면 `409 already_member`, **이미 다른 그룹에 속해 있으면 `409 already_in_group`.**
+→ `200` + **`POST /groups`와 동일한 `{ "group": {...}, "pet": {...} }` 모양**(디자인 온보딩이 가입 직후 펫을 함께 보여준다 — 디자인 갭 E-3, 구현됨). 정원 초과면 `409 group_full`, 이미 그 그룹 멤버면 `409 already_member`, **이미 다른 그룹에 속해 있으면 `409 already_in_group`.**
 
 ### `GET /groups/{group_id}` 🔒
 

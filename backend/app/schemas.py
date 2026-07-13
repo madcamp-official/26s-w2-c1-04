@@ -58,6 +58,8 @@ class GroupOut(BaseModel):
     background_color: str
     member_count: int
     members: list[MemberOut]
+    # 사귄 날부터의 D-day 를 앱이 계산한다 (디자인 홈 상단). UTC ISO8601.
+    created_at: str
 
 
 class PetOut(BaseModel):

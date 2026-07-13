@@ -82,6 +82,9 @@ async def _members(session: AsyncSession, group_id: int) -> list[MemberOut]:
     ]
 
 
+_ISO = "%Y-%m-%dT%H:%M:%SZ"
+
+
 async def _group_out(session: AsyncSession, group: Group) -> GroupOut:
     return GroupOut(
         id=str(group.id),
@@ -90,6 +93,17 @@ async def _group_out(session: AsyncSession, group: Group) -> GroupOut:
         background_color=group.background_color,
         member_count=group.member_count,
         members=await _members(session, group.id),
+        created_at=group.created_at.strftime(_ISO),
+    )
+
+
+def _pet_out(pet: Pet) -> PetOut:
+    return PetOut(
+        id=str(pet.id),
+        name=pet.name,
+        level=pet.level,
+        exp=pet.exp,
+        coins=pet.coins,
     )
 
 
@@ -161,20 +175,14 @@ async def create_group(
 
     return CreateGroupOut(
         group=await _group_out(session, group),
-        pet=PetOut(
-            id=str(pet.id),
-            name=pet.name,
-            level=pet.level,
-            exp=pet.exp,
-            coins=pet.coins,
-        ),
+        pet=_pet_out(pet),
     )
 
 
-@router.post("/groups/join", response_model=GroupOut)
+@router.post("/groups/join", response_model=CreateGroupOut)
 async def join_group(
     body: JoinGroupIn, user: CurrentUser, session: SessionDep
-) -> GroupOut:
+) -> CreateGroupOut:
     # FOR UPDATE 가 동시 가입 경합을 직렬화한다.
     group = (
         await session.execute(
@@ -212,7 +220,11 @@ async def join_group(
         raise
 
     await session.refresh(group)
-    return await _group_out(session, group)
+    # 디자인 온보딩은 가입 직후 펫을 함께 보여준다. 생성과 같은 {group, pet} 모양으로 돌려준다.
+    pet = (
+        await session.execute(select(Pet).where(Pet.group_id == group.id))
+    ).scalar_one()
+    return CreateGroupOut(group=await _group_out(session, group), pet=_pet_out(pet))
 
 
 @router.get("/groups/{group_id}", response_model=GroupOut)
