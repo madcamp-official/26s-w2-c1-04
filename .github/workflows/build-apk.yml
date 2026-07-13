@@ -1,0 +1,46 @@
+name: build-apk
+
+# 완성품 APK 를 CI 에서 뽑는다 (로컬 Android SDK 불필요, VPN·로컬 환경에 안 막힘).
+# push 마다 실행되고, Actions 탭의 아티팩트에서 app-release.apk 를 내려받는다.
+# --dart-define=API_BASE 로 실서버(라이브 백엔드)에 붙는 완성품이 나온다.
+
+on:
+  push:
+    branches: [front-remake, main]
+    paths:
+      - 'app/**'
+      - '.github/workflows/build-apk.yml'
+  workflow_dispatch:
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.6'
+          channel: stable
+          cache: true
+
+      - name: pub get
+        working-directory: app
+        run: flutter pub get
+
+      - name: build release APK (실서버 연결)
+        working-directory: app
+        run: >
+          flutter build apk --release
+          --dart-define=API_BASE=https://anjonghwa.madcamp-kaist.org
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: memory-pager-apk
+          path: app/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
