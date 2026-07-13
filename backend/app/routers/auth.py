@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
+import random
+
 from fastapi import APIRouter
 from sqlalchemy import select
 from sqlalchemy.exc import DBAPIError
@@ -14,17 +17,8 @@ from ..security import hash_token, issue_token
 
 router = APIRouter(tags=["auth"])
 
-
-async def _issue_for_identity(session: SessionDep, identity: AuthIdentity) -> RegisterOut:
-    """기존 identity 에 새 토큰을 발급하고 커밋한다."""
-    user = await session.get(User, identity.user_id)
-    assert user is not None
-    token = issue_token(user.id)
-    identity.secret_hash = hash_token(token)
-    await session.commit()
-    return RegisterOut(
-        token=token, user=UserOut(id=str(user.id), display_name=user.display_name)
-    )
+# 동시 등록 폭주 시 재시도 상한. 갭 락 deadlock·유니크 충돌 모두 재시도로 수렴한다.
+_REGISTER_MAX_TRIES = 6
 
 
 @router.post("/auth/register", response_model=RegisterOut)
@@ -35,62 +29,62 @@ async def register(body: RegisterIn, session: SessionDep) -> RegisterOut:
     `secret_hash` 만 저장하므로 원래 토큰을 되돌려줄 수 없기 때문이다.
     이전 토큰은 그 즉시 무효가 된다.
 
-    **동시성:** 서로 다른 device_uid 두 건이 동시에 등록하면 InnoDB 가 (device_uid
-    충돌이 아니라) 인덱스 갭 락에서 **deadlock** 을 낼 수 있다. deadlock 은 "누가 내
-    행을 이미 넣었다"는 뜻이 아니므로 재조회하면 안 되고, **트랜잭션 전체를 재시도**해야
-    한다. 반면 UNIQUE 위반(같은 device_uid 최초 등록 경합)은 승자 행을 재조회한다.
+    동시 등록(서로 다른 uid든 같은 uid든)은 InnoDB 갭 락으로 deadlock(1213)이
+    나거나 같은 uid 두 건이 동시에 INSERT하며 유니크 충돌(1062)이 날 수 있다.
+    두 경우 모두 rollback 후 짧게 백오프하고 통째로 재시도하면 수렴한다.
     """
-    last_exc: Exception | None = None
-    for _ in range(3):
+    last_exc: DBAPIError | None = None
+    for attempt in range(_REGISTER_MAX_TRIES):
         try:
-            identity = (
-                await session.execute(
-                    select(AuthIdentity)
-                    .where(
-                        AuthIdentity.provider == AuthProvider.DEVICE,
-                        AuthIdentity.provider_uid == body.device_uid,
-                    )
-                    .with_for_update()
-                )
-            ).scalar_one_or_none()
-
-            if identity is None:
-                user = User(display_name=body.display_name)
-                session.add(user)
-                await session.flush()  # user.id 가 필요하다
-                identity = AuthIdentity(
-                    user_id=user.id,
-                    provider=AuthProvider.DEVICE,
-                    provider_uid=body.device_uid,
-                )
-                session.add(identity)
-
-            return await _issue_for_identity(session, identity)
+            return await _register_once(session, body)
         except DBAPIError as exc:
-            errno = mysql_errno(exc)
+            if mysql_errno(exc) not in (MYSQL_DUPLICATE_ERRNO, MYSQL_DEADLOCK_ERRNO):
+                raise
             await session.rollback()
-            if errno == MYSQL_DUPLICATE_ERRNO:
-                # 같은 device_uid 최초 등록 경합: 승자 identity 에 새 토큰 발급.
-                winner = (
-                    await session.execute(
-                        select(AuthIdentity)
-                        .where(
-                            AuthIdentity.provider == AuthProvider.DEVICE,
-                            AuthIdentity.provider_uid == body.device_uid,
-                        )
-                        .with_for_update()
-                    )
-                ).scalar_one_or_none()
-                if winner is not None:
-                    return await _issue_for_identity(session, winner)
-                last_exc = exc  # 승자 행이 아직 안 보이면 재시도
-                continue
-            if errno == MYSQL_DEADLOCK_ERRNO:
-                last_exc = exc  # deadlock → 전체 재시도
-                continue
-            raise
+            last_exc = exc
+            # 지수 백오프 + 지터로 재충돌을 흩뜨린다(같은 타이밍에 재시도하지 않게).
+            await asyncio.sleep(random.uniform(0.01, 0.03) * (attempt + 1))
     assert last_exc is not None
     raise last_exc
+
+
+async def _register_once(session: SessionDep, body: RegisterIn) -> RegisterOut:
+    """등록 1회 시도. 매 재시도마다 세션 상태를 새로 읽어 새 객체로 작업한다.
+
+    초기 SELECT에 `FOR UPDATE`를 걸지 않는다. 존재하지 않는 행에 대한 FOR UPDATE는
+    갭 락을 잡아 동시 INSERT 사이에 deadlock을 유발하기 때문이다. 대신 낙관적으로
+    INSERT하고, 같은 uid가 먼저 들어온 경우의 유니크 충돌은 상위 재시도가 처리한다.
+    """
+    identity = (
+        await session.execute(
+            select(AuthIdentity).where(
+                AuthIdentity.provider == AuthProvider.DEVICE,
+                AuthIdentity.provider_uid == body.device_uid,
+            )
+        )
+    ).scalar_one_or_none()
+
+    if identity is None:
+        user = User(display_name=body.display_name)
+        session.add(user)
+        await session.flush()  # user.id 가 필요하다
+        identity = AuthIdentity(
+            user_id=user.id,
+            provider=AuthProvider.DEVICE,
+            provider_uid=body.device_uid,
+        )
+        session.add(identity)
+    else:
+        user = await session.get(User, identity.user_id)
+        assert user is not None
+
+    token = issue_token(user.id)
+    identity.secret_hash = hash_token(token)
+    await session.commit()
+
+    return RegisterOut(
+        token=token, user=UserOut(id=str(user.id), display_name=user.display_name)
+    )
 
 
 @router.get("/me", response_model=MeOut)
