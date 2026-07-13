@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../mock.dart';
 import '../theme.dart';
 import 'calendar.dart';
+import 'diary.dart';
 import 'viewer.dart';
 
 class AlbumScreen extends StatefulWidget {
@@ -327,7 +328,12 @@ class _AlbumScreenState extends State<AlbumScreen> {
 
   // ------------------------------------------------------------ 모리 앨범 배너
   Widget _moriBanner() {
-    return Container(
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const DiaryScreen()),
+      ),
+      child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
       decoration: BoxDecoration(
         color: blushSoft,
@@ -361,6 +367,7 @@ class _AlbumScreenState extends State<AlbumScreen> {
           ),
           Text('→', style: sans(13, c: brownWarm)),
         ],
+      ),
       ),
     );
   }
