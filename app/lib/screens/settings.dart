@@ -310,6 +310,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         content: TextField(
           controller: controller,
           autofocus: true,
+          textInputAction: TextInputAction.done,
+          onSubmitted: (_) => Navigator.pop(ctx, controller.text.trim()),
           style: sans(15, w: FontWeight.w600),
           cursorColor: coral,
           decoration: InputDecoration(

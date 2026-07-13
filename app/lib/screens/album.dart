@@ -18,6 +18,7 @@ class AlbumScreen extends StatefulWidget {
 class _AlbumScreenState extends State<AlbumScreen> {
   // 0 = 모두, 1 = 나(지우), 2 = 상대(나무)
   int _filter = 0;
+  bool _grid = false; // 상단 겹사진 아이콘: 타임라인 ↔ 격자 갤러리 토글
 
   @override
   Widget build(BuildContext context) {
@@ -44,7 +45,8 @@ class _AlbumScreenState extends State<AlbumScreen> {
                       Text('낙서 사진첩', style: sans(22, w: FontWeight.w800)),
                       Row(
                         children: [
-                          _iconBtn(const _StackPhotosIcon(), onTap: () {}),
+                          _iconBtn(const _StackPhotosIcon(),
+                              onTap: () => setState(() => _grid = !_grid)),
                           const SizedBox(width: 8),
                           _iconBtn(
                             const _CalendarIcon(),
@@ -69,7 +71,7 @@ class _AlbumScreenState extends State<AlbumScreen> {
                         const SizedBox(height: 14),
                         _personChips(),
                         const SizedBox(height: 14),
-                        ..._timeline(items),
+                        if (_grid) _photoGrid(items) else ..._timeline(items),
                       ],
                     ),
                   ),
@@ -96,6 +98,30 @@ class _AlbumScreenState extends State<AlbumScreen> {
         alignment: Alignment.center,
         child: icon,
       ),
+    );
+  }
+
+  // ------------------------------------------------------------ 격자 갤러리
+  Widget _photoGrid(List<Doodle> items) {
+    if (items.isEmpty) return _moriBanner();
+    return GridView.count(
+      crossAxisCount: 3,
+      mainAxisSpacing: 8,
+      crossAxisSpacing: 8,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      children: [
+        for (final d in items)
+          GestureDetector(
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => ViewerScreen(doodle: d)),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: doodleImage(d),
+            ),
+          ),
+      ],
     );
   }
 

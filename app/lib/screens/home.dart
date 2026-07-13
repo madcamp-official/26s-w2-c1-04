@@ -53,6 +53,8 @@ class _HomeScreenState extends State<HomeScreen> {
               autofocus: true,
               maxLines: 3,
               minLines: 1,
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) => Navigator.of(ctx).pop(ctrl.text.trim()),
               style: sans(14),
               decoration: InputDecoration(
                 hintText: '내 답변을 남겨보세요…',
