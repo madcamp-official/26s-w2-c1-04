@@ -27,7 +27,7 @@
 | 실시간 Socket.IO | ✅ 터널 7/7 | 재연결·끊김 내성 | — |
 | 사라지기 5초 | ✅ | 재시작 생존(boot sweep) 실사용 확인 | — |
 | GPU 펫 대사(LLM)·일기(SD) | ✅ `gpu:ok` | guided-JSON 실패율·배치 성공률 | — |
-| **그림체 학습(LoRA)** | ❌ 501 | **손그림 20장 데이터 + 학습 잡** | — |
+| **그림체 학습(LoRA)** | ✅ 구현·E2E | **실커플 손그림 20장(데이터 축적)** | — |
 | FCM 백그라운드 푸시 | ❌ NullPush | (포그라운드는 소켓으로 커버) | **Firebase 연결** |
 | 미디어 프라이버시 | ⚠️ 공개 URL | — | **접근 제어** |
 | 계정·복구 | ⚠️ 익명 device | — | **Kakao 로그인·복구** |
@@ -39,17 +39,18 @@
 
 ### 2.1 ⭐ 그림체 학습 데이터 — 가장 중요, 유일하게 "쌓여야" 켜지는 기능
 
-**무엇:** 펫 일기의 화풍을 *사용자 손그림체*로 바꾸는 SD LoRA(PT-5/PT-6b). 지금은 `learned` 요청이 **501**로 거부된다([gpu/sd_worker.py](../gpu/sd_worker.py):214). 기본 프리셋 일기(PT-6a)는 이미 동작.
+**무엇:** 펫 일기의 화풍을 *사용자 손그림체*로 바꾸는 SD LoRA(PT-5/PT-6b). **✅ 구현·풀스택 E2E 완료** — `learned` 501 거부는 실동작으로 대체됐다. GPU `/train/style`(학습→가중치 저장)·learned `/generate/diary`(어댑터 로드), 백엔드 `services.train_learned_style`(수집→`style_models` training→ready)·손그림 20장 자동 트리거·수동 `POST /groups/{id}/style/train`. 기본 프리셋 일기(PT-6a)도 그대로 동작.
 
-**왜 데이터가 필요:** LoRA에 쓸 만한 손그림이 **그룹당 20장 이상** 필요하다([SPEC.md](SPEC.md) 6.3). 가입 첫날은 0장이고, 현실적으로 20~30장은 며칠~몇 주 실사용이 있어야 쌓인다. **→ 실사용 연결 없이는 이 기능을 만들 데이터가 아예 없다.**
+**왜 데이터가 여전히 필요:** 배선은 됐지만 *화풍 품질*은 **실커플 손그림 20장 이상**이 쌓여야 검증된다([SPEC.md](SPEC.md) 6.3). 라이브 검증은 합성 6장으로 배선을 확인한 것이고, step·rank·캡션 튜닝은 실데이터가 있어야 한다. 가입 첫날은 0장이라 며칠~몇 주 실사용이 선행돼야 한다.
 
-**지금 할 일 (연결되는 순간부터):**
-| 단계 | 내용 | 근거 |
+**남은 일 (데이터가 쌓이는 순간부터):**
+| 단계 | 내용 | 상태 |
 |---|---|---|
-| ① 수집 자동화 | `content_type='drawing'` 낙서를 그룹별로 집계. `stroke_data`도 함께 보존(선화 재현용) | ERD `doodles` |
-| ② 임계 트리거 | 20장 도달 시 학습 잡을 큐에 넣음(현재 미구현) | SPEC 6.3 |
-| ③ 학습 잡 | GPU 새벽 배치로 SD 1.5 LoRA 파인튜닝 → `style_models(kind='learned',version,status)` 기록 | STACK VRAM표(6~8GB) |
-| ④ 전환 | `status='ready'` 이후의 **새 일기부터** 학습 그림체. 과거 일기는 안 다시 그림 | SPEC 6.3 |
+| ① 수집 | 학습 시 `content_type='drawing'` 낙서 최신 60장을 `/root/media`에서 읽어 GPU로 전송 | ✅ `_collect_drawings` |
+| ② 임계 트리거 | 손그림 20장 도달 시 업로드 배경작업이 학습을 건다(+20장마다 재학습). 데모용 수동 트리거는 5장 | ✅ `maybe_train_learned_style` |
+| ③ 학습 잡 | GPU `/train/style`가 SD 1.5 LoRA 학습(300step ~64s) → `style_models(kind='learned',version,status,weights_path)` 기록 | ✅ 배선+실측 |
+| ④ 전환 | `_active_style`이 ready learned 를 우선 → `status='ready'` 이후 **새 일기부터** 학습 그림체. 과거 일기는 안 다시 그림 | ✅ 기존 코드 |
+| ⑤ 품질 튜닝 | 실커플 손그림 20장으로 step·rank·트리거 캡션 조정(화풍 강도 vs 펫 내용 균형) | ⏳ 실데이터 대기 |
 
 **폴백 우선순위(SPEC 6.3, LoRA가 이 프로젝트에서 가장 먼저 무너질 지점):**
 ① img2img만 써서 학습 단계 생략 → ② 프리셋 몇 종을 레벨로 교체 → ③ PT-5/PT-6b 통째 컷.

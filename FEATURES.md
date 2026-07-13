@@ -77,15 +77,15 @@
 - **사진 카메라/갤러리** — image_picker(카메라/갤러리/제거). 전송 PNG에 배경 사진 합성.
 - **로그아웃·커플 연결 끊기** — `POST /groups/{id}/leave` + `mock.logout`. **✅ 라이브 배포+E2E 완료**(leave 204 → /me group:null → 온보딩).
 - **낙서 AI 캡션** — ✅ **실제 구현·배포·E2E 완료.** BLIP(이미지→영어 서술) + EXAONE(펫 말투 한국어) 파이프라인. GPU `/caption` 엔드포인트 + 백엔드 백그라운드 생성 + `caption` 컬럼(라이브 마이그레이션). 실측: 사진 낙서 업로드 → 4초 → *"하얀 드레스 입은 여인이 풀숲에 앉아있다니, 마치 동화 속 같네요!"*
+- **LoRA 화풍 학습** — ✅ **실제 구현·배포·풀스택 E2E 완료.** 커플 손그림으로 SD 1.5 LoRA(UNet attention, rank8)를 학습해 펫 일기를 그 화풍으로 그린다. GPU `/train/style`(학습→6.4MB 가중치 저장, 300step ~64s, VRAM 여유) + learned `/generate/diary`(어댑터 로드·트리거 프롬프트). 백엔드 `train_learned_style`(손그림 수집→`style_models` training→ready) + 손그림 20장 자동 트리거 + 데모용 수동 `POST /groups/{id}/style/train`(5장). `_active_style`이 ready learned 를 우선하므로 이후 새 일기부터 자동 적용. **라이브 검증:** 그림 6장 업로드 → 학습 트리거 → 76초 후 `ready`(weights_path 기록) → 백엔드 프로덕션 경로(`_active_style`→GPU)로 learned 일기 렌더 성공. *단, 검증은 합성/단순 손그림 기준 — 실커플의 다양한 낙서 20장으로 화풍·펫 내용 균형(step·rank·캡션 튜닝)은 실데이터가 쌓여야 최종 확인된다.*
 
 ### 네이티브(CI 빌드 검증, 실기기 확인 필요) 🟡
 - **안드로이드 홈 위젯** — home_widget + PagerWidgetProvider + 레이아웃/manifest. 펫 상태 push. **실기기 홈 화면 검증 남음.**
 
 ### 남은 것 🔴
-- **FCM 푸시** — `firebase_messaging`은 **Firebase 프로젝트(google-services.json)** 없이는 빌드가 깨진다(외부 계정·앱 등록 필요). 백엔드 `/v1/devices`(fcm_token)는 준비됨. → Firebase 프로젝트 생성이 선행돼야 함. *유일하게 외부 계정이 필요한 항목.*
-- **LoRA 화풍 학습** — 커플 낙서로 화풍을 학습해 일기 그림에 반영. GPU에 BLIP까지 얹은 상태(현재 ~17GB/24GB). 실현성 검증됨(peak 6GB·200step 46s). 학습 잡(데이터셋·트레이닝 루프·어댑터 서빙)은 별도의 큰 ML 작업 — 다음 단계.
+- **FCM 푸시** — `firebase_messaging`은 **Firebase 프로젝트(google-services.json)** 없이는 빌드가 깨진다(외부 계정·앱 등록 필요). 백엔드 `/v1/devices`(fcm_token)는 준비됨. → Firebase 프로젝트 생성이 선행돼야 함. *유일하게 외부 계정이 필요한 항목 — 이제 남은 유일한 🔴.*
 
-> **정정:** 낙서 이미지 캡션은 이전 판에서 "모델 스택상 불가"라 했으나 **틀렸다.** BLIP 비전 캡션 모델을 얹어 실제로 구현했다(위 참조).
+> **정정:** 낙서 이미지 캡션은 이전 판에서 "모델 스택상 불가"라 했으나 **틀렸다.** BLIP 비전 캡션 모델을 얹어 실제로 구현했다(위 참조). LoRA 화풍 학습도 "별도의 큰 ML 작업 — 다음 단계"로 미뤄뒀으나 실제로 구현·풀스택 검증했다(위 참조).
 
 ## 남은 검증
 - 갤럭시에 **INTERNET 포함 새 APK** 설치 → 2인 커플 실사용(등록→생성/참여→낙서→일기).
