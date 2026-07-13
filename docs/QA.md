@@ -7,6 +7,10 @@
 >
 > 작성 기준: `front-remake` @ FCM/LoRA 반영 이후. 대상 앱 패키지 `org.madcamp.memory_pager`.
 
+> **런타임 재판정 스탬프 (2026-07-13, `front-remake` @ 536e09e):** 아래 🟢 판정은 "코드 배선 추적"이 아니라 **실제 실행**으로 재확인했다. 헤드리스 회귀 스위트 전부 당일 재실행 그린(§4), 서버 연동 상당수는 백엔드 하드닝 통합테스트 29/29로 런타임 검증됨. 남은 🟢·🔵 항목(2인 실시간 왕복·홈위젯·FCM 배달·image_picker)은 원리상 **실기기 2대**가 있어야 최종 확인되며 `[실기기]`/`[2인]`으로 표기한다. 코드만으로 "동작함"을 단정하지 않는다.
+>
+> **P0(동시 등록 500) 해소·검증:** 서로 다른 `device_uid` 동시 등록 시 InnoDB 갭 락 deadlock으로 4/30이 500 나던 결함을 수정(초기 `SELECT … FOR UPDATE`의 갭 락 제거 + 트랜잭션 전체 재시도). **버스트 재현 테스트로 30/30·동일 uid 12/12 모두 200·토큰 정상** 확인. 하드닝 스위트의 `동일 device_uid/FCM 동시 등록 500 없음`도 그린.
+
 ---
 
 ## 0. 범례 · 판정 기준
@@ -231,16 +235,22 @@
 
 ## 4. 자동 회귀 스위트 (헤드리스로 상시 검증됨)
 
+> 아래 「현재」 값은 **2026-07-13 재실행 실측**이다(추정·과거값 아님).
+
 | 스위트 | 명령 | 현재 |
 |---|---|---|
-| Flutter 골든+시나리오 | `cd app && flutter test` | 23/23 통과 |
-| Flutter 정적분석 | `flutter analyze lib/` | 에러 0(info 3, 스타일) |
+| Flutter 골든+시나리오 | `cd app && flutter test` | **23/23 통과** (당일 재실행) |
+| Flutter 정적분석 | `flutter analyze lib/` | **No issues found**(0, info 포함 0) |
+| 백엔드 하드닝 통합 | `DATABASE_URL=… python tests/test_hardening_integration.py` | **29/29** (동시 등록·동시 확인 데드락 없음·FCM 대상·widget_refresh 2기기) |
+| 백엔드 GPU 클라이언트 | `pytest tests/test_gpu_clients.py -o asyncio_mode=auto` | **4/4** |
+| GPU SD 워커 계약 | `python gpu/tests/test_sd_worker.py` | **9/9** |
+| GPU learned/default 생성 | `POST /generate/diary` (learned+default) | 각 200·512×512 PNG, 상주 화풍 복원 확인 |
 | APK 릴리스 빌드 | GitHub Actions `build-apk` | 성공(32.8MB) |
 | 웹 빌드 | `flutter build web` | 성공 |
-| GPU SD 워커 계약 | `python gpu/tests/test_sd_worker.py` | 9/9 |
-| 백엔드 GPU 클라이언트 | `pytest tests/test_gpu_clients.py -o asyncio_mode=auto` | 4/4 |
 | 서버→FCM 인증 | firebase_admin dry_run | OK(프로젝트 `doodulim-21fbc`) |
 | LoRA 화풍 학습 E2E | 그림6장→학습→ready→learned 렌더 | 성공 |
+
+> **DB 상태:** QA·버스트 테스트로 쌓인 잔여 데이터(유저·그룹·낙서·학습모델)를 **전량 정리해 클린 슬레이트**로 복구했다(트랜잭션 테이블 전부 0행). GPU 디스크의 고아 LoRA(`/data/lora/g17-v1`)·학습 임시 업로드 디렉터리도 제거. 레포엔 커밋된 골든 실패 PNG 없음(`app/test/failures/`는 .gitignore).
 
 ---
 
