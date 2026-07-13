@@ -12,6 +12,7 @@ dependencies:
   http: ^1.2.2              # REST (경량; dio 불필요)
   socket_io_client: ^3.1.2 # 실시간 /rt
   shared_preferences: ^2.3.2 # 기기별 device_uid 영속화(완성품 필수)
+  image_picker: ^1.1.2       # 사진 촬영/갤러리 선택
 
 dev_dependencies:
   flutter_test:

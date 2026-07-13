@@ -3,9 +3,11 @@
 // 실제 프리핸드 드로잉: 스트로크(색·굵기·포인트) 기록 → CustomPainter로 라운드캡 페인팅.
 
 import 'dart:convert';
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../mock.dart';
 import '../pet.dart';
@@ -37,6 +39,8 @@ class DrawCanvasScreen extends StatefulWidget {
 class _DrawCanvasScreenState extends State<DrawCanvasScreen> {
   // 사진 배경 — 1d는 처음부터 사진이 붙어 있고, 답장(4c)은 종이 바탕에서 시작.
   late bool _hasPhoto = widget.replyTo == null;
+  Uint8List? _photoBytes; // 카메라/갤러리에서 고른 실제 사진(표시용)
+  ui.Image? _photoImage; // 래스터 합성용 디코드 이미지
   bool _vanish = false;
   _Tool _tool = _Tool.pen;
   Color _color = coralHot;
@@ -79,6 +83,70 @@ class _DrawCanvasScreenState extends State<DrawCanvasScreen> {
   }
 
   bool _sending = false;
+
+  // 카메라/갤러리에서 사진을 골라 캔버스 배경으로 넣는다.
+  Future<void> _pickPhoto() async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt_rounded, color: coral),
+              title: Text('카메라로 촬영', style: sans(15, w: FontWeight.w700)),
+              onTap: () => Navigator.pop(ctx, 'camera'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_rounded, color: coral),
+              title: Text('갤러리에서 선택', style: sans(15, w: FontWeight.w700)),
+              onTap: () => Navigator.pop(ctx, 'gallery'),
+            ),
+            if (_photoBytes != null)
+              ListTile(
+                leading: const Icon(Icons.close_rounded, color: muted),
+                title: Text('사진 제거', style: sans(15, w: FontWeight.w700, c: muted)),
+                onTap: () => Navigator.pop(ctx, 'remove'),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || choice == null) return; // 시트 그냥 닫음
+    if (choice == 'remove') {
+      setState(() {
+        _photoBytes = null;
+        _photoImage = null;
+        _hasPhoto = false;
+      });
+      return;
+    }
+    try {
+      final source =
+          choice == 'camera' ? ImageSource.camera : ImageSource.gallery;
+      final picked =
+          await ImagePicker().pickImage(source: source, maxWidth: 1600);
+      if (picked == null || !mounted) return;
+      final bytes = await picked.readAsBytes();
+      final decoded = await decodeImageFromList(bytes);
+      if (!mounted) return;
+      setState(() {
+        _photoBytes = bytes;
+        _photoImage = decoded;
+        _hasPhoto = true;
+      });
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('사진을 불러오지 못했어요', style: sans(13))),
+        );
+      }
+    }
+  }
 
   // 텍스트 낙서 — 짧은 글을 입력받아 sendText 로 전송.
   Future<void> _sendTextDoodle() async {
@@ -198,6 +266,15 @@ class _DrawCanvasScreenState extends State<DrawCanvasScreen> {
     canvas.drawRect(
         Rect.fromLTWH(0, 0, w.toDouble(), h.toDouble()),
         Paint()..color = Colors.white);
+    // 배경 사진을 먼저 깔아 전송 PNG 에 포함시킨다(cover fit).
+    if (_photoImage != null) {
+      paintImage(
+        canvas: canvas,
+        rect: Rect.fromLTWH(0, 0, w.toDouble(), h.toDouble()),
+        image: _photoImage!,
+        fit: BoxFit.cover,
+      );
+    }
     for (final s in _strokes) {
       final paint = Paint()
         ..color = s.tool == _Tool.eraser ? Colors.white : s.color
@@ -233,10 +310,12 @@ class _DrawCanvasScreenState extends State<DrawCanvasScreen> {
               // ---- 사진 배경 + 상/하 그라데이션 (1d)
               if (_hasPhoto) ...[
                 Positioned.fill(
-                  child: Image.asset(
-                    'assets/photos/photo_field.png',
-                    fit: BoxFit.cover,
-                  ),
+                  child: _photoBytes != null
+                      ? Image.memory(_photoBytes!, fit: BoxFit.cover)
+                      : Image.asset(
+                          'assets/photos/photo_field.png',
+                          fit: BoxFit.cover,
+                        ),
                 ),
                 Positioned(
                   top: 0,
@@ -463,7 +542,7 @@ class _DrawCanvasScreenState extends State<DrawCanvasScreen> {
                       bottom: 34,
                       left: 20,
                       child: GestureDetector(
-                        onTap: () => setState(() => _hasPhoto = !_hasPhoto),
+                        onTap: _pickPhoto,
                         child: _photoButton(),
                       ),
                     ),
