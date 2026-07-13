@@ -139,7 +139,7 @@ class AppMock extends ChangeNotifier {
 
   Doodle? get latestFromPartner {
     for (final d in doodles) {
-      if (!d.fromMe) return d;
+      if (!d.fromMe && !d.viewed) return d; // 이미 본 낙서는 "새 낙서"가 아니다
     }
     return null;
   }
@@ -176,7 +176,9 @@ class AppMock extends ChangeNotifier {
   int _reportIdx = -1; // reportMonths 내 현재 위치(-1=데모/없음)
 
   String get reportMonthLabel {
-    if (_reportIdx < 0 || _reportIdx >= reportMonths.length) return '6월';
+    if (_reportIdx < 0 || _reportIdx >= reportMonths.length) {
+      return real ? '—' : '6월'; // 실서버·리포트 없음이면 가짜 달을 안 보여준다
+    }
     final p = reportMonths[_reportIdx].split('-');
     return p.length == 2 ? '${int.parse(p[1])}월' : reportMonths[_reportIdx];
   }
@@ -457,11 +459,15 @@ class AppMock extends ChangeNotifier {
   }
 
   void setRoomColor(Color c) {
+    final old = roomColor;
     roomColor = c;
     notifyListeners();
     if (real && groupId != null) {
       final hex = c.toARGB32().toRadixString(16).substring(2).toUpperCase();
-      api!.updateGroup(groupId!, bgColor: hex).catchError((_) {});
+      api!.updateGroup(groupId!, bgColor: hex).catchError((Object _) {
+        roomColor = old; // 서버 반영 실패 시 되돌린다(가짜 성공 금지)
+        notifyListeners();
+      });
     }
   }
 
@@ -471,7 +477,8 @@ class AppMock extends ChangeNotifier {
       {bool ephemeral = false, String? parentId}) async {
     if (real && groupId != null) {
       final d = await api!.sendText(text, ephemeral: ephemeral, parentId: parentId);
-      doodles.insert(0, d);
+      // 소켓 doodle:new 리로드가 먼저 도착해 이미 넣었을 수 있으므로 중복 방지.
+      if (!doodles.any((x) => x.id == d.id)) doodles.insert(0, d);
       notifyListeners();
       return;
     }
@@ -485,7 +492,7 @@ class AppMock extends ChangeNotifier {
     if (real && groupId != null) {
       final d = await api!.sendDrawing(png, strokeJson,
           ephemeral: ephemeral, parentId: parentId);
-      doodles.insert(0, d);
+      if (!doodles.any((x) => x.id == d.id)) doodles.insert(0, d);
       notifyListeners();
       return;
     }
@@ -529,26 +536,40 @@ class AppMock extends ChangeNotifier {
 
   void rename(String v) {
     if (v.isEmpty) return;
+    final old = myName;
     myName = v;
     notifyListeners();
     if (real) {
-      api!.updateMe(v).catchError((_) {}); // 다른 편집 행과 동일하게 서버 반영
+      api!.updateMe(v).catchError((Object _) {
+        myName = old; // 서버 반영 실패 시 되돌린다
+        notifyListeners();
+      });
     }
   }
 
   void setPartnerNick(String v) {
-    if (v.isNotEmpty) partnerNick = v;
+    if (v.isEmpty) return;
+    final old = partnerNick;
+    partnerNick = v;
     notifyListeners();
     if (real && groupId != null && partnerUserId != null) {
-      api!.setNickname(groupId!, partnerUserId!, v).catchError((_) {});
+      api!.setNickname(groupId!, partnerUserId!, v).catchError((Object _) {
+        partnerNick = old;
+        notifyListeners();
+      });
     }
   }
 
   void setGroupName(String v) {
-    if (v.isNotEmpty) groupName = v;
+    if (v.isEmpty) return;
+    final old = groupName;
+    groupName = v;
     notifyListeners();
     if (real && groupId != null) {
-      api!.updateGroup(groupId!, name: v).catchError((_) {});
+      api!.updateGroup(groupId!, name: v).catchError((Object _) {
+        groupName = old;
+        notifyListeners();
+      });
     }
   }
 

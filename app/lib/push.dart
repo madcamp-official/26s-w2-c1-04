@@ -7,6 +7,7 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:home_widget/home_widget.dart';
 
 const _channelId = 'memory_pager_default';
 const _channelName = '메모리 페이저 알림';
@@ -49,7 +50,26 @@ Future<void> _initLocalNotifs() async {
   }
 }
 
+/// widget_refresh 조용한 푸시 → 홈 위젯을 실제로 갱신한다(포그라운드·백그라운드 공통).
+Future<void> _refreshWidget(Map<String, dynamic> data) async {
+  try {
+    if (data['pet_name'] != null) {
+      await HomeWidget.saveWidgetData<String>('pet_name', '${data['pet_name']}');
+    }
+    if (data['pet_level'] != null) {
+      await HomeWidget.saveWidgetData<String>('pet_level', '${data['pet_level']}');
+    }
+    await HomeWidget.updateWidget(androidName: 'PagerWidgetProvider');
+  } catch (_) {
+    // 위젯 미지원 환경에서는 조용히 넘어간다.
+  }
+}
+
 Future<void> _display(Map<String, dynamic> data) async {
+  if ('${data['type']}' == 'widget_refresh') {
+    await _refreshWidget(data); // 알림은 띄우지 않고 위젯만 갱신
+    return;
+  }
   final content = _content(data);
   if (content == null) return;
   await _localNotifs.show(

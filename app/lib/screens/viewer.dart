@@ -36,12 +36,18 @@ class _ViewerScreenState extends State<ViewerScreen> {
   void _tick() {
     Future<void>.delayed(const Duration(seconds: 1), () {
       if (!mounted || _closing) return;
+      // 답장 캔버스 등이 위에 떠 있으면(이 뷰어가 최상단이 아니면) 카운트다운을 멈추고
+      // 대기한다. 예전엔 그대로 pop() 해서 최상단 답장 화면을 닫아 작성 내용을 날렸다.
+      if (ModalRoute.of(context)?.isCurrent != true) {
+        _tick();
+        return;
+      }
       setState(() => _count -= 1);
       if (_count <= 0) {
         _closing = true;
         mock.doodles.remove(widget.doodle);
-        mock.markViewed(widget.doodle); // notifyListeners
-        if (mounted) Navigator.of(context).pop();
+        mock.refresh(); // markViewed 는 initState 에서 이미 호출(중복 view → 410 방지)
+        Navigator.of(context).pop();
       } else {
         _tick();
       }
@@ -163,9 +169,14 @@ class _ViewerScreenState extends State<ViewerScreen> {
                                     shape: BoxShape.circle,
                                   ),
                                   child: Text(
-                                    mock.partnerName.isNotEmpty
-                                        ? mock.partnerName.substring(0, 1)
-                                        : '나',
+                                    () {
+                                      final name = d.fromMe
+                                          ? mock.myName
+                                          : mock.partnerName;
+                                      return name.isNotEmpty
+                                          ? name.substring(0, 1)
+                                          : '나';
+                                    }(),
                                     style: sans(11,
                                         w: FontWeight.w800, c: partnerBlue),
                                   ),
@@ -176,7 +187,7 @@ class _ViewerScreenState extends State<ViewerScreen> {
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Text(
-                                      mock.partnerNick,
+                                      d.fromMe ? mock.myName : mock.partnerNick,
                                       style: sans(13,
                                           w: FontWeight.w800,
                                           c: Colors.white),
@@ -238,8 +249,9 @@ class _ViewerScreenState extends State<ViewerScreen> {
                         ),
                       ),
 
-                    // 하단 액션 줄
-                    Positioned(
+                    // 하단 액션 줄 — 본인 낙서엔 답장·좋아요·콕을 띄우지 않는다.
+                    if (!d.fromMe)
+                      Positioned(
                       bottom: 34,
                       left: 20,
                       right: 20,

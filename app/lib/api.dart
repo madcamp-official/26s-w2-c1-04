@@ -91,6 +91,12 @@ class Api {
         body: body == null ? null : jsonEncode(body),
       ));
 
+  Future<dynamic> _patch(String p, [Object? body]) async => _ok(await http.patch(
+        Uri.parse('$_base$p'),
+        headers: _h,
+        body: body == null ? null : jsonEncode(body),
+      ));
+
   // ---- 인증 · 온보딩 ----
   Future<void> register(String displayName, String deviceUid) async {
     final j = await _post('/auth/register',
@@ -124,29 +130,20 @@ class Api {
 
   /// FCM 토큰 등록(멱등). 204 라 파싱하지 않는다.
   Future<void> registerDevice(String fcmToken, {String? appVersion}) async {
-    await _post('/devices', {
-      'fcm_token': fcmToken,
-      if (appVersion != null) 'app_version': appVersion,
-    });
+    await _post('/devices', {'fcm_token': fcmToken, 'app_version': ?appVersion});
   }
 
+  // PATCH 들은 상태코드를 검사한다(_patch → _ok). 실패 시 예외를 던져 호출측이 되돌린다.
   Future<void> updateMe(String displayName) async {
-    await http.patch(Uri.parse('$_base/me'),
-        headers: _h, body: jsonEncode({'display_name': displayName}));
+    await _patch('/me', {'display_name': displayName});
   }
 
   Future<void> updateGroup(String gid, {String? name, String? bgColor}) async {
-    await http.patch(Uri.parse('$_base/groups/$gid'),
-        headers: _h,
-        body: jsonEncode({
-          if (name != null) 'name': name,
-          if (bgColor != null) 'background_color': bgColor,
-        }));
+    await _patch('/groups/$gid', {'name': ?name, 'background_color': ?bgColor});
   }
 
   Future<void> setNickname(String gid, String targetUserId, String nick) async {
-    await http.patch(Uri.parse('$_base/groups/$gid/members/$targetUserId'),
-        headers: _h, body: jsonEncode({'nickname': nick}));
+    await _patch('/groups/$gid/members/$targetUserId', {'nickname': nick});
   }
 
   // ---- 펫 ----

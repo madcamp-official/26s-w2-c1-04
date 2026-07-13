@@ -41,3 +41,6 @@ app/android/key.properties
 .vscode/
 .DS_Store
 Thumbs.db
+
+# 골든 실패 diff 아티팩트(테스트 실행 시 생성, 커밋 금지)
+app/test/failures/

@@ -16,6 +16,10 @@ SD_STUB=true uvicorn gpu.sd_worker:app --host 127.0.0.1 --port 8200
 curl http://127.0.0.1:8200/health
 ```
 
-실제 모드는 기본적으로 `stable-diffusion-v1-5/stable-diffusion-v1-5`를 fp16으로 CUDA에 올린다. 환경변수 접두사는 `SD_`다: `SD_MODEL_ID`, `SD_DEVICE`, `SD_WIDTH`, `SD_HEIGHT`, `SD_INFERENCE_STEPS`, `SD_GUIDANCE_SCALE`.
+실제 모드는 기본적으로 `stable-diffusion-v1-5/stable-diffusion-v1-5`를 fp16으로 CUDA에 올린다. 환경변수 접두사는 `SD_`다: `SD_MODEL_ID`, `SD_DEVICE`, `SD_WIDTH`, `SD_HEIGHT`, `SD_INFERENCE_STEPS`, `SD_GUIDANCE_SCALE`, LoRA용 `SD_LORA_DIR`, `SD_LORA_STEPS`, `SD_LORA_RANK`, `SD_LORA_LR`.
 
-`style.kind=learned`는 PT-5/PT-6b(P2)이므로 현재 501을 반환한다. P1의 기본 그림체 일기는 완전히 동작하며, learned 요청을 기본 화풍으로 조용히 위장하지 않는다.
+**LoRA 화풍 학습(구현 완료):**
+- `POST /train/style` — 손그림 여러 장(멀티파트 `files`) + `style_id` → SD 1.5 LoRA(UNet attention, rank8) 학습 → `SD_LORA_DIR/{style_id}/pytorch_lora_weights.safetensors` 저장. 300 step ~64s, 가중치 ~6.4MB. 생성 락으로 감싸 VRAM 경합 차단, 학습 후 임시 어댑터는 `finally` 로 제거.
+- `POST /generate/diary` 의 `style.kind=learned`(+`weights_path`) — 해당 어댑터를 로드해 트리거 프롬프트로 렌더. `weights_path` 없는 learned 는 400(기본 화풍으로 위장하지 않음).
+- `peft`·`bitsandbytes`·`python-multipart` 는 `requirements-sd.txt` 에 포함(신규 배포에서도 재현됨).
+- BLIP 캡션(`POST /caption`)도 상주해 낙서→영어 서술을 제공한다.

@@ -37,8 +37,9 @@ class DrawCanvasScreen extends StatefulWidget {
 }
 
 class _DrawCanvasScreenState extends State<DrawCanvasScreen> {
-  // 사진 배경 — 1d는 처음부터 사진이 붙어 있고, 답장(4c)은 종이 바탕에서 시작.
-  late bool _hasPhoto = widget.replyTo == null;
+  // 사진 배경은 사용자가 실제로 고른 사진이 있을 때만 표시한다(표시-전송 일치).
+  // 예전엔 새 낙서가 샘플 사진을 깔았지만 전송 PNG엔 안 들어가 불일치를 냈다.
+  bool _hasPhoto = false;
   Uint8List? _photoBytes; // 카메라/갤러리에서 고른 실제 사진(표시용)
   ui.Image? _photoImage; // 래스터 합성용 디코드 이미지
   bool _vanish = false;
@@ -486,8 +487,9 @@ class _DrawCanvasScreenState extends State<DrawCanvasScreen> {
                         ),
                       ),
 
-                    // 도구 패널 (design top:178 = 52+126)
-                    Positioned(top: 126, right: 20, child: _toolPanel()),
+                    // 도구 패널 — 우상단 버튼 컬럼(펜·휘발·T, ~top174까지) 아래로 내려
+                    // T 버튼과 겹쳐 형광펜 히트를 가로채던 문제를 없앤다.
+                    Positioned(top: 190, right: 20, child: _toolPanel()),
 
                     // 답장 모드 — 받은 낙서 썸네일 카드
                     if (_isReply)

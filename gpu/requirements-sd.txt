@@ -16,7 +16,10 @@ pillow==12.3.0
 transformers==4.57.6
 accelerate==1.12.0
 
-# peft·bitsandbytes는 LoRA(PT-5/PT-6b, P2)에서만 필요하므로 P1 환경에 섞지 않는다.
+# LoRA 화풍 학습(/train/style, learned 렌더)에 필요. 박스 실측 버전으로 고정.
+peft==0.19.1
+bitsandbytes==0.49.2       # 8-bit AdamW (학습 VRAM 절감)
+python-multipart==0.0.32   # /train/style·/caption 멀티파트 업로드
 
 # VRAM (docs/STACK.md 2절, 검증됨. 카드는 실측 24GB):
 #   SD 1.5 추론 (512px, fp16, 1장)              4~6GB   -> 상주 LLM 켠 채로 가능

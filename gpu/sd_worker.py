@@ -292,35 +292,45 @@ def _train_lora(images: list[bytes], out_dir: str) -> dict[str, Any]:
     unet.train()
     steps = settings.lora_steps
     last_loss = 0.0
-    for step in range(steps):
-        img = tensors[step % len(tensors)].unsqueeze(0).to(device, dtype=torch.float16)
-        with torch.no_grad():
-            latents = vae.encode(img).latent_dist.sample() * vae.config.scaling_factor
-        noise = torch.randn_like(latents)
-        timesteps = torch.randint(
-            0, noise_scheduler.config.num_train_timesteps, (latents.shape[0],), device=device
-        ).long()
-        noisy = noise_scheduler.add_noise(latents, noise, timesteps)
-        with torch.autocast("cuda", dtype=torch.float16):
-            pred = unet(noisy, timesteps, encoder_hidden_states=enc).sample
-            loss = F.mse_loss(pred.float(), noise.float())
-        optimizer.zero_grad()
-        scaler.scale(loss).backward()
-        scaler.step(optimizer)
-        scaler.update()
-        last_loss = float(loss.detach())
+    try:
+        for step in range(steps):
+            img = tensors[step % len(tensors)].unsqueeze(0).to(
+                device, dtype=torch.float16
+            )
+            with torch.no_grad():
+                latents = (
+                    vae.encode(img).latent_dist.sample() * vae.config.scaling_factor
+                )
+            noise = torch.randn_like(latents)
+            timesteps = torch.randint(
+                0,
+                noise_scheduler.config.num_train_timesteps,
+                (latents.shape[0],),
+                device=device,
+            ).long()
+            noisy = noise_scheduler.add_noise(latents, noise, timesteps)
+            with torch.autocast("cuda", dtype=torch.float16):
+                pred = unet(noisy, timesteps, encoder_hidden_states=enc).sample
+                loss = F.mse_loss(pred.float(), noise.float())
+            optimizer.zero_grad()
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+            last_loss = float(loss.detach())
 
-    os.makedirs(out_dir, exist_ok=True)
-    state = convert_state_dict_to_diffusers(
-        get_peft_model_state_dict(unet, adapter_name=adapter)
-    )
-    StableDiffusionPipeline.save_lora_weights(
-        save_directory=out_dir, unet_lora_layers=state, safe_serialization=True
-    )
-
-    unet.delete_adapters(adapter)  # 상주 파이프라인을 기본 화풍으로 되돌림
-    unet.eval()
-    torch.cuda.empty_cache()
+        os.makedirs(out_dir, exist_ok=True)
+        state = convert_state_dict_to_diffusers(
+            get_peft_model_state_dict(unet, adapter_name=adapter)
+        )
+        StableDiffusionPipeline.save_lora_weights(
+            save_directory=out_dir, unet_lora_layers=state, safe_serialization=True
+        )
+    finally:
+        # 성공·실패 무관하게 임시 어댑터를 제거해 상주 파이프라인을 기본 화풍으로 되돌린다.
+        # 이게 없으면 학습 중 예외 시 어댑터가 남아 이후 default 생성이 오염된다.
+        unet.delete_adapters(adapter)
+        unet.eval()
+        torch.cuda.empty_cache()
     return {
         "weights_path": out_dir,
         "steps": steps,

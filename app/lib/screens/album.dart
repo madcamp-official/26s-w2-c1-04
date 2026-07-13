@@ -119,7 +119,21 @@ class _AlbumScreenState extends State<AlbumScreen> {
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(12),
-              child: doodleImage(d),
+              // 텍스트 낙서는 이미지가 없어 빈 칸이 되던 것을 텍스트 타일로 채운다.
+              child: d.type == DoodleType.text
+                  ? Container(
+                      color: blushSoft,
+                      alignment: Alignment.center,
+                      padding: const EdgeInsets.all(8),
+                      child: Text(
+                        d.text ?? '',
+                        maxLines: 4,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: hand(16),
+                      ),
+                    )
+                  : doodleImage(d),
             ),
           ),
       ],

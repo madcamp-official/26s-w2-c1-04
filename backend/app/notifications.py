@@ -14,7 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .config import Settings, get_settings
-from .models import Device, GroupMember, User
+from .models import Device, GroupMember, Pet, User
 
 logger = logging.getLogger(__name__)
 FCM_MULTICAST_LIMIT = 500
@@ -207,9 +207,19 @@ async def send_poke(
 async def send_widget_refresh(session: AsyncSession, group_id: int) -> PushResult:
     try:
         user_ids = await _group_user_ids(session, group_id)
-        return await _safe_send(
-            await _tokens_for_users(session, user_ids), {"type": "widget_refresh"}
-        )
+        tokens = await _tokens_for_users(session, user_ids)
+        if not tokens:
+            return PushResult()
+        # 조용한 푸시지만 펫 스냅샷을 실어 보내야 앱(백그라운드 포함)이 홈 위젯을
+        # 실제로 갱신할 수 있다. 값이 없으면 앱은 위젯을 그대로 둔다.
+        data = {"type": "widget_refresh"}
+        pet = (
+            await session.execute(select(Pet).where(Pet.group_id == group_id))
+        ).scalar_one_or_none()
+        if pet is not None:
+            data["pet_name"] = pet.name
+            data["pet_level"] = f"Lv.{pet.level}"
+        return await _safe_send(tokens, data)
     except Exception:
         logger.exception("위젯 갱신 푸시 준비 실패")
         return PushResult()

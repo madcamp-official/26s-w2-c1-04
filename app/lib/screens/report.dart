@@ -22,18 +22,24 @@ class ReportScreen extends StatelessWidget {
               children: [
                 _header(context),
                 Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(24, 18, 24, 24),
-                    child: Column(
-                      children: [
-                        _growthCard(),
-                        const SizedBox(height: 14),
-                        _bestDoodleCard(),
-                        const SizedBox(height: 14),
-                        _statsCard(),
-                      ],
-                    ),
-                  ),
+                  child: mock.real && mock.reportMonths.isEmpty
+                      ? _emptyReport()
+                      : SingleChildScrollView(
+                          padding: const EdgeInsets.fromLTRB(24, 18, 24, 24),
+                          child: Column(
+                            children: [
+                              _growthCard(),
+                              const SizedBox(height: 14),
+                              // '최고의 낙서'는 백엔드 집계가 없어 하드코딩이다.
+                              // 실서버 모드에선 가짜 데이터를 보여주지 않는다(데모만 표시).
+                              if (!mock.real) ...[
+                                _bestDoodleCard(),
+                                const SizedBox(height: 14),
+                              ],
+                              _statsCard(),
+                            ],
+                          ),
+                        ),
                 ),
               ],
             );
@@ -60,7 +66,10 @@ class ReportScreen extends StatelessWidget {
             children: [
               Text('삐삐- 월간 소식 도착!', style: hand(15, c: coral)),
               const SizedBox(height: 2),
-              Text('${mock.reportMonthLabel}의 레포트',
+              Text(
+                  mock.real && mock.reportMonths.isEmpty
+                      ? '월간 레포트'
+                      : '${mock.reportMonthLabel}의 레포트',
                   style: sans(22, w: FontWeight.w800)),
             ],
           ),
@@ -107,6 +116,29 @@ class ReportScreen extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // 신규 그룹(실서버, 리포트 없음)용 빈 상태 — 가짜 '6월 리포트'를 보여주지 않는다.
+  Widget _emptyReport() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const PetFace(size: 88),
+            const SizedBox(height: 18),
+            Text('아직 리포트가 없어요', style: sans(16, w: FontWeight.w800)),
+            const SizedBox(height: 8),
+            Text(
+              '한 달치 낙서와 활동이 쌓이면\n${mock.petName}가 월간 소식을 정리해 줄 거예요.',
+              textAlign: TextAlign.center,
+              style: sans(13, c: hintWarm, h: 1.5),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -165,7 +197,7 @@ class ReportScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  '낙서 25개를 먹고 무럭무럭 자랐어요',
+                  '낙서 ${mock.reportDoodles}개를 먹고 무럭무럭 자랐어요',
                   style: sans(12, c: hintWarm),
                 ),
               ],

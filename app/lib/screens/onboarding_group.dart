@@ -188,28 +188,12 @@ class _OnboardingGroupScreenState extends State<OnboardingGroupScreen> {
                 color: blushSoft,
                 borderRadius: BorderRadius.circular(14),
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    mock.inviteCode,
-                    style: sans(20, w: FontWeight.w700, c: coral, ls: 4),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 7,
-                    ),
-                    decoration: BoxDecoration(
-                      color: coral,
-                      borderRadius: BorderRadius.circular(9),
-                    ),
-                    child: Text(
-                      '복사',
-                      style: sans(12, w: FontWeight.w700, c: Colors.white),
-                    ),
-                  ),
-                ],
+              // 실제 초대코드는 생성 후에 서버가 발급한다. 여기서 가짜 코드를 보여주거나
+              // 복사(死버튼)하게 두지 않고, 설정에서 복사하도록 안내한다.
+              child: Text(
+                '그룹을 만들면 초대 코드가 생겨요.\n설정 화면에서 복사해 연인에게 보내주세요.',
+                textAlign: TextAlign.center,
+                style: sans(12.5, c: hintWarm, h: 1.45),
               ),
             ),
           ),
