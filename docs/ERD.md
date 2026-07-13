@@ -62,7 +62,7 @@ erDiagram
         char background_color "hex, 기본 FFFFFF"
         bigint owner_user_id FK
         tinyint member_count "정원 2 강제용"
-        datetime created_at
+        datetime created_at "D-day 기준일로도 사용 (디자인의 사귄 지 N일)"
     }
 
     group_members {
@@ -251,3 +251,41 @@ erDiagram
 ## 4. 다음 단계
 
 `backend/schema.sql`(DDL)과 SQLAlchemy 모델을 생성한다. SPEC 7절의 미해결 사항 중 ①(정원 강제 방식)과 ④(LoRA 학습 임계값)만 이 ERD에 닿으며, 나머지는 스키마를 바꾸지 않는다.
+
+## 5. 디자인 갭 후보 (2026-07-13, 미구현)
+
+> Claude 디자인 시안이 새로 도입한 **"오늘의 질문"**(매일 커플에게 같은 질문, 각자 답변)은 위 16개 테이블에 담을 곳이 없다. 아래는 **구현 전 스케치**다 — DDL·모델에 아직 반영하지 않았고, 최종 관계·제약은 백엔드 구현 시 확정한다.
+
+**D-day는 새 컬럼이 필요 없다.** 디자인의 "사귄 지 N일"은 `groups.created_at`(그룹 생성 = 커플 시작일 근사)에서 계산하면 된다. 정확한 기념일을 사용자가 직접 고르게 할지는 별도 판단이며, 그 경우에만 `groups`에 `anniversary_date DATE`를 추가한다.
+
+**"오늘의 질문" 후보 테이블 2개** — 질문 카탈로그와 답변을 분리한다.
+
+```mermaid
+erDiagram
+    daily_questions ||--o{ question_answers : "질문에 달린 답변"
+    groups ||--o{ question_answers : "커플별 답변"
+    users ||--o{ question_answers : "답변자"
+
+    daily_questions {
+        bigint id PK
+        varchar body "질문 본문"
+        smallint day_offset "노출 순번, 후보 (매일 같은 질문 로테이션)"
+        bool active
+        datetime created_at
+    }
+
+    question_answers {
+        bigint id PK
+        bigint group_id FK
+        bigint question_id FK
+        bigint user_id FK
+        date entry_date "질문이 뜬 날"
+        text answer
+        datetime created_at
+    }
+```
+
+- **질문 본문은 `daily_questions` 카탈로그에 두고, `question_answers`는 답변만 담는다.** 같은 질문을 두 사람이 각자 답하므로 답변은 (그룹, 질문, 유저)당 1행이다.
+- **"그날의 질문"을 어떻게 고르나**는 미확정이다. 후보: ① 전역 로테이션(`day_offset`을 커플 D-day 또는 절대 날짜에 매핑) ② 그룹별 시작일 기준 순번. 이 선택에 따라 `day_offset`의 의미와 UNIQUE 키가 달라지므로 구현 시 확정한다.
+- **제약 후보:** `UNIQUE(group_id, question_id, user_id)`(같은 질문 중복 답변 방지) 또는 `UNIQUE(group_id, entry_date, user_id)`(하루 1답변 강제). 위 "그날의 질문" 선택과 함께 결정한다.
+- **그 밖 디자인 갭**(D-day용 `created_at` 노출, 앨범 AI 큐레이션, 낙서 속 단어 검색, `groups/join` 응답 `{group,pet}` 래핑 등)은 스키마보다 **API/응답 형태** 문제이므로 이 ERD에서는 다루지 않는다.

@@ -6,6 +6,8 @@
 > - ✅ **검증** — 적대적 검증을 통과했거나 2026-07-10에 공식 출처로 재확인
 > - ⚠️ **미확인** — 신뢰할 근거를 확보하지 못함. 설치해 보고 고정할 것
 > - 🔬 **실측 필요** — 숫자가 환경에 좌우됨. 반드시 직접 재야 함
+>
+> **현황(2026-07-13)** — 백엔드는 실배포·라이브(`https://anjonghwa.madcamp-kaist.org/v1`, Cloudflare Tunnel + 앱 VM systemd `memory-pager.service`), GPU 서버도 라이브(vLLM :8100 / SD :8200, systemd `mp-vllm`·`mp-sd`, health `"gpu":"ok"`, 펫 대사·그림 일기 실추론 확인). 프론트는 **front-remake** 브랜치(worktree mp-design)에서 0부터 재구축해 현재 Mock 구동(실서버 미연결). LoRA 그림체 학습은 실현성만 검증(3090 6GB·200step 46s)·미구현.
 
 ---
 
@@ -62,6 +64,8 @@ VLLM_SERVER_DEV_MODE=1 vllm serve LGAI-EXAONE/EXAONE-3.5-7.8B-Instruct-AWQ \
   --enable-sleep-mode --port 8100
 ```
 
+> **현황(2026-07-13): 실기동에 두 가지가 더 필요했다.** EXAONE AWQ는 `--trust-remote-code`가 없으면 로드에 실패하고, 3090에서는 `VLLM_USE_FLASHINFER_SAMPLER=0`을 env로 주지 않으면 샘플링이 깨진다. 현재 systemd `mp-vllm`(:8100)·`mp-sd`(:8200) 유닛으로 상주 중이다.
+
 - 무거운 배치 직전: `POST /sleep?level=1` — 가중치를 CPU RAM으로 오프로드하고 KV 캐시를 버려 GPU를 비운다
 - 배치 후: `POST /wake_up` — 7B급 기준 3~6초
 - 상태 확인: `GET /is_sleeping`
@@ -109,14 +113,27 @@ VLLM_SERVER_DEV_MODE=1 vllm serve LGAI-EXAONE/EXAONE-3.5-7.8B-Instruct-AWQ \
 
 > EXAONE 4.0·4.5가 나와 있으나 공개 사이즈가 32B급이라 4-bit로도 18~20GB다. **상주 + SD 공존이라는 이 프로젝트의 제약에는 3.5의 7.8B가 여전히 최적이다.** 신형 계열에 7~8B급 변형이 있는지는 채택 전 확인할 것.
 
-### Flutter
+### Flutter — front-remake 브랜치(worktree mp-design)
 
-| 구성요소 | 버전 | 등급 |
+> **현황(2026-07-13): 프론트를 0부터 재구축했다.** 이전 mock+RestRepository 프론트를 배제하고 Claude 디자인 시안(`Memory Pager 디자인.dc.html`, 16캔버스 하이파이)을 **유일 원본**으로 삼아 새로 작성했다. 인앱 14화면 + shell 탭바. 현재 **Mock 구동**(`lib/mock.dart` 전역 싱글턴)으로 실서버 미연결이며, 실연결(REST+Socket.IO)은 다음 스텝이다. flutter analyze 0, 웹 빌드 성공, 골든 15 + 시나리오 8 테스트 통과. 앱 자체 문서는 `app/README.md`.
+
+**현재 빌드에 들어간 것 (실측):**
+
+| 구성요소 | 버전 | 등급 | 비고 |
+|---|---|---|---|
+| Flutter SDK | 3.44.6 (stable) | ✅ | 실측 |
+| Dart | 3.12.2 | ✅ | Flutter 3.44.6 번들 |
+| 폰트 Pretendard(본문) + Gaegu(손글씨) | OFL, assets 번들 | ✅ | 팔레트 코랄 `#E8566B`·잉크 `#3A2E2E` |
+| 펫·장면 렌더링 | CustomPainter | ✅ | 이미지 에셋 대신 코드로 그림 |
+
+**실서버 연결 시 추가할 패키지 (아직 미도입):**
+
+| 구성요소 | 버전 | 비고 |
 |---|---|---|
-| Flutter SDK | 3.44.0 (stable) | ✅ 2026-05-29 |
-| socket_io_client | 3.1.6 | ✅ **`setTransports(['websocket'])` 명시 필수** (dart:io는 polling 미지원) |
-| home_widget | 0.9.3 | ✅ |
-| Dart / camera / image_picker / workmanager | 미확인 | ⚠️ |
+| socket_io_client | 3.1.6 | **`setTransports(['websocket'])` 명시 필수** (dart:io는 polling 미지원) |
+| REST 클라이언트 (http / dio) | 미정 | mock→실물 교체 시 결정 |
+| home_widget | 0.9.3 | 네이티브 홈위젯(P2, AppWidget) |
+| camera / image_picker / workmanager | 미정 | 실기능 붙일 때 |
 
 ---
 

@@ -18,6 +18,45 @@
 
 ---
 
+## 프로젝트 현황(2026-07-13)
+
+**한 줄 소개:** 두 사람만의 커플 낙서 호출기 — 낙서·사진·짧은 글을 주고받고, 그 활동이 펫의 대사와 그림 일기로 쌓인다.
+
+**아키텍처 상태**
+
+| 레이어 | 상태 | 비고 |
+|---|---|---|
+| 백엔드 (FastAPI + Socket.IO `/rt` + MySQL 8) | **라이브** | `https://anjonghwa.madcamp-kaist.org/v1` (Cloudflare Tunnel, 앱 VM `memory-pager.service`). 라우터 전부 완성(auth/groups/devices/doodles/pokes/widget/pets/reports), 통합 테스트 198+ 그린, 하드닝(입력검증·동시성·DATETIME(6)) 완료 |
+| GPU 서버 (vLLM + SD 1.5) | **라이브** | vLLM EXAONE 3.5 7.8B AWQ(`:8100`) + SD 1.5(`:8200`), systemd `mp-vllm`/`mp-sd`, health `"gpu":"ok"`. 펫 대사·그림 일기 실추론 확인. vLLM 부팅에 `--trust-remote-code` + `VLLM_USE_FLASHINFER_SAMPLER=0` 필수. LoRA 그림체는 실현성만 검증(3090·200step 46s)·미구현 |
+| 프론트엔드 (Flutter, Android) | **디자인 기반 재구축·Mock** | Claude 디자인 시안(16캔버스 하이파이)을 유일 원본으로 `front-remake` 브랜치에서 0부터 재작성. Flutter 3.44.6/Dart 3.12.2, 폰트 Pretendard+Gaegu 번들, 팔레트 코랄 `#E8566B`·잉크 `#3A2E2E`. 인앱 14화면 + shell 탭바. 현재 `lib/mock.dart` 전역 싱글턴으로 Mock 구동, **실서버 미연결**. `flutter analyze` 0, 웹 빌드 성공, 골든 15 + 시나리오 8 테스트 통과 |
+| FCM 푸시 | 코드 완성·무동작 | Firebase 프로젝트 부재로 `NullPushClient` |
+
+**브랜치**
+
+| 브랜치 | 내용 |
+|---|---|
+| `anjonghwa` | 서버 · GPU · 문서 |
+| `front-remake` | 디자인 시안 기반 새 프론트(worktree `mp-design`) — 현재 개발 중심 |
+| `jonghklee` | 구 프론트(Flutter mock + RestRepository) — 배제 |
+
+**실행법**
+
+- 백엔드·GPU: 이미 배포·라이브 상태(위 URL). 로컬 재현은 [backend/README.md](backend/README.md) 참고.
+- 앱: `cd app && flutter run` (현재 Mock 데이터로 단독 구동). 앱 상세는 [app/README.md](app/README.md).
+
+**디자인 갭(백엔드 추가 필요)**
+
+- **오늘의 질문** — 매일 커플에게 같은 질문, 각자 답변(디자인 신규 기능, 백엔드에 없음)
+- D-day용 그룹 `created_at` 노출
+- 앨범 AI 큐레이션("모리가 모아줬어요")
+- 낙서 속 단어 검색
+- `groups/join` 응답을 `{group, pet}`로 래핑
+- (디자인 4h 홈 위젯·4i 푸시 알림은 OS 네이티브(AppWidget/FCM)라 인앱 화면 아님)
+
+**남은 큰 스텝:** ① 재구축 프론트를 실서버(REST + Socket.IO)에 연결(Mock→실물 교체) ② 백엔드 디자인 갭 엔드포인트 ③ FCM(Firebase) ④ 네이티브 홈 위젯 ⑤ LoRA 그림체 학습(P2)
+
+---
+
 ## 팀원
 
 | 이름 | 학교 | GitHub | 역할 |

@@ -445,6 +445,41 @@ curl -X POST localhost:8100/wake_up         # 3~6초
 
 ---
 
+# ③ 앱(Flutter) 빌드
+
+> **프론트엔드는 새 브랜치 `front-remake`(worktree `mp-design`)에서 0부터 재작성한다.** Claude 디자인 시안을 유일 원본으로 삼은 재구축본이다. 앱 자체 문서는 [app/README.md](../app/README.md).
+
+## 현황(2026-07-13)
+
+- Flutter **3.44.6** / Dart 3.12.2. 폰트 Pretendard(본문)+Gaegu(손글씨)와 사진 에셋은 **레포에 번들**돼 있어 따로 받지 않는다.
+- 지금은 **Mock 구동**(`lib/mock.dart` 전역 싱글턴)이다. 실서버(REST+Socket.IO) 미연결 — 실물 교체는 다음 스텝이다.
+- `flutter analyze` 0, 웹 빌드 성공, 골든 15 + 시나리오 8 통과.
+
+## 1. 워크트리로 이동
+
+```bash
+cd mp-design            # front-remake 브랜치의 worktree
+cd app
+```
+
+## 2. 의존성
+
+```bash
+flutter --version        # 3.44.6 확인
+flutter pub get
+```
+
+## 3. 실행
+
+```bash
+flutter run -d chrome    # 웹 데모 (Mock 구동)
+flutter run -d android   # 갤럭시 실기
+```
+
+크로스플랫폼은 제외다([SPEC.md](SPEC.md)). 배포 타깃은 Android(갤럭시) 단일이며, `-d chrome`은 데모·리뷰용이다.
+
+---
+
 # 확인 체크리스트
 
 | | 확인 방법 | 통과 기준 | 상태 |
@@ -458,5 +493,6 @@ curl -X POST localhost:8100/wake_up         # 3~6초
 | vLLM 점유 | `nvidia-smi` | **약 8~10GB** (18GB면 실패) | ✅ ~9.8GB (SD 합 ~17GB) |
 | vLLM sleep | `curl localhost:8100/is_sleeping` | 404 아님 | ✅ `is_sleeping:false` |
 | GPU 실추론 E2E | 앱 VM에서 펫활동·캡션(LLM)+그림일기(SD) | 실제 출력 | ✅ EXAONE JSON + 512px PNG |
+| 앱 빌드 | `mp-design/app`에서 `flutter pub get && flutter run -d chrome` | Mock 홈 뜸 | ✅ 웹 빌드 성공 (Mock) |
 
 > **PowerShell에서는 `curl`이 `Invoke-WebRequest`의 별칭이다.** 진짜 curl은 `curl.exe`로 부른다. VM 안(리눅스 셸)에서는 그냥 `curl`이 맞다.
