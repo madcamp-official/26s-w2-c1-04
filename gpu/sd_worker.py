@@ -13,12 +13,13 @@ import asyncio
 import hashlib
 import io
 import logging
+import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import date
 from typing import Any, Literal
 
-from fastapi import FastAPI, File, HTTPException, Response, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Response, UploadFile
 from PIL import Image, ImageDraw, ImageFont
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -38,6 +39,11 @@ class WorkerSettings(BaseSettings):
     inference_steps: int = 28
     guidance_scale: float = 7.0
     stub: bool = False
+    # LoRA 화풍 학습
+    lora_dir: str = "/data/lora"
+    lora_steps: int = 300
+    lora_rank: int = 8
+    lora_lr: float = 1e-4
 
 
 class StyleIn(BaseModel):
@@ -63,6 +69,12 @@ _generation_lock = asyncio.Lock()
 _BLIP_MODEL = "Salesforce/blip-image-captioning-base"
 _blip: Any | None = None  # (processor, model)
 _blip_error: str | None = None
+
+# LoRA 화풍 학습/서빙. 커플 손그림으로 SD 1.5 LoRA를 학습해 learned 일기에 적용한다.
+# 학습·렌더 모두 트리거 토큰을 프롬프트에 넣어 화풍을 호출한다.
+_LORA_TRIGGER = "sksdoodle"
+_LORA_TRAIN_PROMPT = f"{_LORA_TRIGGER}, a hand-drawn doodle in a personal sketchy style"
+_active_lora: str | None = None  # 현재 _pipeline 에 로드된 어댑터 경로(없으면 None)
 
 _ACTIVITY_PROMPTS = {
     "eating": "happily eating a small meal",
@@ -163,6 +175,19 @@ def _stub_image(body: DiaryImageIn) -> Image.Image:
     return image
 
 
+def _set_lora(path: str | None) -> None:
+    """_pipeline 에 로드된 LoRA 어댑터를 path 로 맞춘다(없으면 언로드). 락 안에서 호출."""
+    global _active_lora
+    if path == _active_lora:
+        return
+    if _active_lora is not None:
+        _pipeline.unload_lora_weights()
+        _active_lora = None
+    if path is not None:
+        _pipeline.load_lora_weights(path)
+        _active_lora = path
+
+
 def _generate(body: DiaryImageIn) -> Image.Image:
     if settings.stub:
         return _stub_image(body)
@@ -171,7 +196,12 @@ def _generate(body: DiaryImageIn) -> Image.Image:
 
     import torch
 
+    learned = body.style.kind == "learned" and bool(body.style.weights_path)
+    _set_lora(body.style.weights_path if learned else None)
+
     prompt, negative = build_prompt(body)
+    if learned:
+        prompt = f"{_LORA_TRIGGER}, {prompt}"
     generator = torch.Generator(device=settings.device).manual_seed(_seed(body))
     result = _pipeline(
         prompt=prompt,
@@ -183,6 +213,120 @@ def _generate(body: DiaryImageIn) -> Image.Image:
         generator=generator,
     )
     return result.images[0].convert("RGB")
+
+
+def _train_lora(images: list[bytes], out_dir: str) -> dict[str, Any]:
+    """커플 손그림 여러 장으로 SD 1.5 LoRA(UNet attention)를 학습해 out_dir 에 저장한다.
+
+    상주 _pipeline 컴포넌트(VAE/텍스트인코더/UNet)를 재사용한다. peak VRAM ~6GB
+    (실측 2026-07-11). 학습이 끝나면 임시 어댑터를 제거해 기본 화풍을 되돌린다.
+    """
+    import numpy as np
+    import torch
+    import torch.nn.functional as F
+    from diffusers import DDPMScheduler, StableDiffusionPipeline
+    from diffusers.utils import convert_state_dict_to_diffusers
+    from peft import LoraConfig
+    from peft.utils import get_peft_model_state_dict
+
+    if _pipeline is None:
+        raise RuntimeError(_load_error or "SD 파이프라인이 아직 로드되지 않았다")
+
+    device = settings.device
+    pipe = _pipeline
+    unet, vae, text_encoder, tokenizer = (
+        pipe.unet,
+        pipe.vae,
+        pipe.text_encoder,
+        pipe.tokenizer,
+    )
+    noise_scheduler = DDPMScheduler.from_config(pipe.scheduler.config)
+
+    adapter = "train_tmp"
+    unet.add_adapter(
+        LoraConfig(
+            r=settings.lora_rank,
+            lora_alpha=settings.lora_rank,
+            init_lora_weights="gaussian",
+            target_modules=["to_k", "to_q", "to_v", "to_out.0"],
+        ),
+        adapter_name=adapter,
+    )
+    vae.requires_grad_(False)
+    text_encoder.requires_grad_(False)
+    lora_params = []
+    for name, param in unet.named_parameters():
+        if "lora" in name:
+            param.requires_grad_(True)
+            param.data = param.data.float()  # 학습 파라미터는 fp32 로(안정)
+            lora_params.append(param)
+        else:
+            param.requires_grad_(False)
+
+    try:
+        import bitsandbytes as bnb
+
+        optimizer = bnb.optim.AdamW8bit(lora_params, lr=settings.lora_lr)
+    except Exception:
+        optimizer = torch.optim.AdamW(lora_params, lr=settings.lora_lr)
+
+    tokens = tokenizer(
+        _LORA_TRAIN_PROMPT,
+        padding="max_length",
+        max_length=tokenizer.model_max_length,
+        truncation=True,
+        return_tensors="pt",
+    ).input_ids.to(device)
+    with torch.no_grad():
+        enc = text_encoder(tokens)[0]
+
+    def prep(data: bytes) -> torch.Tensor:
+        image = Image.open(io.BytesIO(data)).convert("RGB").resize(
+            (settings.width, settings.height)
+        )
+        arr = np.asarray(image, dtype=np.float32) / 127.5 - 1.0
+        return torch.from_numpy(arr).permute(2, 0, 1)
+
+    tensors = [prep(b) for b in images]
+    scaler = torch.cuda.amp.GradScaler()
+    unet.train()
+    steps = settings.lora_steps
+    last_loss = 0.0
+    for step in range(steps):
+        img = tensors[step % len(tensors)].unsqueeze(0).to(device, dtype=torch.float16)
+        with torch.no_grad():
+            latents = vae.encode(img).latent_dist.sample() * vae.config.scaling_factor
+        noise = torch.randn_like(latents)
+        timesteps = torch.randint(
+            0, noise_scheduler.config.num_train_timesteps, (latents.shape[0],), device=device
+        ).long()
+        noisy = noise_scheduler.add_noise(latents, noise, timesteps)
+        with torch.autocast("cuda", dtype=torch.float16):
+            pred = unet(noisy, timesteps, encoder_hidden_states=enc).sample
+            loss = F.mse_loss(pred.float(), noise.float())
+        optimizer.zero_grad()
+        scaler.scale(loss).backward()
+        scaler.step(optimizer)
+        scaler.update()
+        last_loss = float(loss.detach())
+
+    os.makedirs(out_dir, exist_ok=True)
+    state = convert_state_dict_to_diffusers(
+        get_peft_model_state_dict(unet, adapter_name=adapter)
+    )
+    StableDiffusionPipeline.save_lora_weights(
+        save_directory=out_dir, unet_lora_layers=state, safe_serialization=True
+    )
+
+    unet.delete_adapters(adapter)  # 상주 파이프라인을 기본 화풍으로 되돌림
+    unet.eval()
+    torch.cuda.empty_cache()
+    return {
+        "weights_path": out_dir,
+        "steps": steps,
+        "num_images": len(images),
+        "final_loss": round(last_loss, 4),
+    }
 
 
 def _load_blip() -> None:
@@ -271,12 +415,42 @@ async def caption(file: UploadFile = File(...)) -> dict[str, str]:
     return {"caption": text}
 
 
+@app.post("/train/style")
+async def train_style(
+    style_id: str = Form(...),
+    files: list[UploadFile] = File(...),
+) -> dict[str, Any]:
+    """커플 손그림들로 그룹 화풍 LoRA 를 학습한다. weights_path 를 백엔드가 style_models 에 저장."""
+    if settings.stub:
+        return {
+            "weights_path": os.path.join(settings.lora_dir, style_id),
+            "steps": 0,
+            "num_images": len(files),
+            "stub": True,
+        }
+    if _pipeline is None:
+        raise HTTPException(
+            status_code=503, detail=_load_error or "Stable Diffusion model is loading"
+        )
+    images = [b for b in [await f.read() for f in files] if b]
+    if len(images) < 5:
+        raise HTTPException(status_code=400, detail="need at least 5 drawings to train")
+    out_dir = os.path.join(settings.lora_dir, style_id)
+    async with _generation_lock:  # 학습 중 SD 생성 차단(VRAM 안전장치)
+        try:
+            info = await asyncio.to_thread(_train_lora, images, out_dir)
+        except Exception as exc:
+            logger.exception("LoRA 학습 실패")
+            raise HTTPException(status_code=503, detail="lora training failed") from exc
+    return info
+
+
 @app.post("/generate/diary")
 async def generate_diary(body: DiaryImageIn) -> Response:
-    if body.style.kind == "learned":
-        # LoRA 학습·동적 어댑터 전환은 PT-5/PT-6b(P2)다. 잘못 기본 화풍으로
-        # 생성해 learned라고 기록하는 것보다 명시적으로 거부한다.
-        raise HTTPException(status_code=501, detail="learned style is not enabled")
+    if body.style.kind == "learned" and not body.style.weights_path:
+        # learned 라면서 가중치 경로가 없으면 기본 화풍으로 렌더하고 learned 라 속이는
+        # 것보다 명시적으로 거부한다.
+        raise HTTPException(status_code=400, detail="learned style requires weights_path")
     if not settings.stub and _pipeline is None:
         raise HTTPException(
             status_code=503,

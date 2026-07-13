@@ -237,6 +237,10 @@ async def create_doodle(
             services.generate_doodle_caption, doodle.id, caption_bytes
         )
 
+    # 손그림이 쌓이면 그룹 화풍(LoRA)을 학습한다. 임계 미달이면 즉시 반환하므로 저렴하다.
+    if drawing_bytes is not None:
+        background_tasks.add_task(services.maybe_train_learned_style, group_id)
+
     payload: dict[str, Any] = {
         "doodle_id": str(doodle.id),
         "sender_id": str(user.id),

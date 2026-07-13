@@ -86,6 +86,9 @@ class ImageClient(Protocol):
         weights_path: str | None,
     ) -> bytes: ...
     async def image_caption(self, image_bytes: bytes) -> str: ...
+    async def train_style(
+        self, style_id: str, images: list[bytes]
+    ) -> dict[str, object]: ...
     async def health(self) -> bool: ...
 
 
@@ -137,6 +140,11 @@ class StubImageClient:
         output = io.BytesIO()
         image.save(output, "PNG")
         return output.getvalue()
+
+    async def train_style(
+        self, style_id: str, images: list[bytes]
+    ) -> dict[str, object]:
+        return {"weights_path": f"lora/{style_id}", "num_images": len(images), "steps": 0}
 
     async def health(self) -> bool:
         return True
@@ -312,6 +320,23 @@ class HttpImageClient:
             # image_url/caption이 NOT NULL인 일기에 1x1 빈 이미지를 저장하지 않는다.
             logger.warning("일기 그림 생성 실패. 그날 일기를 생성하지 않는다.", exc_info=True)
             raise ImageGenerationError("sd-worker 일기 이미지 생성 실패") from exc
+
+    async def train_style(
+        self, style_id: str, images: list[bytes]
+    ) -> dict[str, object]:
+        """손그림들로 그룹 화풍 LoRA 를 학습한다. 학습은 수 분 걸리므로 별도 타임아웃."""
+        files = [
+            ("files", (f"d{i}.png", data, "image/png"))
+            for i, data in enumerate(images)
+        ]
+        async with httpx.AsyncClient(timeout=900.0) as client:
+            resp = await client.post(
+                f"{self._base}/train/style",
+                data={"style_id": style_id},
+                files=files,
+            )
+            resp.raise_for_status()
+        return dict(resp.json())
 
     async def health(self) -> bool:
         try:

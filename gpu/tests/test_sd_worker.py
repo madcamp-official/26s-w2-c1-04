@@ -25,6 +25,12 @@ VALID = {
 }
 
 
+def _png_bytes() -> bytes:
+    buf = io.BytesIO()
+    Image.new("RGB", (64, 64), (240, 240, 235)).save(buf, "PNG")
+    return buf.getvalue()
+
+
 def main() -> int:
     failed = 0
 
@@ -58,13 +64,33 @@ def main() -> int:
             client.post("/generate/diary", json=bad).status_code == 422,
         )
 
+        # learned + weights_path: 스텁도 200(화풍 어댑터는 실모델에서만 적용).
         learned = dict(VALID, style={"kind": "learned", "weights_path": "/tmp/lora"})
         check(
-            "P2 learned 명시적 501",
-            client.post("/generate/diary", json=learned).status_code == 501,
+            "learned+weights 200",
+            client.post("/generate/diary", json=learned).status_code == 200,
+        )
+        # learned 인데 weights_path 없음 → 400(기본 화풍으로 속이지 않음).
+        learned_bad = dict(VALID, style={"kind": "learned", "weights_path": None})
+        check(
+            "learned without weights 400",
+            client.post("/generate/diary", json=learned_bad).status_code == 400,
         )
 
-    total = 6
+        # /train/style 스텁 계약(파일 5장 미만이어도 스텁은 배선만 확인).
+        train_files = [
+            ("files", (f"d{i}.png", _png_bytes(), "image/png")) for i in range(3)
+        ]
+        train = client.post(
+            "/train/style", data={"style_id": "g7-v1"}, files=train_files
+        )
+        check("train/style 200(stub)", train.status_code == 200, train.text[:100])
+        check(
+            "train weights_path 반환",
+            train.status_code == 200 and "weights_path" in train.json(),
+        )
+
+    total = 9
     print(f"\n{total - failed}/{total} passed")
     return 1 if failed else 0
 

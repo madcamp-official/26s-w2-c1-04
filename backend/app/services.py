@@ -461,6 +461,149 @@ async def _active_style(session: AsyncSession, group_id: int) -> StyleModel:
     return default
 
 
+# 화풍 학습 임계값. SPEC 6.3: 그룹당 손그림 20장 이상이면 LoRA 학습이 의미 있다.
+# GPU /train/style 최소 요구는 5장. 재학습은 새 그림 STEP 장이 더 쌓였을 때만.
+LEARN_MIN_DRAWINGS = 20
+LEARN_RETRAIN_STEP = 20
+LEARN_MAX_SAMPLES = 60  # 학습에 쓸 최신 손그림 상한(오래 걸리지 않게)
+
+
+async def _collect_drawings(
+    session: AsyncSession, group_id: int, limit: int
+) -> tuple[list[bytes], int]:
+    """그룹 손그림 낙서의 PNG 바이트를 최신순으로 모은다. (바이트들, 전체 그림 수)."""
+    total = (
+        await session.execute(
+            select(func.count(Doodle.id)).where(
+                Doodle.group_id == group_id,
+                Doodle.content_type == ContentType.DRAWING,
+            )
+        )
+    ).scalar_one()
+    rows = (
+        await session.execute(
+            select(Doodle.id)
+            .where(
+                Doodle.group_id == group_id,
+                Doodle.content_type == ContentType.DRAWING,
+            )
+            .order_by(Doodle.created_at.desc())
+            .limit(limit)
+        )
+    ).scalars().all()
+    base = media.group_dir(group_id)
+    images: list[bytes] = []
+    for did in rows:
+        path = base / f"{did}_draw.png"
+        if path.exists():
+            images.append(path.read_bytes())
+    return images, int(total)
+
+
+async def train_learned_style(group_id: int, min_drawings: int) -> int | None:
+    """그룹 손그림으로 LoRA 화풍을 학습해 새 learned StyleModel(version+1, ready)을 만든다.
+
+    이미 학습 중이거나 그림이 부족하면 아무것도 하지 않는다. 실패하면 status=failed.
+    학습은 수 분 걸리므로 세션 밖(GPU 호출)과 안(상태 기록)을 분리한다.
+    """
+    async with session_factory()() as session:
+        in_progress = (
+            await session.execute(
+                select(StyleModel.id).where(
+                    StyleModel.group_id == group_id,
+                    StyleModel.status == StyleStatus.TRAINING,
+                )
+            )
+        ).first()
+        if in_progress is not None:
+            return None
+
+        images, _ = await _collect_drawings(session, group_id, LEARN_MAX_SAMPLES)
+        if len(images) < max(min_drawings, 5):
+            return None
+
+        latest = (
+            await session.execute(
+                select(StyleModel)
+                .where(
+                    StyleModel.group_id == group_id,
+                    StyleModel.kind == StyleKind.LEARNED,
+                )
+                .order_by(StyleModel.version.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        next_version = (latest.version + 1) if latest is not None else 1
+
+        style = StyleModel(
+            group_id=group_id,
+            kind=StyleKind.LEARNED,
+            version=next_version,
+            status=StyleStatus.TRAINING,
+            trained_sample_count=len(images),
+        )
+        session.add(style)
+        await session.commit()
+        style_id = style.id  # 세션 밖에서 쓸 PK
+
+    gpu_style_id = f"g{group_id}-v{next_version}"
+    try:
+        info = await gpu.get_image_client().train_style(gpu_style_id, images)
+    except Exception:
+        logger.exception("LoRA 학습 실패 group=%s v=%s", group_id, next_version)
+        async with session_factory()() as session:
+            failed = await session.get(StyleModel, style_id)
+            if failed is not None:
+                failed.status = StyleStatus.FAILED
+                await session.commit()
+        return None
+
+    async with session_factory()() as session:
+        ready = await session.get(StyleModel, style_id)
+        if ready is None:
+            return None
+        ready.weights_path = str(info.get("weights_path") or "")
+        ready.status = StyleStatus.READY
+        ready.trained_at = _real_now()
+        ready.trained_sample_count = int(info.get("num_images", len(images)))
+        await session.commit()
+    logger.info(
+        "LoRA 화풍 준비 group=%s version=%s samples=%s",
+        group_id,
+        next_version,
+        len(images),
+    )
+    return style_id
+
+
+async def maybe_train_learned_style(group_id: int) -> None:
+    """손그림 업로드 후 호출되는 자동 트리거. 임계·재학습 간격을 만족할 때만 학습한다."""
+    async with session_factory()() as session:
+        images, total = await _collect_drawings(session, group_id, 1)
+        if total < LEARN_MIN_DRAWINGS:
+            return
+        latest = (
+            await session.execute(
+                select(StyleModel)
+                .where(
+                    StyleModel.group_id == group_id,
+                    StyleModel.kind == StyleKind.LEARNED,
+                )
+                .order_by(StyleModel.version.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+    # 학습된 적 없으면 지금, 있으면 새 그림이 STEP 장 이상 쌓였을 때만 재학습.
+    if latest is not None and latest.status in (
+        StyleStatus.TRAINING,
+        StyleStatus.PENDING,
+    ):
+        return
+    if latest is not None and total - latest.trained_sample_count < LEARN_RETRAIN_STEP:
+        return
+    await train_learned_style(group_id, LEARN_MIN_DRAWINGS)
+
+
 async def generate_diary(pet_id: int, entry_date: date) -> int | None:
     """하루치 활동을 그림 한 장 + 캡션으로 묶는다 (PT-6a).
 

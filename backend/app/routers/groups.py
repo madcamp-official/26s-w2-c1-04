@@ -19,11 +19,12 @@ from __future__ import annotations
 
 import secrets
 
-from fastapi import APIRouter, Response
+from fastapi import APIRouter, BackgroundTasks, Response
 from sqlalchemy import select
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from .. import services
 from ..deps import CurrentUser, SessionDep
 from ..errors import MYSQL_SIGNAL_ERRNO, ApiError, mysql_errno
 from ..models import (
@@ -312,3 +313,55 @@ async def leave_group(
         # member_count 는 AFTER DELETE 트리거가 내린다(schema.sql). 여기서 손대지 않는다.
         await session.commit()
     return Response(status_code=204)
+
+
+async def _latest_learned(
+    session: AsyncSession, group_id: int
+) -> StyleModel | None:
+    return (
+        await session.execute(
+            select(StyleModel)
+            .where(
+                StyleModel.group_id == group_id,
+                StyleModel.kind == StyleKind.LEARNED,
+            )
+            .order_by(StyleModel.version.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+
+
+def _style_status(learned: StyleModel | None) -> dict[str, object]:
+    if learned is None:
+        return {"status": "none", "version": 0, "trained_sample_count": 0}
+    return {
+        "status": learned.status.value,
+        "version": learned.version,
+        "trained_sample_count": learned.trained_sample_count,
+        "trained_at": learned.trained_at.isoformat() if learned.trained_at else None,
+    }
+
+
+@router.get("/groups/{group_id}/style")
+async def get_style(
+    group_id: int, user: CurrentUser, session: SessionDep
+) -> dict[str, object]:
+    """현재 그룹 화풍(LoRA) 학습 상태. none/training/ready/failed."""
+    await _require_member(session, user.id, group_id)
+    return _style_status(await _latest_learned(session, group_id))
+
+
+@router.post("/groups/{group_id}/style/train", status_code=202)
+async def train_style(
+    group_id: int,
+    user: CurrentUser,
+    session: SessionDep,
+    background_tasks: BackgroundTasks,
+) -> dict[str, object]:
+    """그룹 화풍 학습을 수동으로 건다(데모용). 손그림 5장 이상이면 백그라운드로 학습.
+
+    자동 트리거(손그림 20장)와 달리 임계를 5장으로 낮춰 즉시 시연할 수 있다.
+    이미 학습 중이면 중복 실행하지 않는다(서비스에서 가드)."""
+    await _require_member(session, user.id, group_id)
+    background_tasks.add_task(services.train_learned_style, group_id, 5)
+    return {"accepted": True, **_style_status(await _latest_learned(session, group_id))}
