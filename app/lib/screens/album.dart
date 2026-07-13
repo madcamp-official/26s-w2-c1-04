@@ -244,7 +244,9 @@ class _AlbumScreenState extends State<AlbumScreen> {
           onTap: () => Navigator.of(context).push(
             MaterialPageRoute(builder: (_) => ViewerScreen(doodle: d)),
           ),
-          child: d.asset != null ? _photoCard(d) : _textCard(d),
+          child: (d.asset != null || d.imageUrl != null)
+              ? _photoCard(d)
+              : _textCard(d),
         ),
       ],
     );
@@ -258,7 +260,7 @@ class _AlbumScreenState extends State<AlbumScreen> {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            Image.asset(d.asset!, fit: BoxFit.cover),
+            doodleImage(d),
             if (d.caption != null)
               Positioned(
                 left: 12,

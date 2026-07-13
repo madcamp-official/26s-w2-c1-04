@@ -2,6 +2,9 @@
 // + 4c(답장 보내기 · 1d와 동일한 캔버스, paperReply 바탕) 변형.
 // 실제 프리핸드 드로잉: 스트로크(색·굵기·포인트) 기록 → CustomPainter로 라운드캡 페인팅.
 
+import 'dart:convert';
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 
 import '../mock.dart';
@@ -75,18 +78,83 @@ class _DrawCanvasScreenState extends State<DrawCanvasScreen> {
     setState(() => _strokes.last.points.add(at));
   }
 
-  void _send() {
-    final d = Doodle(
-      id: 'me-${DateTime.now().millisecondsSinceEpoch}',
-      fromMe: true,
-      type: DoodleType.drawing,
-      text: '내 낙서',
-      when: '방금 전',
-      ephemeral: _vanish,
+  bool _sending = false;
+
+  Future<void> _send() async {
+    if (_sending) return;
+    if (mock.real) {
+      setState(() => _sending = true);
+      final size = MediaQuery.of(context).size;
+      try {
+        final png = await _rasterStrokes(size);
+        await mock.sendDrawing(png, _strokeJson(size), ephemeral: _vanish);
+      } catch (_) {}
+      if (mounted) Navigator.of(context).pop();
+      return;
+    }
+    // 데모
+    mock.doodles.insert(
+      0,
+      Doodle(
+        id: 'me-${DateTime.now().millisecondsSinceEpoch}',
+        fromMe: true,
+        type: DoodleType.drawing,
+        text: '내 낙서',
+        when: '방금 전',
+        ephemeral: _vanish,
+      ),
     );
-    mock.doodles.insert(0, d);
-    mock.markViewed(d); // 리스너 갱신
+    mock.refresh();
     Navigator.of(context).pop();
+  }
+
+  String _hex(Color c) =>
+      c.toARGB32().toRadixString(16).substring(2).toUpperCase();
+
+  String _strokeJson(Size size) => jsonEncode({
+        'canvas': {'w': size.width.round(), 'h': size.height.round()},
+        'duration_ms': 1000,
+        'strokes': [
+          for (final s in _strokes)
+            {
+              'pen': s.tool.name,
+              'color': _hex(s.color),
+              'width': s.width.round().clamp(1, 40),
+              'points': [
+                for (final p in s.points) [p.dx.round(), p.dy.round(), 0]
+              ],
+            }
+        ],
+      });
+
+  Future<List<int>> _rasterStrokes(Size size) async {
+    final rec = ui.PictureRecorder();
+    final canvas = Canvas(rec);
+    final w = size.width.toInt().clamp(1, 2000);
+    final h = size.height.toInt().clamp(1, 2000);
+    canvas.drawRect(
+        Rect.fromLTWH(0, 0, w.toDouble(), h.toDouble()),
+        Paint()..color = Colors.white);
+    for (final s in _strokes) {
+      final paint = Paint()
+        ..color = s.tool == _Tool.eraser ? Colors.white : s.color
+        ..strokeWidth = s.width
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round
+        ..style = PaintingStyle.stroke;
+      if (s.points.length == 1) {
+        canvas.drawPoints(ui.PointMode.points, s.points, paint);
+      } else {
+        final path = Path()..moveTo(s.points.first.dx, s.points.first.dy);
+        for (final p in s.points.skip(1)) {
+          path.lineTo(p.dx, p.dy);
+        }
+        canvas.drawPath(path, paint);
+      }
+    }
+    final img = await rec.endRecording().toImage(w, h);
+    final bytes = await img.toByteData(format: ui.ImageByteFormat.png);
+    return bytes!.buffer.asUint8List();
   }
 
   @override

@@ -416,10 +416,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               )
             else
-              Image.asset(
-                d.asset ?? 'assets/photos/photo_sky.png',
-                fit: BoxFit.cover,
-              ),
+              doodleImage(d),
             Positioned(
               right: 4,
               bottom: 4,

@@ -58,9 +58,10 @@ class _ViewerScreenState extends State<ViewerScreen> {
           return Stack(
             fit: StackFit.expand,
             children: [
-              // ---- 배경: 사진 또는 텍스트 낙서
-              if (d.type == DoodleType.photo && d.asset != null)
-                Image.asset(d.asset!, fit: BoxFit.cover)
+              // ---- 배경: 사진/그림(asset 또는 network) 또는 텍스트 낙서
+              if (d.type != DoodleType.text &&
+                  (d.asset != null || d.imageUrl != null))
+                doodleImage(d)
               else
                 Container(
                   color: blushSoft,

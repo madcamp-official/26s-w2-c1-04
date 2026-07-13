@@ -26,14 +26,16 @@ class _NicknameScreenState extends State<NicknameScreen> {
     super.dispose();
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     final v = _nick.text.trim();
-    if (v.isNotEmpty) mock.partnerNick = v;
-    mock.completeOnboarding(name: widget.myName);
+    if (v.isNotEmpty) mock.setPartnerNick(v);
+    await mock.completeOnboarding(name: widget.myName);
+    if (mounted) Navigator.of(context).popUntil((r) => r.isFirst);
   }
 
-  void _skip() {
-    mock.completeOnboarding(name: widget.myName);
+  Future<void> _skip() async {
+    await mock.completeOnboarding(name: widget.myName);
+    if (mounted) Navigator.of(context).popUntil((r) => r.isFirst);
   }
 
   @override
