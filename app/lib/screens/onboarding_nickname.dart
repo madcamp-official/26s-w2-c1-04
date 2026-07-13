@@ -29,12 +29,13 @@ class _NicknameScreenState extends State<NicknameScreen> {
   Future<void> _submit() async {
     final v = _nick.text.trim();
     if (v.isNotEmpty) mock.setPartnerNick(v);
-    await mock.completeOnboarding(name: widget.myName);
+    // 실서버 흐름은 그룹 화면에서 이미 온보딩을 마쳤다(중복 생성 방지).
+    if (!mock.onboarded) await mock.completeOnboarding(name: widget.myName);
     if (mounted) Navigator.of(context).popUntil((r) => r.isFirst);
   }
 
   Future<void> _skip() async {
-    await mock.completeOnboarding(name: widget.myName);
+    if (!mock.onboarded) await mock.completeOnboarding(name: widget.myName);
     if (mounted) Navigator.of(context).popUntil((r) => r.isFirst);
   }
 

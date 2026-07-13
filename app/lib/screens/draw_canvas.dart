@@ -80,6 +80,60 @@ class _DrawCanvasScreenState extends State<DrawCanvasScreen> {
 
   bool _sending = false;
 
+  // 텍스트 낙서 — 짧은 글을 입력받아 sendText 로 전송.
+  Future<void> _sendTextDoodle() async {
+    final ctrl = TextEditingController();
+    final text = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        title: Text('텍스트 낙서', style: sans(15, w: FontWeight.w800, c: coral)),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          maxLines: 3,
+          minLines: 1,
+          textInputAction: TextInputAction.done,
+          onSubmitted: (_) => Navigator.of(ctx).pop(ctrl.text.trim()),
+          style: sans(14),
+          decoration: InputDecoration(
+            hintText: '한마디 남겨보세요…',
+            hintStyle: sans(13.5, c: muted),
+            filled: true,
+            fillColor: paper,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(13),
+              borderSide: BorderSide.none,
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text('취소', style: sans(13.5, w: FontWeight.w600, c: muted)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(ctrl.text.trim()),
+            child: Text('보내기', style: sans(13.5, w: FontWeight.w800, c: coral)),
+          ),
+        ],
+      ),
+    );
+    if (text == null || text.isEmpty) return;
+    try {
+      await mock.sendText(text, ephemeral: _vanish, parentId: widget.replyTo?.id);
+      if (mounted) Navigator.of(context).pop();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('전송에 실패했어요. 다시 시도해 주세요', style: sans(13))),
+        );
+      }
+    }
+  }
+
   Future<void> _send() async {
     if (_sending) return;
     if (mock.real) {
@@ -301,6 +355,24 @@ class _DrawCanvasScreenState extends State<DrawCanvasScreen> {
                           GestureDetector(
                             onTap: () => setState(() => _vanish = !_vanish),
                             child: _vanishToggle(),
+                          ),
+                          const SizedBox(height: 12),
+                          // 텍스트 낙서 보내기
+                          GestureDetector(
+                            onTap: _sendTextDoodle,
+                            child: Container(
+                              width: 46,
+                              height: 46,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                shape: BoxShape.circle,
+                                border: Border.all(color: coralHot, width: 2.5),
+                              ),
+                              alignment: Alignment.center,
+                              child: Text('T',
+                                  style: sans(20,
+                                      w: FontWeight.w800, c: coralHot)),
+                            ),
                           ),
                         ],
                       ),
