@@ -53,14 +53,16 @@ class DiaryScreen extends StatelessWidget {
                 Expanded(
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.fromLTRB(24, 14, 24, 0),
-                    child: Column(
-                      children: [
-                        for (int i = 0; i < mock.diary.length; i++) ...[
-                          if (i > 0) const SizedBox(height: 14),
-                          _DiaryCard(entry: mock.diary[i]),
-                        ],
-                      ],
-                    ),
+                    child: mock.diary.isEmpty
+                        ? _emptyDiary(mock.petName)
+                        : Column(
+                            children: [
+                              for (int i = 0; i < mock.diary.length; i++) ...[
+                                if (i > 0) const SizedBox(height: 14),
+                                _DiaryCard(entry: mock.diary[i]),
+                              ],
+                            ],
+                          ),
                   ),
                 ),
                 // ---- 하단 페이지 도트
@@ -91,6 +93,19 @@ class DiaryScreen extends StatelessWidget {
       ),
     );
   }
+
+  Widget _emptyDiary(String petName) => Padding(
+        padding: const EdgeInsets.only(top: 80),
+        child: Column(
+          children: [
+            Text('아직 그린 일기가 없어요',
+                style: sans(15, w: FontWeight.w700, c: muted)),
+            const SizedBox(height: 8),
+            Text('$petName가 너희 낙서를 보고 그림을 그리면\n여기에 하나씩 쌓여요',
+                textAlign: TextAlign.center, style: hand(15, c: goldText)),
+          ],
+        ),
+      );
 
   Widget _dot() => Container(
         width: 6,
@@ -147,23 +162,40 @@ class _DiaryCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
-          // 점선 프레임 + 손그림 장면
+          // 점선 프레임 + (실서버 이미지 or 손그림 장면)
           SizedBox(
             width: double.infinity,
-            height: scene0 ? 130 : 110,
+            height: entry.isRemote ? 150 : (scene0 ? 130 : 110),
             child: CustomPaint(
               painter: _DashedFramePainter(),
-              child: Center(
-                child: scene0
-                    ? const CustomPaint(
-                        size: Size(114 * 200 / 110, 114),
-                        painter: _HoldingHandsScene(),
-                      )
-                    : const CustomPaint(
-                        size: Size(94 * 200 / 90, 94),
-                        painter: _TteokbokkiScene(),
+              child: entry.isRemote
+                  ? Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: Image.network(
+                          entry.imageUrl!,
+                          fit: BoxFit.cover,
+                          width: double.infinity,
+                          errorBuilder: (ctx, err, st) => Center(
+                              child: Text('그림을 불러오지 못했어요',
+                                  style: hand(14, c: goldText))),
+                          loadingBuilder: (ctx, child, p) =>
+                              p == null ? child : const SizedBox.shrink(),
+                        ),
                       ),
-              ),
+                    )
+                  : Center(
+                      child: scene0
+                          ? const CustomPaint(
+                              size: Size(114 * 200 / 110, 114),
+                              painter: _HoldingHandsScene(),
+                            )
+                          : const CustomPaint(
+                              size: Size(94 * 200 / 90, 94),
+                              painter: _TteokbokkiScene(),
+                            ),
+                    ),
             ),
           ),
           const SizedBox(height: 10),

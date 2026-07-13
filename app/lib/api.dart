@@ -145,6 +145,26 @@ class Api {
     return [for (final it in items) doodleFrom(it as Map)];
   }
 
+  // ---- 그림 일기 · 월간 레포트 ----
+  Future<List<Map<String, dynamic>>> diaries(String petId,
+      {int limit = 20}) async {
+    final j = await _get('/pets/$petId/diaries?limit=$limit') as Map;
+    final items = (j['items'] as List? ?? const []);
+    return [for (final it in items) Map<String, dynamic>.from(it as Map)];
+  }
+
+  /// 가장 최근 달의 레포트. 없으면 null(신규 그룹).
+  Future<Map<String, dynamic>?> latestReport(String gid) async {
+    final j = await _get('/groups/$gid/reports') as Map;
+    final items = (j['items'] as List? ?? const []);
+    if (items.isEmpty) return null;
+    final months = [for (final it in items) '${(it as Map)['report_month']}']
+      ..sort();
+    final month = months.last; // 최신 달
+    return Map<String, dynamic>.from(
+        await _get('/groups/$gid/reports/$month') as Map);
+  }
+
   Future<Doodle> getDoodle(String id) async =>
       doodleFrom(await _get('/doodles/$id') as Map);
 

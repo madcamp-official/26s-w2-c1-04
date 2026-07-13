@@ -48,12 +48,16 @@ class DiaryEntry {
     required this.caption,
     this.isNew = false,
     this.scene = 0, // 0: 손잡은 우리, 1: 떡볶이
+    this.imageUrl, // 실서버 생성 이미지(있으면 scene 대신 이걸 렌더)
   });
 
   final String dateLabel; // '7월 13일 맑음'
   final String caption;
   final bool isNew;
   final int scene;
+  final String? imageUrl;
+
+  bool get isRemote => imageUrl != null && imageUrl!.isNotEmpty;
 }
 
 class StoreItem {
@@ -137,9 +141,9 @@ class AppMock extends ChangeNotifier {
     return null;
   }
 
-  // ---- 그림 일기장 (4f)
-  final List<DiaryEntry> diary = const [
-    DiaryEntry(
+  // ---- 그림 일기장 (4f) — 실서버 모드에선 _loadAll 에서 교체된다.
+  final List<DiaryEntry> diary = [
+    const DiaryEntry(
       dateLabel: '7월 13일 맑음',
       caption: '오늘은 둘이 억새밭 얘기를 했다. 나도 데려가 줬으면…',
       isNew: true,
@@ -162,9 +166,9 @@ class AppMock extends ChangeNotifier {
     StoreItem('리본', 200),
   ];
 
-  // ---- 월간 레포트 (1f)
-  final int reportPhotos = 12, reportDrawings = 8, reportTexts = 5;
-  final int reportPokes = 47, reportDoodles = 25, reportAnswers = 30;
+  // ---- 월간 레포트 (1f) — 실서버 모드에선 _loadAll 에서 최신 달 값으로 교체.
+  int reportPhotos = 12, reportDrawings = 8, reportTexts = 5;
+  int reportPokes = 47, reportDoodles = 25, reportAnswers = 30;
 
   // ==== 실서버 모드 (api != null 이면 실물, null 이면 데모) ====
   Api? api;
@@ -246,6 +250,32 @@ class AppMock extends ChangeNotifier {
     doodles
       ..clear()
       ..addAll(await a.doodles(gid));
+    // 그림 일기 (서버 생성 이미지). 신규 그룹은 빈 리스트가 정상.
+    final ds = await a.diaries(petId!);
+    diary
+      ..clear()
+      ..addAll([
+        for (var i = 0; i < ds.length; i++)
+          DiaryEntry(
+            dateLabel: _diaryDateLabel('${ds[i]['entry_date'] ?? ''}'),
+            caption: '${ds[i]['caption'] ?? ''}',
+            isNew: i == 0,
+            imageUrl: _mediaUrl('${ds[i]['image_url'] ?? ''}'),
+          ),
+      ]);
+    // 월간 레포트 (최신 달). 없으면 0 으로.
+    final rep = await a.latestReport(gid);
+    if (rep != null) {
+      reportPhotos = (rep['photo_count'] as num?)?.toInt() ?? 0;
+      reportDrawings = (rep['drawing_count'] as num?)?.toInt() ?? 0;
+      reportTexts = (rep['text_count'] as num?)?.toInt() ?? 0;
+      reportPokes = (rep['poke_count'] as num?)?.toInt() ?? 0;
+      reportDoodles = reportPhotos + reportDrawings + reportTexts;
+      reportAnswers = 0; // 레포트엔 질문 답변 집계가 없다(백엔드 미제공)
+    } else {
+      reportPhotos = reportDrawings = reportTexts = 0;
+      reportPokes = reportDoodles = reportAnswers = 0;
+    }
     final q = await a.question(gid);
     question = '${q['text']}';
     myAnswer = q['my_answer'] as String?;
@@ -266,6 +296,19 @@ class AppMock extends ChangeNotifier {
     'waiting': '언제 오나 기다리고 있었어.',
   };
   String _activityUtterance(String key) => _activityText[key] ?? petBubble;
+
+  // 서버 image_url 을 절대 URL 로. 이미 http면 그대로, 상대경로면 호스트를 붙인다.
+  String _mediaUrl(String p) {
+    if (p.isEmpty) return '';
+    if (p.startsWith('http')) return p;
+    return api?.media(p) ?? p;
+  }
+
+  // '2026-07-13' → '7월 13일'. 파싱 실패하면 원문.
+  String _diaryDateLabel(String iso) {
+    final d = DateTime.tryParse(iso);
+    return d == null ? iso : '${d.month}월 ${d.day}일';
+  }
 
   Future<void> _onRtEvent(String event, Map data) async {
     switch (event) {
