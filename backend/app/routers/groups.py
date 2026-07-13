@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import secrets
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Response
 from sqlalchemy import select
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -285,3 +285,30 @@ async def set_nickname(
     group = await session.get(Group, group_id)
     assert group is not None
     return await _group_out(session, group)
+
+
+@router.post("/groups/{group_id}/leave", status_code=204)
+async def leave_group(
+    group_id: int,
+    user: CurrentUser,
+    session: SessionDep,
+) -> Response:
+    """그룹에서 나간다(커플 연결 끊기). 나가면 /me 의 group 이 null 이 되고,
+    member_count 가 하나 줄어 상대가 새로 초대할 수 있다.
+
+    남은 데이터(낙서·펫)는 그대로 둔다 — 상대가 남아 있을 수 있고, 캐스케이드 삭제는
+    되돌릴 수 없기 때문이다. 두 사람이 모두 나가면 그룹은 빈 채로 남는다(무해)."""
+    await _require_member(session, user.id, group_id)
+    member = (
+        await session.execute(
+            select(GroupMember).where(
+                GroupMember.group_id == group_id,
+                GroupMember.user_id == user.id,
+            )
+        )
+    ).scalar_one_or_none()
+    if member is not None:
+        await session.delete(member)
+        # member_count 는 AFTER DELETE 트리거가 내린다(schema.sql). 여기서 손대지 않는다.
+        await session.commit()
+    return Response(status_code=204)

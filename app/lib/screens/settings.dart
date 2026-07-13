@@ -156,9 +156,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       // ---- 로그아웃
                       GestureDetector(
                         behavior: HitTestBehavior.opaque,
-                        onTap: () {
-                          mock.resetToOnboarding();
-                          Navigator.of(context).popUntil((r) => r.isFirst);
+                        onTap: () async {
+                          await mock.logout();
+                          if (context.mounted) {
+                            Navigator.of(context).popUntil((r) => r.isFirst);
+                          }
                         },
                         child: Padding(
                           padding: const EdgeInsets.symmetric(vertical: 4),

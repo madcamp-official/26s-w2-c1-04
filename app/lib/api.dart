@@ -115,6 +115,13 @@ class Api {
       Map<String, dynamic>.from(
           await _post('/groups/join', {'invite_code': code}) as Map);
 
+  /// 그룹 나가기(커플 연결 끊기). 204 No Content 라 _post(JSON 파싱) 대신 직접 호출.
+  Future<void> leaveGroup(String gid) async {
+    final r =
+        await http.post(Uri.parse('$_base/groups/$gid/leave'), headers: _h);
+    if (r.statusCode >= 400) _fail(r);
+  }
+
   Future<void> updateMe(String displayName) async {
     await http.patch(Uri.parse('$_base/me'),
         headers: _h, body: jsonEncode({'display_name': displayName}));

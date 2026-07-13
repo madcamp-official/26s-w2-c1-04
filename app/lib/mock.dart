@@ -526,6 +526,25 @@ class AppMock extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 로그아웃 · 커플 연결 끊기. 실서버면 그룹을 나가고(멤버 삭제) 로컬 세션을 온보딩으로 되돌린다.
+  /// device_uid 는 유지 — 같은 계정으로 새 그룹을 만들거나 참여할 수 있다.
+  Future<void> logout() async {
+    if (real && groupId != null) {
+      try {
+        await api!.leaveGroup(groupId!);
+      } catch (_) {}
+    }
+    try {
+      rt?.dispose();
+    } catch (_) {}
+    rt = null;
+    groupId = null;
+    petId = null;
+    partnerUserId = null;
+    onboarded = false;
+    notifyListeners();
+  }
+
   /// 온보딩 완료. 실서버면 그룹 생성 또는 참여를 서버에 반영한다.
   Future<void> completeOnboarding({String? name, String? joinCode}) async {
     if (name != null && name.isNotEmpty) myName = name;
