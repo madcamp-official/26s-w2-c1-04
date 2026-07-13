@@ -514,3 +514,31 @@ class MonthlyReport(Base):
     pet_level_start: Mapped[int] = mapped_column(Integer, server_default="1")
     pet_level_end: Mapped[int] = mapped_column(Integer, server_default="1")
     generated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class QuestionAnswer(Base):
+    """오늘의 질문 답변 (디자인 갭 E-1).
+
+    질문 텍스트는 저장하지 않는다 — 코드가 `question_date` 로 결정한다(앱과 서버가 같은
+    풀·같은 규칙을 쓰므로 항상 일치). 한 사람이 하루에 한 답, 수정 가능.
+    """
+
+    __tablename__ = "question_answers"
+    __table_args__ = (
+        UniqueConstraint(
+            "group_id", "question_date", "user_id", name="uq_question_answers"
+        ),
+        Index("ix_qa_group_date", "group_id", "question_date"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    group_id: Mapped[int] = mapped_column(ForeignKey("groups.id", ondelete="CASCADE"))
+    question_date: Mapped[date] = mapped_column(Date)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    answer: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )

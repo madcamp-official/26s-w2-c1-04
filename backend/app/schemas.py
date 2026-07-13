@@ -58,6 +58,8 @@ class GroupOut(BaseModel):
     background_color: str
     member_count: int
     members: list[MemberOut]
+    # 사귄 날부터의 D-day 를 앱이 계산한다 (디자인 홈 상단). UTC ISO8601.
+    created_at: str
 
 
 class PetOut(BaseModel):
@@ -66,6 +68,21 @@ class PetOut(BaseModel):
     level: int
     exp: int
     coins: int
+
+
+# --- 오늘의 질문 (디자인 갭 E-1) ---
+
+
+class AnswerIn(BaseModel):
+    answer: str = Field(min_length=1, max_length=500)
+
+
+class QuestionOut(BaseModel):
+    date: str  # 'YYYY-MM-DD' (KST)
+    text: str
+    my_answer: str | None
+    # 상대가 오늘 답했는지. 원문은 아직 공개하지 않는다(공개 시점 미확정, API.md 디자인 갭)
+    partner_answered: bool
 
 
 class CreateGroupIn(BaseModel):

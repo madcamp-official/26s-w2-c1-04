@@ -131,7 +131,11 @@ def main() -> int:
         # --- 가입 ---------------------------------------------------------
         r = c.post("/v1/groups/join", json={"invite_code": code.lower()}, headers=B)
         check("소문자 초대코드도 통과 (정규화)", r.status_code == 200, str(r.status_code))
-        check("member_count 가 2", r.json()["member_count"] == 2)
+        # 가입 응답은 생성과 같은 {group, pet} 모양 (디자인 온보딩용, E-3)
+        check("join 응답에 group·pet", "group" in r.json() and "pet" in r.json(), str(list(r.json().keys())))
+        check("member_count 가 2", r.json()["group"]["member_count"] == 2)
+        check("group.created_at 노출 (D-day용, E-2)", bool(r.json()["group"].get("created_at")), str(r.json()["group"].get("created_at")))
+        check("join 응답의 펫", r.json()["pet"]["name"] and r.json()["pet"]["level"] >= 1, str(r.json()["pet"]))
 
         r = c.post("/v1/groups/join", json={"invite_code": code}, headers=B)
         check("같은 그룹 재가입 409 already_member", r.status_code == 409 and code_of(r) == "already_member", f"{r.status_code} {code_of(r)}")
