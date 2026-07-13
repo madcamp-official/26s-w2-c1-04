@@ -1,12 +1,30 @@
 // 2d 사진첩 · 추억 달력 — 날짜에 낙서가 쌓임.
 // 디자인: Memory Pager 디자인.dc.html #2d (390px 카드) 실측값 그대로.
+// 월 이동·날짜 선택 동작. 2026-07은 디자인 샘플 장식, 그 외 달은 실제 그리드.
 
 import 'package:flutter/material.dart';
 
 import '../theme.dart';
 
-class CalendarScreen extends StatelessWidget {
+class CalendarScreen extends StatefulWidget {
   const CalendarScreen({super.key});
+
+  @override
+  State<CalendarScreen> createState() => _CalendarScreenState();
+}
+
+class _CalendarScreenState extends State<CalendarScreen> {
+  DateTime _month = DateTime(2026, 7); // 표시 중인 달(1일)
+  int _selectedDay = 13; // 선택된 날
+
+  bool get _isJuly2026 => _month.year == 2026 && _month.month == 7;
+
+  void _shiftMonth(int delta) {
+    setState(() {
+      _month = DateTime(_month.year, _month.month + delta);
+      _selectedDay = 1;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -96,11 +114,26 @@ class CalendarScreen extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Text('◀', style: sans(13, c: muted)),
-        const SizedBox(width: 16),
-        Text('2026년 7월', style: sans(15, w: FontWeight.w800)),
-        const SizedBox(width: 16),
-        Text('▶', style: sans(13, c: muted)),
+        GestureDetector(
+          onTap: () => _shiftMonth(-1),
+          behavior: HitTestBehavior.opaque,
+          child: Padding(
+            padding: const EdgeInsets.all(6),
+            child: Text('◀', style: sans(13, c: muted)),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Text('${_month.year}년 ${_month.month}월',
+            style: sans(15, w: FontWeight.w800)),
+        const SizedBox(width: 10),
+        GestureDetector(
+          onTap: () => _shiftMonth(1),
+          behavior: HitTestBehavior.opaque,
+          child: Padding(
+            padding: const EdgeInsets.all(6),
+            child: Text('▶', style: sans(13, c: muted)),
+          ),
+        ),
       ],
     );
   }
@@ -121,30 +154,17 @@ class CalendarScreen extends StatelessWidget {
 
   // ---------------------------------------------------------------- grid
   Widget _dateGrid() {
-    // 7월: 1일이 수요일 시작(빈칸 2) — 디자인 그대로 19일까지.
-    final cells = <Widget>[
-      const SizedBox(),
-      const SizedBox(),
-      _plainCell(1),
-      _plainCell(2),
-      _photoCell(3, 'assets/photos/photo_sky.png'),
-      _plainCell(4),
-      _heartCell(5),
-      _plainCell(6),
-      _diaryCell(7),
-      _plainCell(8),
-      _plainCell(9),
-      _plainCell(10),
-      _photoCell(11, 'assets/photos/photo_sky.png'),
-      _heartCell(12),
-      _photoCell(13, 'assets/photos/photo_field.png', selected: true),
-      _plainCell(14, dim: true),
-      _plainCell(15, dim: true),
-      _plainCell(16, dim: true),
-      _plainCell(17, dim: true),
-      _plainCell(18, dim: true),
-      _plainCell(19, dim: true),
-    ];
+    final first = DateTime(_month.year, _month.month, 1);
+    final lead = first.weekday % 7; // 일요일 시작(월=1..일=7 → 일=0)
+    final daysIn = DateTime(_month.year, _month.month + 1, 0).day;
+
+    final cells = <Widget>[];
+    for (var i = 0; i < lead; i++) {
+      cells.add(const SizedBox());
+    }
+    for (var day = 1; day <= daysIn; day++) {
+      cells.add(_cellFor(day));
+    }
     return GridView.count(
       crossAxisCount: 7,
       mainAxisSpacing: 6,
@@ -155,10 +175,47 @@ class CalendarScreen extends StatelessWidget {
     );
   }
 
-  /// 숫자만 있는 날. [dim]은 미래 날짜(lineSoft).
+  /// 그 날의 셀. 2026-07은 디자인 샘플 장식, 그 외엔 숫자 셀.
+  Widget _cellFor(int day) {
+    if (_isJuly2026) {
+      switch (day) {
+        case 3:
+          return _photoCell(3, 'assets/photos/photo_sky.png');
+        case 5:
+          return _heartCell(5);
+        case 7:
+          return _diaryCell(7);
+        case 11:
+          return _photoCell(11, 'assets/photos/photo_sky.png');
+        case 12:
+          return _heartCell(12);
+        case 13:
+          return _photoCell(13, 'assets/photos/photo_field.png',
+              selected: _selectedDay == 13);
+      }
+      return _plainCell(day, dim: day > 13);
+    }
+    return _plainCell(day);
+  }
+
+  /// 숫자만 있는 날(탭 → 선택). [dim]은 미래 날짜.
   Widget _plainCell(int day, {bool dim = false}) {
-    return Center(
-      child: Text('$day', style: sans(12, c: dim ? lineSoft : muted)),
+    final selected = _selectedDay == day;
+    return GestureDetector(
+      onTap: () => setState(() => _selectedDay = day),
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        decoration: selected
+            ? BoxDecoration(
+                color: blushSoft, borderRadius: BorderRadius.circular(10))
+            : null,
+        child: Center(
+          child: Text('$day',
+              style: sans(12,
+                  w: selected ? FontWeight.w800 : FontWeight.w400,
+                  c: selected ? coral : (dim ? lineSoft : muted))),
+        ),
+      ),
     );
   }
 
@@ -189,13 +246,18 @@ class CalendarScreen extends StatelessWidget {
         ],
       ),
     );
-    if (!selected) return photo;
+    final cell = GestureDetector(
+      onTap: () => setState(() => _selectedDay = day),
+      behavior: HitTestBehavior.opaque,
+      child: photo,
+    );
+    if (!selected) return cell;
     // outline: 2.5px solid coral, offset 1px — 셀 밖으로 살짝 벗어난 테두리.
     return Stack(
       clipBehavior: Clip.none,
       fit: StackFit.expand,
       children: [
-        photo,
+        cell,
         Positioned(
           left: -3.5,
           top: -3.5,
@@ -216,50 +278,60 @@ class CalendarScreen extends StatelessWidget {
 
   /// 하트 낙서가 있던 날.
   Widget _heartCell(int day) {
-    return Container(
-      decoration: BoxDecoration(
-        color: blushSoft,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          Center(child: Text('♥', style: hand(13, c: coral))),
-          Positioned(
-            top: 2,
-            left: 4,
-            child: Text('$day',
-                style: sans(10, w: FontWeight.w700, c: brownWarm)),
-          ),
-        ],
+    return GestureDetector(
+      onTap: () => setState(() => _selectedDay = day),
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        decoration: BoxDecoration(
+          color: blushSoft,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Center(child: Text('♥', style: hand(13, c: coral))),
+            Positioned(
+              top: 2,
+              left: 4,
+              child: Text('$day',
+                  style: sans(10, w: FontWeight.w700, c: brownWarm)),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   /// 텍스트 낙서('글')가 있던 날.
   Widget _diaryCell(int day) {
-    return Container(
-      decoration: BoxDecoration(
-        color: goldBg,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          Center(child: Text('글', style: hand(12, c: goldText))),
-          Positioned(
-            top: 2,
-            left: 4,
-            child: Text('$day',
-                style: sans(10, w: FontWeight.w700, c: goldText)),
-          ),
-        ],
+    return GestureDetector(
+      onTap: () => setState(() => _selectedDay = day),
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        decoration: BoxDecoration(
+          color: goldBg,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Center(child: Text('글', style: hand(12, c: goldText))),
+            Positioned(
+              top: 2,
+              left: 4,
+              child: Text('$day',
+                  style: sans(10, w: FontWeight.w700, c: goldText)),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   // ---------------------------------------------------------------- selected
   Widget _selectedDayCard() {
+    // 2026-07-13만 샘플 콘텐츠가 있다. 그 외 날짜는 요약만.
+    final hasSample = _isJuly2026 && _selectedDay == 13;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
@@ -269,23 +341,33 @@ class CalendarScreen extends StatelessWidget {
       ),
       child: Row(
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(13),
-            child: Image.asset(
-              'assets/photos/photo_field.png',
-              width: 48,
-              height: 48,
-              fit: BoxFit.cover,
+          if (hasSample) ...[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(13),
+              child: Image.asset(
+                'assets/photos/photo_field.png',
+                width: 48,
+                height: 48,
+                fit: BoxFit.cover,
+              ),
             ),
-          ),
-          const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('7월 13일 · 낙서 3개', style: sans(13, w: FontWeight.w800)),
-              const SizedBox(height: 2),
-              Text('오늘 억새밭!! ♥', style: hand(15, c: brown)),
-            ],
+            const SizedBox(width: 12),
+          ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  hasSample
+                      ? '${_month.month}월 $_selectedDay일 · 낙서 3개'
+                      : '${_month.month}월 $_selectedDay일',
+                  style: sans(13, w: FontWeight.w800),
+                ),
+                const SizedBox(height: 2),
+                Text(hasSample ? '오늘 억새밭!! ♥' : '이 날의 낙서가 없어요',
+                    style: hand(15, c: hasSample ? brown : muted)),
+              ],
+            ),
           ),
         ],
       ),

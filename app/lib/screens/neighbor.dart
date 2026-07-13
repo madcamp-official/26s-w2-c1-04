@@ -16,6 +16,27 @@ class NeighborScreen extends StatefulWidget {
 class _NeighborScreenState extends State<NeighborScreen> {
   bool _showSearch = false;
   int _likes = 128;
+  final _code = TextEditingController();
+
+  @override
+  void dispose() {
+    _code.dispose();
+    super.dispose();
+  }
+
+  // 이웃 방문(백엔드 이웃 방문 API 미제공 — 입력·피드백만 동작).
+  void _visit() {
+    final code = _code.text.trim();
+    if (code.isEmpty) return;
+    FocusScope.of(context).unfocus();
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        behavior: SnackBarBehavior.floating,
+        content: Text("'$code' 집을 찾는 중… 이웃 방문은 곧 열려요",
+            style: sans(13, c: Colors.white)),
+      ));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -256,27 +277,40 @@ class _NeighborScreenState extends State<NeighborScreen> {
                                     color: const Color(0xFFF5F0FA),
                                     borderRadius: BorderRadius.circular(11),
                                   ),
-                                  child: Text(
-                                    '코드 입력',
-                                    style: sans(13,
-                                        ls: 2,
-                                        c: const Color(0xFFB0A3C2)),
+                                  child: TextField(
+                                    controller: _code,
+                                    textCapitalization:
+                                        TextCapitalization.characters,
+                                    textInputAction: TextInputAction.go,
+                                    onSubmitted: (_) => _visit(),
+                                    style: sans(13, ls: 2, c: lilacInk),
+                                    decoration: InputDecoration(
+                                      isCollapsed: true,
+                                      border: InputBorder.none,
+                                      hintText: '코드 입력',
+                                      hintStyle: sans(13,
+                                          ls: 2,
+                                          c: const Color(0xFFB0A3C2)),
+                                    ),
                                   ),
                                 ),
                               ),
                               const SizedBox(width: 8),
-                              Container(
-                                width: 40,
-                                height: 40,
-                                decoration: BoxDecoration(
-                                  color: lilac,
-                                  borderRadius: BorderRadius.circular(11),
-                                ),
-                                child: const Center(
-                                  child: CustomPaint(
-                                    size: Size(15, 15),
-                                    painter: _ChevronPainter(
-                                        color: Colors.white, forward: true),
+                              GestureDetector(
+                                onTap: _visit,
+                                child: Container(
+                                  width: 40,
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    color: lilac,
+                                    borderRadius: BorderRadius.circular(11),
+                                  ),
+                                  child: const Center(
+                                    child: CustomPaint(
+                                      size: Size(15, 15),
+                                      painter: _ChevronPainter(
+                                          color: Colors.white, forward: true),
+                                    ),
                                   ),
                                 ),
                               ),

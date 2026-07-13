@@ -19,6 +19,7 @@ class _ViewerScreenState extends State<ViewerScreen> {
   late final bool _showCountdown;
   int _count = 5;
   bool _closing = false;
+  bool _liked = false; // 로컬 좋아요(서버 리액션 API 미제공)
 
   @override
   void initState() {
@@ -290,9 +291,22 @@ class _ViewerScreenState extends State<ViewerScreen> {
                           ),
                           const SizedBox(width: 10),
                           _roundAction(
+                            onTap: () {
+                              setState(() => _liked = !_liked);
+                              if (_liked) {
+                                ScaffoldMessenger.of(context)
+                                  ..hideCurrentSnackBar()
+                                  ..showSnackBar(SnackBar(
+                                    behavior: SnackBarBehavior.floating,
+                                    content: Text('이 낙서를 좋아해요 ♥',
+                                        style: sans(13, c: Colors.white)),
+                                  ));
+                              }
+                            },
                             child: Text(
                               '♥',
-                              style: sans(19, c: coral),
+                              style: sans(19,
+                                  c: _liked ? coral : Colors.black26),
                             ),
                           ),
                           const SizedBox(width: 10),
