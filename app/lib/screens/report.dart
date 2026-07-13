@@ -1,0 +1,289 @@
+// 1f 월간 레포트 — 성장 / 최고의 낙서 / 유형 통계.
+// 디자인 원본: "Memory Pager 디자인.dc.html" #1f (390x844).
+
+import 'package:flutter/material.dart';
+
+import '../mock.dart';
+import '../pet.dart';
+import '../theme.dart';
+
+class ReportScreen extends StatelessWidget {
+  const ReportScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: paper,
+      body: SafeArea(
+        child: ListenableBuilder(
+          listenable: mock,
+          builder: (context, _) {
+            return Column(
+              children: [
+                _header(context),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(24, 18, 24, 24),
+                    child: Column(
+                      children: [
+                        _growthCard(),
+                        const SizedBox(height: 14),
+                        _bestDoodleCard(),
+                        const SizedBox(height: 14),
+                        _statsCard(),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------- header
+  Widget _header(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 10, 24, 0),
+      child: Row(
+        children: [
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => Navigator.maybePop(context),
+            child: Text('←', style: sans(17, w: FontWeight.w700, c: muted)),
+          ),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('삐삐- 월간 소식 도착!', style: hand(15, c: coral)),
+              const SizedBox(height: 2),
+              Text('6월의 레포트', style: sans(22, w: FontWeight.w800)),
+            ],
+          ),
+          const Spacer(),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border.all(color: line, width: 1.5),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text('◀ 6월 ▶', style: sans(13, w: FontWeight.w700, c: brown)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------- card 1
+  Widget _growthCard() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: line, width: 1.5),
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Row(
+        children: [
+          const PetFace(size: 76),
+          const SizedBox(width: 18),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '${mock.petName}가 이만큼 컸어요',
+                        style: sans(15, w: FontWeight.w800),
+                      ),
+                    ),
+                    Text(
+                      mock.levelLabel,
+                      style: sans(12, w: FontWeight.w800, c: coral),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(99),
+                  child: Container(
+                    height: 10,
+                    color: chipBg,
+                    alignment: Alignment.centerLeft,
+                    child: FractionallySizedBox(
+                      widthFactor: mock.growthPct,
+                      heightFactor: 1,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: coral,
+                          borderRadius: BorderRadius.circular(99),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '낙서 25개를 먹고 무럭무럭 자랐어요',
+                  style: sans(12, c: hintWarm),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------- card 2
+  Widget _bestDoodleCard() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: ink,
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '이번 달 최고의 낙서',
+            style: sans(13, w: FontWeight.w800, c: dashPeach, ls: 1),
+          ),
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: SizedBox(
+              height: 150,
+              width: double.infinity,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Image.asset(
+                    'assets/photos/photo_field.png',
+                    fit: BoxFit.cover,
+                  ),
+                  Positioned(
+                    left: 12,
+                    bottom: 10,
+                    child: Text(
+                      '오늘 억새밭!! ♥',
+                      style: hand(24, c: Colors.white).copyWith(
+                        shadows: [
+                          Shadow(
+                            offset: const Offset(0, 2),
+                            blurRadius: 6,
+                            color: Colors.black.withValues(alpha: 0.4),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            '6월 21일 · ${mock.myName} → ${mock.partnerName} · 답장 2번을 받았어요',
+            style: sans(12.5, c: Colors.white.withValues(alpha: 0.6)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------- card 3
+  Widget _statsCard() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: line, width: 1.5),
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('어떤 낙서가 많았을까?', style: sans(14, w: FontWeight.w800)),
+          const SizedBox(height: 12),
+          _barRow('사진', mock.reportPhotos, 0.60, salmon),
+          const SizedBox(height: 9),
+          _barRow('그림', mock.reportDrawings, 0.40, const Color(0xFFFFC0B2)),
+          const SizedBox(height: 9),
+          _barRow('텍스트', mock.reportTexts, 0.25, blush),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              _statBox('${mock.reportPokes}', '콕 찌르기'),
+              const SizedBox(width: 10),
+              _statBox('${mock.reportDoodles}', '낙서'),
+              const SizedBox(width: 10),
+              _statBox('${mock.reportAnswers}', '질문 답변'),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _barRow(String label, int count, double pct, Color fill) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 64,
+          child: Text(label, style: sans(12.5, w: FontWeight.w700, c: brown)),
+        ),
+        Expanded(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              height: 22,
+              color: paper,
+              alignment: Alignment.centerLeft,
+              child: FractionallySizedBox(
+                widthFactor: pct,
+                heightFactor: 1,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: fill,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Text('$count', style: sans(12, w: FontWeight.w800)),
+      ],
+    );
+  }
+
+  Widget _statBox(String number, String label) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: blushSoft,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Column(
+          children: [
+            Text(number, style: sans(18, w: FontWeight.w800, c: coral)),
+            const SizedBox(height: 2),
+            Text(label, style: sans(11.5, c: brown)),
+          ],
+        ),
+      ),
+    );
+  }
+}
