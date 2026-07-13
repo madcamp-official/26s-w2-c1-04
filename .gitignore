@@ -14,6 +14,11 @@ env/
 .env.*
 !.env.example
 
+# FCM 서비스 계정 키(비밀! 절대 커밋 금지). google-services.json 은 앱에 필요해 커밋한다.
+*-firebase-adminsdk-*.json
+**/service-account*.json
+secrets/
+
 # 미디어 · 모델 가중치 (VM 파일시스템에 둔다. 레포에 넣지 않는다)
 media/
 models/

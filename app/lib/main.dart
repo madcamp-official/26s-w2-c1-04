@@ -5,10 +5,12 @@
 
 import 'dart:math';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'mock.dart';
+import 'push.dart';
 import 'screens/onboarding_name.dart';
 import 'shell.dart';
 import 'theme.dart';
@@ -65,7 +67,21 @@ class _RootState extends State<_Root> {
     // 실서버 모드면 부팅(register→/me). 데모면 mock 그대로.
     _boot = _apiBase.isEmpty
         ? null
-        : _deviceUid().then((uid) => mock.bootstrapReal(_apiBase, uid, '나'));
+        : _deviceUid()
+            .then((uid) => mock.bootstrapReal(_apiBase, uid, '나'))
+            .then((_) => _setupPush());
+  }
+
+  /// 실서버 + 안드로이드에서만 FCM 초기화. 웹 데모(firebase_options 없음)·mock 은 건드리지 않는다.
+  /// 어떤 실패도 앱 부팅을 막지 않도록 통째로 try/catch 한다.
+  Future<void> _setupPush() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    if (!mock.real) return;
+    try {
+      await initPush(onToken: mock.registerPushToken);
+    } catch (_) {
+      // 푸시는 보조 경로. 초기화 실패해도 앱은 정상 동작한다.
+    }
   }
 
   @override

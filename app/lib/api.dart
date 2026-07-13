@@ -122,6 +122,14 @@ class Api {
     if (r.statusCode >= 400) _fail(r);
   }
 
+  /// FCM 토큰 등록(멱등). 204 라 파싱하지 않는다.
+  Future<void> registerDevice(String fcmToken, {String? appVersion}) async {
+    await _post('/devices', {
+      'fcm_token': fcmToken,
+      if (appVersion != null) 'app_version': appVersion,
+    });
+  }
+
   Future<void> updateMe(String displayName) async {
     await http.patch(Uri.parse('$_base/me'),
         headers: _h, body: jsonEncode({'display_name': displayName}));

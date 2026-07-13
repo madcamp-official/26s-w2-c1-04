@@ -14,6 +14,9 @@ dependencies:
   shared_preferences: ^2.3.2 # 기기별 device_uid 영속화(완성품 필수)
   image_picker: ^1.1.2       # 사진 촬영/갤러리 선택
   home_widget: ^0.6.0        # 안드로이드 홈 화면 위젯(펫 상태)
+  firebase_core: ^3.8.1              # FCM 초기화(google-services.json 기반)
+  firebase_messaging: ^15.1.6        # 백그라운드/종료 상태 푸시 수신
+  flutter_local_notifications: ^18.0.1  # data-only 메시지를 알림 트레이에 렌더
 
 dev_dependencies:
   flutter_test:

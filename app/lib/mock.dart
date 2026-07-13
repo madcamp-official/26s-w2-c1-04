@@ -243,6 +243,17 @@ class AppMock extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// FCM 토큰을 서버에 등록한다(push.dart 의 initPush 콜백). 실서버 모드에서만.
+  Future<void> registerPushToken(String token) async {
+    final a = api;
+    if (a == null) return;
+    try {
+      await a.registerDevice(token);
+    } catch (_) {
+      // 푸시 등록 실패는 앱 사용을 막지 않는다(보조 전달 경로).
+    }
+  }
+
   void _applyGroup(Map g) {
     groupId = '${g['id']}';
     groupName = '${g['name']}';

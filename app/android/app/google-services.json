@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "133027099408",
+    "project_id": "doodulim-21fbc",
+    "storage_bucket": "doodulim-21fbc.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:133027099408:android:a91e45458cdb278456eb95",
+        "android_client_info": {
+          "package_name": "org.madcamp.memory_pager"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDtfQCcBjXzedvT3H_YQM4ApOiPbd-0XmE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
