@@ -79,14 +79,13 @@
 - **낙서 AI 캡션** — ✅ **실제 구현·배포·E2E 완료.** BLIP(이미지→영어 서술) + EXAONE(펫 말투 한국어) 파이프라인. GPU `/caption` 엔드포인트 + 백엔드 백그라운드 생성 + `caption` 컬럼(라이브 마이그레이션). 실측: 사진 낙서 업로드 → 4초 → *"하얀 드레스 입은 여인이 풀숲에 앉아있다니, 마치 동화 속 같네요!"*
 - **LoRA 화풍 학습** — ✅ **실제 구현·배포·풀스택 E2E 완료.** 커플 손그림으로 SD 1.5 LoRA(UNet attention, rank8)를 학습해 펫 일기를 그 화풍으로 그린다. GPU `/train/style`(학습→6.4MB 가중치 저장, 300step ~64s, VRAM 여유) + learned `/generate/diary`(어댑터 로드·트리거 프롬프트). 백엔드 `train_learned_style`(손그림 수집→`style_models` training→ready) + 손그림 20장 자동 트리거 + 데모용 수동 `POST /groups/{id}/style/train`(5장). `_active_style`이 ready learned 를 우선하므로 이후 새 일기부터 자동 적용. **라이브 검증:** 그림 6장 업로드 → 학습 트리거 → 76초 후 `ready`(weights_path 기록) → 백엔드 프로덕션 경로(`_active_style`→GPU)로 learned 일기 렌더 성공. *단, 검증은 합성/단순 손그림 기준 — 실커플의 다양한 낙서 20장으로 화풍·펫 내용 균형(step·rank·캡션 튜닝)은 실데이터가 쌓여야 최종 확인된다.*
 
-### 네이티브(CI 빌드 검증, 실기기 확인 필요) 🟡
+### 네이티브·푸시(구현 완료, 실기기 확인 필요) 🟡
 - **안드로이드 홈 위젯** — home_widget + PagerWidgetProvider + 레이아웃/manifest. 펫 상태 push. **실기기 홈 화면 검증 남음.**
+- **FCM 백그라운드 푸시** — ✅ **Firebase 프로젝트 연결·앱/서버 양쪽 구현 완료.** 프로젝트 `doodulim-21fbc`, `google-services.json`(앱)·서비스계정키(서버 `/root/secrets/fcm-sa.json`, 600). Flutter: firebase_core/messaging + flutter_local_notifications, 포그라운드·백그라운드/종료 상태 모두 data 페이로드를 알림으로 렌더(찌르기·낙서·월간 리포트), 토큰→`POST /v1/devices` 등록. 백엔드: `FCM_CREDENTIALS_PATH` 설정 후 `init_push`가 `FirebasePushClient` 활성 확인(전엔 NullPush). **남은 것: 실기기에 새 APK 설치 → 앱 끈 채 찌르기 → 알림 뜨는지 확인.** (FCM은 실기기 전용 — 웹/에뮬레이터로는 검증 불가.)
 
-### 남은 것 🔴
-- **FCM 푸시** — `firebase_messaging`은 **Firebase 프로젝트(google-services.json)** 없이는 빌드가 깨진다(외부 계정·앱 등록 필요). 백엔드 `/v1/devices`(fcm_token)는 준비됨. → Firebase 프로젝트 생성이 선행돼야 함. *유일하게 외부 계정이 필요한 항목 — 이제 남은 유일한 🔴.*
+> **정정:** 낙서 이미지 캡션은 이전 판에서 "모델 스택상 불가"라 했으나 **틀렸다.** BLIP 비전 캡션 모델을 얹어 실제로 구현했다(위 참조). LoRA 화풍 학습도 "별도의 큰 ML 작업 — 다음 단계"로, FCM도 "외부 계정 필요"로 미뤄뒀으나 **셋 다 실제로 구현·검증했다.** 이제 코드로 해결 가능한 🔴 항목은 없다.
 
-> **정정:** 낙서 이미지 캡션은 이전 판에서 "모델 스택상 불가"라 했으나 **틀렸다.** BLIP 비전 캡션 모델을 얹어 실제로 구현했다(위 참조). LoRA 화풍 학습도 "별도의 큰 ML 작업 — 다음 단계"로 미뤄뒀으나 실제로 구현·풀스택 검증했다(위 참조).
-
-## 남은 검증
-- 갤럭시에 **INTERNET 포함 새 APK** 설치 → 2인 커플 실사용(등록→생성/참여→낙서→일기).
+## 남은 검증 (모두 실기기 — 헤드리스로 불가)
+- 갤럭시에 **최신 APK** 설치 → 2인 커플 실사용(등록→생성/참여→낙서→일기).
 - 재접속 복원·전송 실패 스낵바·답장 parent_id 실기기 확인.
+- **FCM**: 앱을 끈/백그라운드 상태에서 상대가 찌르기·낙서 → 알림 트레이에 뜨는지. 홈 위젯도 실기기 확인.
