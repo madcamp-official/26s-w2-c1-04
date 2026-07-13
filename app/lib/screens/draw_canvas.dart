@@ -87,9 +87,18 @@ class _DrawCanvasScreenState extends State<DrawCanvasScreen> {
       final size = MediaQuery.of(context).size;
       try {
         final png = await _rasterStrokes(size);
-        await mock.sendDrawing(png, _strokeJson(size), ephemeral: _vanish);
-      } catch (_) {}
-      if (mounted) Navigator.of(context).pop();
+        await mock.sendDrawing(png, _strokeJson(size),
+            ephemeral: _vanish, parentId: widget.replyTo?.id);
+        if (mounted) Navigator.of(context).pop();
+      } catch (_) {
+        // 실패 시 화면을 닫지 않고 알린다(가짜 성공 방지).
+        if (mounted) {
+          setState(() => _sending = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('전송에 실패했어요. 다시 시도해 주세요', style: sans(13))),
+          );
+        }
+      }
       return;
     }
     // 데모

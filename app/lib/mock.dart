@@ -191,8 +191,11 @@ class AppMock extends ChangeNotifier {
       if (u != null) myName = '${u['display_name']}';
       final g = m['group'];
       if (g != null) {
-        groupId = '${(g as Map)['id']}';
+        final gid = '${(g as Map)['id']}';
+        groupId = gid;
         onboarded = true;
+        // /me 의 group 은 {id,name}뿐이라 상세(초대코드·상대·D-day)를 따로 복원한다.
+        _applyGroup(await a.group(gid));
         await _loadAll();
       } else {
         onboarded = false; // 온보딩으로
@@ -251,18 +254,7 @@ class AppMock extends ChangeNotifier {
       ..clear()
       ..addAll(await a.doodles(gid));
     // 그림 일기 (서버 생성 이미지). 신규 그룹은 빈 리스트가 정상.
-    final ds = await a.diaries(petId!);
-    diary
-      ..clear()
-      ..addAll([
-        for (var i = 0; i < ds.length; i++)
-          DiaryEntry(
-            dateLabel: _diaryDateLabel('${ds[i]['entry_date'] ?? ''}'),
-            caption: '${ds[i]['caption'] ?? ''}',
-            isNew: i == 0,
-            imageUrl: _mediaUrl('${ds[i]['image_url'] ?? ''}'),
-          ),
-      ]);
+    await _reloadDiaries();
     // 월간 레포트 (최신 달). 없으면 0 으로.
     final rep = await a.latestReport(gid);
     if (rep != null) {
@@ -331,7 +323,31 @@ class AppMock extends ChangeNotifier {
       case 'pet:levelup':
         petLevel = (data['level'] as num?)?.toInt() ?? petLevel;
         notifyListeners();
+      case 'diary:new':
+        // 펫이 새 그림 일기를 그렸다 — 일기 목록을 다시 불러온다.
+        if (real && petId != null) {
+          try {
+            await _reloadDiaries();
+            notifyListeners();
+          } catch (_) {}
+        }
     }
+  }
+
+  /// 서버에서 그림 일기를 받아 diary 리스트를 교체한다. (_loadAll · diary:new 공용)
+  Future<void> _reloadDiaries() async {
+    final ds = await api!.diaries(petId!);
+    diary
+      ..clear()
+      ..addAll([
+        for (var i = 0; i < ds.length; i++)
+          DiaryEntry(
+            dateLabel: _diaryDateLabel('${ds[i]['entry_date'] ?? ''}'),
+            caption: '${ds[i]['caption'] ?? ''}',
+            isNew: i == 0,
+            imageUrl: _mediaUrl('${ds[i]['image_url'] ?? ''}'),
+          ),
+      ]);
   }
 
   static Color _hexRoom(String hex6) {
@@ -390,29 +406,29 @@ class AppMock extends ChangeNotifier {
     }
   }
 
-  /// 텍스트/그림 전송. 실서버면 서버에 올리고 목록을 앞에 추가한다.
-  Future<void> sendText(String text, {bool ephemeral = false}) async {
+  /// 텍스트/그림 전송. 실서버면 서버에 올린다.
+  /// 실서버 전송이 실패하면 예외를 그대로 던진다(화면이 실패를 표시하도록 — 가짜 성공 금지).
+  Future<void> sendText(String text,
+      {bool ephemeral = false, String? parentId}) async {
     if (real && groupId != null) {
-      try {
-        final d = await api!.sendText(text, ephemeral: ephemeral);
-        doodles.insert(0, d);
-        notifyListeners();
-        return;
-      } catch (_) {}
+      final d = await api!.sendText(text, ephemeral: ephemeral, parentId: parentId);
+      doodles.insert(0, d);
+      notifyListeners();
+      return;
     }
     doodles.insert(0,
         Doodle(id: 'local-${doodles.length}', fromMe: true, type: DoodleType.text, text: text, when: '방금 전', ephemeral: ephemeral));
     notifyListeners();
   }
 
-  Future<void> sendDrawing(List<int> png, String strokeJson, {bool ephemeral = false}) async {
+  Future<void> sendDrawing(List<int> png, String strokeJson,
+      {bool ephemeral = false, String? parentId}) async {
     if (real && groupId != null) {
-      try {
-        final d = await api!.sendDrawing(png, strokeJson, ephemeral: ephemeral);
-        doodles.insert(0, d);
-        notifyListeners();
-        return;
-      } catch (_) {}
+      final d = await api!.sendDrawing(png, strokeJson,
+          ephemeral: ephemeral, parentId: parentId);
+      doodles.insert(0, d);
+      notifyListeners();
+      return;
     }
     doodles.insert(0,
         Doodle(id: 'local-${doodles.length}', fromMe: true, type: DoodleType.drawing, when: '방금 전', ephemeral: ephemeral));
@@ -472,9 +488,12 @@ class AppMock extends ChangeNotifier {
     if (real) {
       try {
         if (name != null && name.isNotEmpty) await api!.updateMe(name);
+        // 온보딩엔 그룹/펫 이름 입력 UI가 없으므로 사용자 이름 기반 기본값으로 생성.
+        // (목 기본값 '지우 ♥ 나무'/'모리' 를 실서버에 넣지 않는다. 이후 설정/펫하우스에서 변경)
+        final newGroupName = '$myName의 그룹';
         final Map res = joinCode != null && joinCode.isNotEmpty
             ? await api!.joinGroup(joinCode)
-            : await api!.createGroup(groupName, petName);
+            : await api!.createGroup(newGroupName, petName);
         _applyGroup(res['group'] as Map);
         onboarded = true;
         await _loadAll();

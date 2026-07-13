@@ -2,6 +2,7 @@
 // 디자인: "썸원 스타일 앱 디자인/Memory Pager 디자인.dc.html" #4g (248-288행) 실측.
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../mock.dart';
 import '../theme.dart';
@@ -344,6 +345,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _copyInvite() {
+    Clipboard.setData(ClipboardData(text: mock.inviteCode));
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(

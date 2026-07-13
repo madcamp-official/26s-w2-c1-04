@@ -160,7 +160,7 @@ class PetHouseScreen extends StatelessWidget {
                           Center(
                             child: PetFace(
                               size: 132,
-                              hat: mock.hats.first.wearing,
+                              hat: mock.hats.any((h) => h.wearing),
                             ),
                           ),
                           // 말풍선

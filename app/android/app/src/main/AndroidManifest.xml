@@ -1,4 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 실서버(HTTPS) 통신에 필수. 이게 없으면 release APK가 네트워크를 못 쓴다. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
         android:label="memory_pager"
         android:name="${applicationName}"

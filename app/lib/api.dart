@@ -103,6 +103,10 @@ class Api {
   Future<Map<String, dynamic>> me() async =>
       Map<String, dynamic>.from(await _get('/me') as Map);
 
+  /// 그룹 상세(name·invite_code·members·created_at·background_color). /me 는 {id,name}만 준다.
+  Future<Map<String, dynamic>> group(String gid) async =>
+      Map<String, dynamic>.from(await _get('/groups/$gid') as Map);
+
   Future<Map<String, dynamic>> createGroup(String name, String petName) async =>
       Map<String, dynamic>.from(
           await _post('/groups', {'name': name, 'pet_name': petName}) as Map);

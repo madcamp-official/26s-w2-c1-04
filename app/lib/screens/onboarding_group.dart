@@ -279,6 +279,7 @@ class _OnboardingGroupScreenState extends State<OnboardingGroupScreen> {
                       hintText: '코드 입력',
                       hintStyle: sans(16, c: muted, ls: 3),
                     ),
+                    onChanged: (_) => setState(() {}), // 화살표 활성 상태 갱신
                     onSubmitted: (v) =>
                         v.trim().isEmpty ? null : _finish(joinCode: v.trim()),
                   ),
