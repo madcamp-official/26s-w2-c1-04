@@ -230,6 +230,19 @@ class AppMock extends ChangeNotifier {
     petName = '${p['name']}';
     petLevel = (p['level'] as num).toInt();
     coins = (p['coins'] as num).toInt();
+    // 활동 표정: 서버의 current_activity 를 말풍선에 반영(없으면 기본 유지)
+    final act = p['current_activity'];
+    if (act is Map && act['activity'] != null) {
+      petBubble = _activityUtterance('${act['activity']}');
+    }
+    // 착용 아이템: hat 카테고리가 걸려 있으면 모자를 씌운다(실서버 상태 반영)
+    final items = (p['equipped_items'] as List?) ?? const [];
+    final wearingHat =
+        items.any((it) => it is Map && it['category'] == 'hat');
+    for (final h in hats) {
+      h.wearing = false;
+    }
+    if (wearingHat && hats.isNotEmpty) hats.first.wearing = true;
     doodles
       ..clear()
       ..addAll(await a.doodles(gid));
@@ -242,6 +255,17 @@ class AppMock extends ChangeNotifier {
     await rt!.connect();
     notifyListeners();
   }
+
+  // 서버 활동 키 → 말풍선. 백엔드 ACTIVITIES(eating/sleeping/…) 와 값이 같아야 한다.
+  static const _activityText = {
+    'eating': '밥 먹는 중! 오늘 뭐 했어?',
+    'sleeping': '방금 밥 먹고 졸려…',
+    'walking': '산책 나왔어. 날씨 좋다!',
+    'playing': '심심해서 혼자 놀고 있었어.',
+    'drawing': '너희 그림 따라 그려보는 중이야.',
+    'waiting': '언제 오나 기다리고 있었어.',
+  };
+  String _activityUtterance(String key) => _activityText[key] ?? petBubble;
 
   Future<void> _onRtEvent(String event, Map data) async {
     switch (event) {
