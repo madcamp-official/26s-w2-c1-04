@@ -243,6 +243,7 @@ class Api {
       imageUrl: img == null ? null : media(img),
       thumbUrl: j['thumb_url'] == null ? null : media(j['thumb_url'] as String),
       text: j['text_body'] as String?,
+      caption: j['caption'] as String?,
       when: _rel(j['created_at'] as String?),
       ephemeral: '${j['mode']}' == 'ephemeral',
       viewed: j['viewed_by_me'] == true,

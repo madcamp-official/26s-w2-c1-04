@@ -152,6 +152,8 @@ class DoodleOut(BaseModel):
     # 미열람 사라지기 낙서는 내용을 숨기므로 null이다. 그 외에는 항상 채워진다.
     thumb_url: str | None
     text_body: str | None
+    # 펫이 붙인 한마디(GPU 비동기 생성). 아직 생성 전이면 null.
+    caption: str | None
     # 아래 둘은 DB 컬럼이 아니라 계산 필드다
     reply_count: int
     viewed_by_me: bool

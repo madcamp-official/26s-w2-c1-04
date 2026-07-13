@@ -300,6 +300,8 @@ class Doodle(Base):
     drawing_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     stroke_data: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
     text_body: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # 펫이 낙서(사진/그림)를 보고 붙이는 한마디. GPU(BLIP→EXAONE)로 비동기 생성.
+    caption: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     expires_at: Mapped[Optional[datetime]] = mapped_column(
         MYSQL_DATETIME(fsp=6), nullable=True
     )

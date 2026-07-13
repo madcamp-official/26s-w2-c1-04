@@ -35,6 +35,7 @@ from .models import (
     StyleKind,
     StyleModel,
     StyleStatus,
+    User,
 )
 
 logger = logging.getLogger(__name__)
@@ -338,6 +339,35 @@ async def pat_pet(session: AsyncSession, user_id: int, pet_id: int) -> dict:
         "utterance": act.utterance if act else DEFAULT_UTTERANCE,
         "exp_gained": exp_gained,
     }
+
+
+async def generate_doodle_caption(doodle_id: int, image_bytes: bytes) -> None:
+    """낙서(사진/그림) 이미지를 GPU 로 캡션한다. 업로드 응답 후 백그라운드로 부른다.
+    BLIP(영어 서술) → EXAONE(펫 말투 한국어) → doodle.caption 저장. 실패해도 무해(null 유지)."""
+    try:
+        english = await gpu.get_image_client().image_caption(image_bytes)
+    except Exception:
+        logger.warning("낙서 BLIP 캡션 실패(doodle=%s)", doodle_id, exc_info=True)
+        return
+    async with session_factory()() as session:
+        doodle = await session.get(Doodle, doodle_id)
+        if doodle is None:
+            return
+        pet = (
+            await session.execute(select(Pet).where(Pet.group_id == doodle.group_id))
+        ).scalar_one_or_none()
+        sender = await session.get(User, doodle.sender_id)
+        pet_name = pet.name if pet else "펫"
+        sender_name = sender.display_name if sender else "누군가"
+        try:
+            korean = await gpu.get_llm_client().doodle_caption(
+                english, pet_name, sender_name
+            )
+        except Exception:
+            korean = english
+        doodle.caption = korean[:255]
+        await session.commit()
+        logger.info("낙서 캡션 저장(doodle=%s): %s", doodle_id, doodle.caption)
 
 
 async def rotate_pet_activity(pet_id: int) -> None:

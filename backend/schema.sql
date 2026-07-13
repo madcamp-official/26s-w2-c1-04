@@ -165,6 +165,7 @@ CREATE TABLE doodles (
     stroke_data   JSON         NULL
                   COMMENT '펜 종류·색상·좌표·획별 타임스탬프. 타임스탬프는 그리기 소요 시간용',
     text_body     TEXT         NULL,
+    caption       VARCHAR(255) NULL COMMENT '펫이 낙서를 보고 붙이는 한마디(BLIP→EXAONE, 비동기)',
     expires_at    DATETIME(6)  NULL COMMENT 'ephemeral 전용. 최초 확인 + 5초',
     created_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted_at    DATETIME     NULL COMMENT 'soft delete',

@@ -68,6 +68,9 @@ class GroupContext:
 class LlmClient(Protocol):
     async def pet_activity(self, ctx: GroupContext) -> PetActivity: ...
     async def diary_caption(self, activities: list[str], pet_name: str) -> str: ...
+    async def doodle_caption(
+        self, english: str, pet_name: str, sender_name: str
+    ) -> str: ...
     async def health(self) -> bool: ...
 
 
@@ -82,6 +85,7 @@ class ImageClient(Protocol):
         style_kind: str,
         weights_path: str | None,
     ) -> bytes: ...
+    async def image_caption(self, image_bytes: bytes) -> str: ...
     async def health(self) -> bool: ...
 
 
@@ -100,6 +104,11 @@ class StubLlmClient:
     async def diary_caption(self, activities: list[str], pet_name: str) -> str:
         return f"오늘 나 {pet_name}는 {', '.join(activities) or '아무것도 안'} 했어."
 
+    async def doodle_caption(
+        self, english: str, pet_name: str, sender_name: str
+    ) -> str:
+        return f"{sender_name}가 그려준 낙서 ♥"
+
     async def health(self) -> bool:
         return True
 
@@ -109,6 +118,9 @@ class ImageGenerationError(RuntimeError):
 
 
 class StubImageClient:
+    async def image_caption(self, image_bytes: bytes) -> str:
+        return "a cute little drawing"
+
     async def diary_image(self, **kwargs: object) -> bytes:
         """GPU가 없는 개발 환경에서도 눈으로 확인 가능한 512px PNG를 만든다."""
         activities = kwargs.get("activities")
@@ -188,6 +200,32 @@ class HttpLlmClient:
             logger.warning("LLM 캡션 생성 실패. 스텁으로 열화한다.", exc_info=True)
             return await self._fallback.diary_caption(activities, pet_name)
 
+    async def doodle_caption(
+        self, english: str, pet_name: str, sender_name: str
+    ) -> str:
+        # BLIP 의 영어 설명을 펫 말투 한국어 한마디로 바꾼다.
+        prompt = (
+            f"너는 '{pet_name}'라는 커플의 반려 펫이야. 방금 '{sender_name}'가 낙서를 보냈어.\n"
+            f"그림 내용(영어 설명): {english}\n"
+            "이 낙서를 보고 네가 건네는 짧고 귀여운 한국어 한마디를 25자 안팎으로 써.\n"
+            "1인칭, 한국어만. 외국어나 이상한 글자를 섞지 말고, 그림 내용을 자연스럽게 언급해."
+        )
+        try:
+            data = await self._chat(
+                prompt,
+                {
+                    "type": "object",
+                    "properties": {"caption": {"type": "string", "maxLength": 120}},
+                    "required": ["caption"],
+                    "additionalProperties": False,
+                },
+                temperature=0.5,
+            )
+            return data["caption"]
+        except Exception:
+            logger.warning("낙서 캡션 한국어 변환 실패.", exc_info=True)
+            return await self._fallback.doodle_caption(english, pet_name, sender_name)
+
     async def _chat(
         self, prompt: str, schema: dict, temperature: float | None = None
     ) -> dict:
@@ -229,6 +267,15 @@ class HttpImageClient:
     def __init__(self, settings: Settings) -> None:
         self._base = settings.gpu_sd_url.rstrip("/")
         self._timeout = settings.gpu_timeout_seconds
+
+    async def image_caption(self, image_bytes: bytes) -> str:
+        async with httpx.AsyncClient(timeout=self._timeout) as client:
+            resp = await client.post(
+                f"{self._base}/caption",
+                files={"file": ("doodle.png", image_bytes, "image/png")},
+            )
+            resp.raise_for_status()
+        return str(resp.json()["caption"])
 
     async def diary_image(
         self,

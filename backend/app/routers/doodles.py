@@ -6,7 +6,7 @@ import json
 from datetime import date as date_type
 from typing import Annotated, Any
 
-from fastapi import APIRouter, File, Form, Query, UploadFile
+from fastapi import APIRouter, BackgroundTasks, File, Form, Query, UploadFile
 from pydantic import ValidationError
 from sqlalchemy import func, select
 
@@ -43,6 +43,7 @@ def _to_out(d: Doodle, *, reply_count: int, viewed_by_me: bool) -> DoodleOut:
         drawing_url=None if locked else d.drawing_url,
         thumb_url=None if locked else media.thumb_url(d.group_id, d.id),
         text_body=None if locked else d.text_body,
+        caption=None if locked else d.caption,
         reply_count=reply_count,
         viewed_by_me=viewed_by_me,
         expires_at=_iso(d.expires_at),
@@ -113,6 +114,7 @@ async def _decorate(session, user_id: int, doodles: list[Doodle]) -> list[Doodle
 async def create_doodle(
     user: CurrentUser,
     session: SessionDep,
+    background_tasks: BackgroundTasks,
     mode: Annotated[str, Form()],
     content_type: Annotated[str, Form()],
     parent_id: Annotated[str | None, Form()] = None,
@@ -226,6 +228,14 @@ async def create_doodle(
             media.delete_doodle_files(group_id, doodle.id)
         raise
     await session.refresh(doodle)
+
+    # 펫이 낙서를 보고 한마디 — 사진/그림이면 GPU(BLIP→EXAONE)로 캡션을 비동기 생성.
+    # 응답을 막지 않는다. 수신자가 뷰어를 열 때쯤 caption 이 채워진다.
+    caption_bytes = photo_bytes if photo_bytes is not None else drawing_bytes
+    if caption_bytes is not None:
+        background_tasks.add_task(
+            services.generate_doodle_caption, doodle.id, caption_bytes
+        )
 
     payload: dict[str, Any] = {
         "doodle_id": str(doodle.id),
