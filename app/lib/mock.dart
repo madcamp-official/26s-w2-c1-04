@@ -171,6 +171,39 @@ class AppMock extends ChangeNotifier {
   // ---- 월간 레포트 (1f) — 실서버 모드에선 _loadAll 에서 최신 달 값으로 교체.
   int reportPhotos = 12, reportDrawings = 8, reportTexts = 5;
   int reportPokes = 47, reportDoodles = 25, reportAnswers = 30;
+  List<String> reportMonths = const []; // 'YYYY-MM' 오름차순(실서버)
+  int _reportIdx = -1; // reportMonths 내 현재 위치(-1=데모/없음)
+
+  String get reportMonthLabel {
+    if (_reportIdx < 0 || _reportIdx >= reportMonths.length) return '6월';
+    final p = reportMonths[_reportIdx].split('-');
+    return p.length == 2 ? '${int.parse(p[1])}월' : reportMonths[_reportIdx];
+  }
+
+  bool get canPrevReport => _reportIdx > 0;
+  bool get canNextReport =>
+      _reportIdx >= 0 && _reportIdx < reportMonths.length - 1;
+
+  Future<void> shiftReportMonth(int delta) async {
+    if (!real) return;
+    final ni = _reportIdx + delta;
+    if (ni < 0 || ni >= reportMonths.length) return;
+    _reportIdx = ni;
+    try {
+      await _loadReportMonth(reportMonths[ni]);
+    } catch (_) {}
+    notifyListeners();
+  }
+
+  Future<void> _loadReportMonth(String month) async {
+    final rep = await api!.report(groupId!, month);
+    reportPhotos = (rep['photo_count'] as num?)?.toInt() ?? 0;
+    reportDrawings = (rep['drawing_count'] as num?)?.toInt() ?? 0;
+    reportTexts = (rep['text_count'] as num?)?.toInt() ?? 0;
+    reportPokes = (rep['poke_count'] as num?)?.toInt() ?? 0;
+    reportDoodles = reportPhotos + reportDrawings + reportTexts;
+    reportAnswers = 0; // 레포트엔 질문 답변 집계 없음(백엔드 미제공)
+  }
 
   // ==== 실서버 모드 (api != null 이면 실물, null 이면 데모) ====
   Api? api;
@@ -257,16 +290,13 @@ class AppMock extends ChangeNotifier {
       ..addAll(await a.doodles(gid));
     // 그림 일기 (서버 생성 이미지). 신규 그룹은 빈 리스트가 정상.
     await _reloadDiaries();
-    // 월간 레포트 (최신 달). 없으면 0 으로.
-    final rep = await a.latestReport(gid);
-    if (rep != null) {
-      reportPhotos = (rep['photo_count'] as num?)?.toInt() ?? 0;
-      reportDrawings = (rep['drawing_count'] as num?)?.toInt() ?? 0;
-      reportTexts = (rep['text_count'] as num?)?.toInt() ?? 0;
-      reportPokes = (rep['poke_count'] as num?)?.toInt() ?? 0;
-      reportDoodles = reportPhotos + reportDrawings + reportTexts;
-      reportAnswers = 0; // 레포트엔 질문 답변 집계가 없다(백엔드 미제공)
+    // 월간 레포트 — 있는 달 목록을 받아 최신 달을 로드(월 이동은 shiftReportMonth).
+    reportMonths = await a.reportMonths(gid);
+    if (reportMonths.isNotEmpty) {
+      _reportIdx = reportMonths.length - 1;
+      await _loadReportMonth(reportMonths[_reportIdx]);
     } else {
+      _reportIdx = -1;
       reportPhotos = reportDrawings = reportTexts = 0;
       reportPokes = reportDoodles = reportAnswers = 0;
     }

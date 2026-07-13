@@ -157,17 +157,17 @@ class Api {
     return [for (final it in items) Map<String, dynamic>.from(it as Map)];
   }
 
-  /// 가장 최근 달의 레포트. 없으면 null(신규 그룹).
-  Future<Map<String, dynamic>?> latestReport(String gid) async {
+  /// 레포트가 있는 달 목록('YYYY-MM' 오름차순). 없으면 빈 리스트(신규 그룹).
+  Future<List<String>> reportMonths(String gid) async {
     final j = await _get('/groups/$gid/reports') as Map;
     final items = (j['items'] as List? ?? const []);
-    if (items.isEmpty) return null;
-    final months = [for (final it in items) '${(it as Map)['report_month']}']
-      ..sort();
-    final month = months.last; // 최신 달
-    return Map<String, dynamic>.from(
-        await _get('/groups/$gid/reports/$month') as Map);
+    return [for (final it in items) '${(it as Map)['report_month']}']..sort();
   }
+
+  /// 특정 달의 레포트 상세.
+  Future<Map<String, dynamic>> report(String gid, String month) async =>
+      Map<String, dynamic>.from(
+          await _get('/groups/$gid/reports/$month') as Map);
 
   Future<Doodle> getDoodle(String id) async =>
       doodleFrom(await _get('/doodles/$id') as Map);

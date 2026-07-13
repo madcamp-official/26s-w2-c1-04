@@ -60,18 +60,51 @@ class ReportScreen extends StatelessWidget {
             children: [
               Text('삐삐- 월간 소식 도착!', style: hand(15, c: coral)),
               const SizedBox(height: 2),
-              Text('6월의 레포트', style: sans(22, w: FontWeight.w800)),
+              Text('${mock.reportMonthLabel}의 레포트',
+                  style: sans(22, w: FontWeight.w800)),
             ],
           ),
           const Spacer(),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
               color: Colors.white,
               border: Border.all(color: line, width: 1.5),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Text('◀ 6월 ▶', style: sans(13, w: FontWeight.w700, c: brown)),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: mock.canPrevReport
+                      ? () => mock.shiftReportMonth(-1)
+                      : null,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Text('◀',
+                        style: sans(13,
+                            w: FontWeight.w700,
+                            c: mock.canPrevReport ? brown : lineSoft)),
+                  ),
+                ),
+                Text(mock.reportMonthLabel,
+                    style: sans(13, w: FontWeight.w700, c: brown)),
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: mock.canNextReport
+                      ? () => mock.shiftReportMonth(1)
+                      : null,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Text('▶',
+                        style: sans(13,
+                            w: FontWeight.w700,
+                            c: mock.canNextReport ? brown : lineSoft)),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
