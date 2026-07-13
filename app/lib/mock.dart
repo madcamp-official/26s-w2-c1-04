@@ -61,11 +61,13 @@ class DiaryEntry {
 }
 
 class StoreItem {
-  StoreItem(this.name, this.price, {this.wearing = false});
+  StoreItem(this.name, this.price, {this.wearing = false, bool? owned})
+      : owned = owned ?? (price == 0); // 무료(중절모)는 기본 보유
 
   final String name;
   final int price;
   bool wearing;
+  bool owned; // 구매했는지(세션 로컬 — 서버 구매 API 없음)
 }
 
 class AppMock extends ChangeNotifier {
@@ -448,12 +450,24 @@ class AppMock extends ChangeNotifier {
   /// 화면이 상태를 직접 바꾼 뒤 갱신을 트리거할 때(데모 전송 등).
   void refresh() => notifyListeners();
 
-  void wear(StoreItem item) {
-    for (final h in hats) {
-      h.wearing = false;
+  /// 아이템 탭: 미보유면 코인으로 구매 후 착용, 보유면 착용/해제 토글.
+  /// 코인 부족이면 착용하지 않고 사유 문자열을 돌려준다(화면이 안내).
+  String? buyOrWear(StoreItem item) {
+    if (!item.owned) {
+      if (coins < item.price) return '코인이 ${item.price - coins} 더 필요해요';
+      coins -= item.price; // 세션 로컬 차감(서버 구매 API 미제공)
+      item.owned = true;
     }
-    item.wearing = true;
+    if (item.wearing) {
+      item.wearing = false; // 착용 해제
+    } else {
+      for (final h in hats) {
+        h.wearing = false;
+      }
+      item.wearing = true;
+    }
     notifyListeners();
+    return null;
   }
 
   void rename(String v) {

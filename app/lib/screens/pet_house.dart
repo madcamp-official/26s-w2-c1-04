@@ -9,8 +9,16 @@ import '../theme.dart';
 import 'diary.dart';
 import 'neighbor.dart';
 
-class PetHouseScreen extends StatelessWidget {
+class PetHouseScreen extends StatefulWidget {
   const PetHouseScreen({super.key});
+
+  @override
+  State<PetHouseScreen> createState() => _PetHouseScreenState();
+}
+
+class _PetHouseScreenState extends State<PetHouseScreen> {
+  static const _cats = ['모자', '옷', '가구', '배경', '소품'];
+  String _cat = '모자';
 
   String _comma(int n) => n
       .toString()
@@ -231,7 +239,11 @@ class PetHouseScreen extends StatelessWidget {
 
   // ---------------------------------------------------------------- chips
   Widget _categoryChips() {
-    Widget chip(String label, {bool active = false}) => Container(
+    Widget chip(String label) {
+      final active = _cat == label;
+      return GestureDetector(
+        onTap: () => setState(() => _cat = label),
+        child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
           decoration: BoxDecoration(
             color: active ? ink : chipBg,
@@ -245,21 +257,18 @@ class PetHouseScreen extends StatelessWidget {
               c: active ? Colors.white : brown,
             ),
           ),
-        );
+        ),
+      );
+    }
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
       child: Row(
         children: [
-          chip('모자', active: true),
-          const SizedBox(width: 8),
-          chip('옷'),
-          const SizedBox(width: 8),
-          chip('가구'),
-          const SizedBox(width: 8),
-          chip('배경'),
-          const SizedBox(width: 8),
-          chip('소품'),
+          for (int i = 0; i < _cats.length; i++) ...[
+            if (i > 0) const SizedBox(width: 8),
+            chip(_cats[i]),
+          ],
         ],
       ),
     );
@@ -267,9 +276,32 @@ class PetHouseScreen extends StatelessWidget {
 
   // ---------------------------------------------------------------- grid
   Widget _itemGrid() {
+    Widget statusLine(StoreItem item) {
+      if (item.wearing) {
+        return Text('착용 중', style: sans(11.5, w: FontWeight.w800, c: coral));
+      }
+      if (item.owned) {
+        return Text('보유', style: sans(11.5, w: FontWeight.w800, c: muted));
+      }
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 10,
+            height: 10,
+            decoration: const BoxDecoration(
+                color: goldCoin, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 4),
+          Text('${item.price}',
+              style: sans(11.5, w: FontWeight.w800, c: brown)),
+        ],
+      );
+    }
+
     Widget card(StoreItem item) => Expanded(
           child: GestureDetector(
-            onTap: () => mock.wear(item),
+            onTap: () => _onItemTap(item),
             behavior: HitTestBehavior.opaque,
             child: Container(
               padding:
@@ -285,9 +317,12 @@ class PetHouseScreen extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  CustomPaint(
-                    size: const Size(44, 24.2),
-                    painter: _HatGlyphPainter(item.name),
+                  Opacity(
+                    opacity: item.owned ? 1 : 0.75,
+                    child: CustomPaint(
+                      size: const Size(44, 24.2),
+                      painter: _HatGlyphPainter(item.name),
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Text(item.name,
@@ -295,29 +330,7 @@ class PetHouseScreen extends StatelessWidget {
                       overflow: TextOverflow.clip,
                       style: sans(12, w: FontWeight.w700)),
                   const SizedBox(height: 8),
-                  SizedBox(
-                    height: 16,
-                    child: item.wearing
-                        ? Text('착용 중',
-                            style: sans(11.5, w: FontWeight.w800, c: coral))
-                        : Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                width: 10,
-                                height: 10,
-                                decoration: const BoxDecoration(
-                                  color: goldCoin,
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                              Text('${item.price}',
-                                  style: sans(11.5,
-                                      w: FontWeight.w800, c: brown)),
-                            ],
-                          ),
-                  ),
+                  SizedBox(height: 16, child: statusLine(item)),
                 ],
               ),
             ),
@@ -334,6 +347,16 @@ class PetHouseScreen extends StatelessWidget {
           ],
         );
 
+    // 현재는 '모자'만 아이템이 있다. 다른 카테고리는 준비 중 안내(정직).
+    if (_cat != '모자') {
+      return Container(
+        margin: const EdgeInsets.only(top: 8),
+        padding: const EdgeInsets.symmetric(vertical: 40),
+        alignment: Alignment.center,
+        child: Text('$_cat 아이템은 곧 추가돼요',
+            style: sans(13, w: FontWeight.w700, c: muted)),
+      );
+    }
     final hats = mock.hats;
     return Column(
       children: [
@@ -342,6 +365,30 @@ class PetHouseScreen extends StatelessWidget {
         rowOf(hats.sublist(3, 6)),
       ],
     );
+  }
+
+  void _onSave() {
+    final worn = mock.hats.where((h) => h.wearing).map((h) => h.name).toList();
+    final msg = worn.isEmpty ? '기본 모습으로 저장했어요' : '${worn.first} 착용을 저장했어요';
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        behavior: SnackBarBehavior.floating,
+        content: Text(msg, style: sans(13, c: Colors.white)),
+      ));
+  }
+
+  // 코인 게이팅: 미보유면 구매(코인 부족 시 안내), 보유면 착용/해제.
+  void _onItemTap(StoreItem item) {
+    final err = mock.buyOrWear(item);
+    if (err != null) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text(err, style: sans(13, c: Colors.white)),
+        ));
+    }
   }
 
   // ---------------------------------------------------------------- info
@@ -417,23 +464,26 @@ class PetHouseScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 10),
-            Container(
-              width: 120,
-              height: 52,
-              decoration: BoxDecoration(
-                color: coral,
-                borderRadius: BorderRadius.circular(18),
-                boxShadow: [
-                  BoxShadow(
-                    color: coral.withValues(alpha: 0.3),
-                    offset: const Offset(0, 6),
-                    blurRadius: 16,
-                  ),
-                ],
-              ),
-              child: Center(
-                child: Text('저장하기',
-                    style: sans(14, w: FontWeight.w800, c: Colors.white)),
+            GestureDetector(
+              onTap: _onSave,
+              child: Container(
+                width: 120,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: coral,
+                  borderRadius: BorderRadius.circular(18),
+                  boxShadow: [
+                    BoxShadow(
+                      color: coral.withValues(alpha: 0.3),
+                      offset: const Offset(0, 6),
+                      blurRadius: 16,
+                    ),
+                  ],
+                ),
+                child: Center(
+                  child: Text('저장하기',
+                      style: sans(14, w: FontWeight.w800, c: Colors.white)),
+                ),
               ),
             ),
           ],
