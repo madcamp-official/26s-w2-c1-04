@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="14dp"
+    android:background="@drawable/pager_widget_bg">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/widget_pet_name"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="모리"
+            android:textStyle="bold"
+            android:textSize="16sp"
+            android:textColor="#3A2E2E" />
+
+        <TextView
+            android:id="@+id/widget_pet_level"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Lv.1"
+            android:textStyle="bold"
+            android:textSize="13sp"
+            android:textColor="#E8566B" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/widget_pet_bubble"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="삐삐! 낙서 기다리는 중"
+        android:textSize="13sp"
+        android:textColor="#6B5E5E"
+        android:maxLines="2"
+        android:ellipsize="end" />
+</LinearLayout>

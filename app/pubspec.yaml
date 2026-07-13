@@ -13,6 +13,7 @@ dependencies:
   socket_io_client: ^3.1.2 # 실시간 /rt
   shared_preferences: ^2.3.2 # 기기별 device_uid 영속화(완성품 필수)
   image_picker: ^1.1.2       # 사진 촬영/갤러리 선택
+  home_widget: ^0.6.0        # 안드로이드 홈 화면 위젯(펫 상태)
 
 dev_dependencies:
   flutter_test:

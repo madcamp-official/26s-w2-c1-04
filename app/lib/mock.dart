@@ -2,6 +2,7 @@
 // 전역 싱글턴 [mock] 하나. 화면들은 이걸 읽고 쓴 뒤 notifyListeners 로 갱신된다.
 
 import 'package:flutter/material.dart';
+import 'package:home_widget/home_widget.dart';
 
 import 'api.dart';
 import 'realtime.dart';
@@ -307,6 +308,7 @@ class AppMock extends ChangeNotifier {
     // 실시간 연결
     rt = Rt(a.host, a.token!)..onEvent = _onRtEvent;
     await rt!.connect();
+    _syncWidget(); // 홈 위젯 갱신(펫 이름·레벨·말풍선)
     notifyListeners();
   }
 
@@ -351,9 +353,11 @@ class AppMock extends ChangeNotifier {
         notifyListeners();
       case 'pet:activity':
         petBubble = '${data['utterance']}';
+        _syncWidget();
         notifyListeners();
       case 'pet:levelup':
         petLevel = (data['level'] as num?)?.toInt() ?? petLevel;
+        _syncWidget();
         notifyListeners();
       case 'diary:new':
         // 펫이 새 그림 일기를 그렸다 — 일기 목록을 다시 불러온다.
@@ -363,6 +367,18 @@ class AppMock extends ChangeNotifier {
             notifyListeners();
           } catch (_) {}
         }
+    }
+  }
+
+  /// 홈 화면 위젯에 펫 상태를 밀어넣는다(Android). 다른 플랫폼/데모는 조용히 무시.
+  Future<void> _syncWidget() async {
+    try {
+      await HomeWidget.saveWidgetData<String>('pet_name', petName);
+      await HomeWidget.saveWidgetData<String>('pet_level', levelLabel);
+      await HomeWidget.saveWidgetData<String>('pet_bubble', petBubble);
+      await HomeWidget.updateWidget(androidName: 'PagerWidgetProvider');
+    } catch (_) {
+      // 위젯 미지원 플랫폼(웹/데스크톱/테스트)에서는 조용히 넘어간다.
     }
   }
 
