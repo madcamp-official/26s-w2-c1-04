@@ -18,7 +18,7 @@ from contextlib import asynccontextmanager
 from datetime import date
 from typing import Any, Literal
 
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, File, HTTPException, Response, UploadFile
 from PIL import Image, ImageDraw, ImageFont
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -58,6 +58,11 @@ _pipeline: Any | None = None
 _load_error: str | None = None
 _load_task: asyncio.Task[None] | None = None
 _generation_lock = asyncio.Lock()
+
+# BLIP 이미지 캡션(낙서/사진을 영어로 서술 → 백엔드가 EXAONE으로 펫 말투 한국어 변환).
+_BLIP_MODEL = "Salesforce/blip-image-captioning-base"
+_blip: Any | None = None  # (processor, model)
+_blip_error: str | None = None
 
 _ACTIVITY_PROMPTS = {
     "eating": "happily eating a small meal",
@@ -180,6 +185,45 @@ def _generate(body: DiaryImageIn) -> Image.Image:
     return result.images[0].convert("RGB")
 
 
+def _load_blip() -> None:
+    global _blip, _blip_error
+    try:
+        import torch
+        from transformers import BlipForConditionalGeneration, BlipProcessor
+
+        dtype = torch.float16 if settings.device.startswith("cuda") else torch.float32
+        processor = BlipProcessor.from_pretrained(_BLIP_MODEL)
+        model = BlipForConditionalGeneration.from_pretrained(
+            _BLIP_MODEL, torch_dtype=dtype
+        ).to(settings.device)
+        _blip = (processor, model)
+        _blip_error = None
+        logger.info("BLIP 캡션 모델 로드 완료: %s", _BLIP_MODEL)
+    except Exception as exc:
+        _blip_error = f"{type(exc).__name__}: {exc}"
+        logger.exception("BLIP 로드 실패")
+
+
+def _caption_image(data: bytes) -> str:
+    if settings.stub:
+        return "a cute little drawing"
+    if _blip is None:
+        _load_blip()
+    if _blip is None:
+        raise RuntimeError(_blip_error or "BLIP 모델을 불러오지 못했습니다")
+
+    import torch
+
+    processor, model = _blip
+    image = Image.open(io.BytesIO(data)).convert("RGB")
+    inputs = processor(images=image, return_tensors="pt").to(settings.device)
+    if settings.device.startswith("cuda"):
+        inputs["pixel_values"] = inputs["pixel_values"].to(torch.float16)
+    with torch.no_grad():
+        out = model.generate(**inputs, max_new_tokens=30)
+    return processor.decode(out[0], skip_special_tokens=True).strip()
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     global _load_task
@@ -204,6 +248,21 @@ async def health(response: Response) -> dict[str, str]:
         return {"status": "down", "error": _load_error}
     response.status_code = 503
     return {"status": "loading", "model": settings.model_id}
+
+
+@app.post("/caption")
+async def caption(file: UploadFile = File(...)) -> dict[str, str]:
+    """이미지(낙서/사진) → 영어 캡션(BLIP). 백엔드가 EXAONE으로 한국어 펫 말투로 바꾼다."""
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="empty image")
+    async with _generation_lock:  # SD 생성과 VRAM 경합 방지
+        try:
+            text = await asyncio.to_thread(_caption_image, data)
+        except Exception as exc:
+            logger.exception("캡션 생성 실패")
+            raise HTTPException(status_code=503, detail="caption failed") from exc
+    return {"caption": text}
 
 
 @app.post("/generate/diary")
