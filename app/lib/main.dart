@@ -3,7 +3,10 @@
 // (선택) --dart-define=DEVICE_UID=couple-a 로 기기를 구분한다(두 브라우저 = 커플 2인).
 // API_BASE 가 없으면 Mock 데모(온보딩 완료 상태로 홈에서 시작).
 
+import 'dart:math';
+
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'mock.dart';
 import 'screens/onboarding_name.dart';
@@ -11,8 +14,21 @@ import 'shell.dart';
 import 'theme.dart';
 
 const _apiBase = String.fromEnvironment('API_BASE');
-const _deviceUid =
-    String.fromEnvironment('DEVICE_UID', defaultValue: 'web-demo-a');
+// 테스트용 강제 uid(선택). 비어 있으면 기기별로 생성·영속화한다.
+const _forcedUid = String.fromEnvironment('DEVICE_UID');
+
+/// 기기 고유 id. 최초 실행 때 만들어 저장하고, 이후 재사용한다(완성품에서 한 기기 = 한 유저).
+Future<String> _deviceUid() async {
+  if (_forcedUid.isNotEmpty) return _forcedUid;
+  final prefs = await SharedPreferences.getInstance();
+  final saved = prefs.getString('device_uid');
+  if (saved != null && saved.length >= 8) return saved;
+  final r = Random();
+  final uid = 'mp-${DateTime.now().millisecondsSinceEpoch.toRadixString(36)}-'
+      '${List.generate(6, (_) => r.nextInt(36).toRadixString(36)).join()}';
+  await prefs.setString('device_uid', uid);
+  return uid;
+}
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -49,7 +65,7 @@ class _RootState extends State<_Root> {
     // 실서버 모드면 부팅(register→/me). 데모면 mock 그대로.
     _boot = _apiBase.isEmpty
         ? null
-        : mock.bootstrapReal(_apiBase, _deviceUid, '나');
+        : _deviceUid().then((uid) => mock.bootstrapReal(_apiBase, uid, '나'));
   }
 
   @override
