@@ -213,30 +213,37 @@ class _PetHouseScreenState extends State<PetHouseScreen> {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 7),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.8),
-                          borderRadius: BorderRadius.circular(99),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              width: 16,
-                              height: 16,
-                              decoration: BoxDecoration(
-                                color: goldCoin,
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                    color: const Color(0xFFE09E00), width: 2),
+                      // 코인 필 — 탭하면 획득 기준 안내(#4).
+                      GestureDetector(
+                        onTap: _showCoinInfo,
+                        behavior: HitTestBehavior.opaque,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 7),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.8),
+                            borderRadius: BorderRadius.circular(99),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 16,
+                                height: 16,
+                                decoration: BoxDecoration(
+                                  color: goldCoin,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                      color: const Color(0xFFE09E00), width: 2),
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: 6),
-                            Text(_comma(mock.coins),
-                                style: sans(14, w: FontWeight.w800)),
-                          ],
+                              const SizedBox(width: 6),
+                              Text(_comma(mock.coins),
+                                  style: sans(14, w: FontWeight.w800)),
+                              const SizedBox(width: 5),
+                              Text('ⓘ', style: sans(12, c: brownWarm)),
+                            ],
+                          ),
                         ),
                       ),
                     ],
@@ -304,7 +311,8 @@ class _PetHouseScreenState extends State<PetHouseScreen> {
                             child: GestureDetector(
                               onTap: _showBubble,
                               behavior: HitTestBehavior.opaque,
-                              child: const DecoratedPet(size: 132),
+                              // const 금지 — mock 변경(미리보기·착용) 시 다시 그려야 함(#2)
+                              child: DecoratedPet(size: 132),
                             ),
                           ),
                           // 말풍선(#11) — 평소엔 숨겨 모자·소품을 가리지 않고,
@@ -524,17 +532,13 @@ class _PetHouseScreenState extends State<PetHouseScreen> {
   }
 
   void _onSave() {
-    final worn = mock
-        .itemsForCategory('모자')
-        .where((h) => h.wearing)
-        .map((h) => h.name)
-        .toList();
-    final msg = worn.isEmpty ? '기본 모습으로 저장했어요' : '${worn.first} 착용을 저장했어요';
+    // 저장했다는 것만 알리면 충분 — 모자 기준으로 문구가 고정되던 것 제거(#3).
+    mock.clearPreview(); // 저장 시 미리보기 상태는 정리
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(
         behavior: SnackBarBehavior.floating,
-        content: Text(msg, style: sans(13, c: Colors.white)),
+        content: Text('${mock.petName} 모습을 저장했어요', style: sans(13, c: Colors.white)),
       ));
   }
 
@@ -607,7 +611,10 @@ class _PetHouseScreenState extends State<PetHouseScreen> {
   }
 
   // ---------------------------------------------------------------- info
+  // 모리 학습 진행(#5) — 정확한 숫자 대신 단계 문구 + 부드러운 진행바.
   Widget _infoStrip() {
+    final stage = mock.learnStage;
+    final done = stage >= 3;
     return Container(
       margin: const EdgeInsets.only(top: 14),
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
@@ -615,32 +622,123 @@ class _PetHouseScreenState extends State<PetHouseScreen> {
         color: blushSoft,
         borderRadius: BorderRadius.circular(18),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          CustomPaint(
-            size: const Size(20, 20),
-            painter: _ScribblePainter(),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text.rich(
-              TextSpan(
-                style: sans(12.5, c: brown, h: 1.5),
-                children: [
-                  TextSpan(
-                      text: '${mock.petName}는 두 사람의 낙서 그림체를 배우는 중!\n'),
-                  TextSpan(
-                    text: '가끔 직접 그린 낙서를 선물해요',
-                    style: sans(12.5, c: coral, w: FontWeight.w700, h: 1.5),
-                  ),
-                ],
+          Row(
+            children: [
+              CustomPaint(size: const Size(20, 20), painter: _ScribblePainter()),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  mock.learnMessage,
+                  style: sans(12.5,
+                      c: done ? coral : brown,
+                      w: done ? FontWeight.w700 : FontWeight.w600,
+                      h: 1.45),
+                ),
               ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          // 진행바 — 개수는 숨기고 대략의 진척만 보여준다.
+          ClipRRect(
+            borderRadius: BorderRadius.circular(99),
+            child: LinearProgressIndicator(
+              value: mock.learnProgress,
+              minHeight: 7,
+              backgroundColor: Colors.white.withValues(alpha: .7),
+              valueColor: AlwaysStoppedAnimation<Color>(done ? coral : goldCoin),
             ),
           ),
         ],
       ),
     );
   }
+
+  // 코인 획득 기준 안내(#4) — 코인 필을 탭하면 뜬다.
+  void _showCoinInfo() {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        Widget row(String how, String amount) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 9),
+              child: Row(
+                children: [
+                  Expanded(
+                      child: Text(how, style: sans(14, w: FontWeight.w600))),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: goldBg,
+                      borderRadius: BorderRadius.circular(99),
+                    ),
+                    child: Text(amount,
+                        style: sans(13, w: FontWeight.w800, c: goldText)),
+                  ),
+                ],
+              ),
+            );
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 20,
+                      height: 20,
+                      decoration: BoxDecoration(
+                        color: goldCoin,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                            color: const Color(0xFFE09E00), width: 2),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text('코인 모으는 법', style: sans(17, w: FontWeight.w800)),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text('${mock.petName}랑 놀아주면 코인이 모여요. 꾸미기 아이템 사는 데 써요.',
+                    style: sans(12.5, c: brown, h: 1.4)),
+                const SizedBox(height: 8),
+                row('사진·그림·글 낙서 보내기', '+3'),
+                _thinDivider(),
+                row('답장 낙서하기', '+2'),
+                _thinDivider(),
+                row('${mock.petName} 레벨 올리기', '+50'),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: blushSoft,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Text(
+                    '쓰다듬기·콕 찌르기는 경험치가 올라 레벨업으로 코인을 받아요.',
+                    style: sans(12, c: brownWarm, h: 1.4),
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _thinDivider() =>
+      Container(height: 1, color: const Color(0xFFF0E6E0));
 
   // ---------------------------------------------------------------- bottom
   Widget _bottomRow(BuildContext context) {

@@ -1214,6 +1214,40 @@ class AppMock extends ChangeNotifier {
   /// 펫이 우리 그림체를 배웠는지(대략). 낙서가 어느 정도 쌓이고 그림 일기가 생기면 true.
   /// 아직이면(#9) 홈에서 쓰다듬을 때 '어린이 그림' 기본 낙서를 선물하고 안내 문구를 띄운다.
   bool get petLearned => doodles.length >= 6 && diary.isNotEmpty;
+
+  // ---- 모리 학습 진행(#5) — 정확한 숫자는 숨기고 단계로만 안내 ----
+  static const int _learnGoalDrawings = 20; // 서버 LEARN_MIN_DRAWINGS 와 동일
+  int get _visibleDrawings =>
+      doodles.where((d) => d.type == DoodleType.drawing).length;
+
+  /// 학습 단계: 0 시작 전, 1 배우는 중, 2 거의 다, 3 완료(이미 그림을 그림).
+  int get learnStage {
+    if (diary.isNotEmpty) return 3; // 모리가 이미 그림 = 학습 완료
+    final c = _visibleDrawings;
+    if (c <= 0) return 0;
+    if (c >= (_learnGoalDrawings * 0.7).round()) return 2; // 70%+
+    return 1;
+  }
+
+  /// 학습 진척(0~1) — 진행바용. 정확한 개수는 노출하지 않는다(#5).
+  double get learnProgress {
+    if (learnStage >= 3) return 1;
+    return (_visibleDrawings / _learnGoalDrawings).clamp(0.05, 0.95);
+  }
+
+  /// 펫하우스 안내 문구(#5).
+  String get learnMessage {
+    switch (learnStage) {
+      case 3:
+        return '$petName가 그림체를 다 배웠어요 🎨 가끔 직접 그린 낙서를 선물해요';
+      case 2:
+        return '$petName가 거의 다 배웠어요! 손그림을 조금만 더 주고받으면 그림을 그려요';
+      case 1:
+        return '$petName가 두 사람의 그림체를 배우는 중이에요';
+      default:
+        return '손그림 낙서를 주고받으면 $petName가 그림체를 배우기 시작해요';
+    }
+  }
 }
 
 final AppMock mock = AppMock();

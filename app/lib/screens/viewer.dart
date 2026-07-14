@@ -20,6 +20,9 @@ class ViewerScreen extends StatefulWidget {
 class _ViewerScreenState extends State<ViewerScreen>
     with TickerProviderStateMixin {
   late final bool _showCountdown;
+  // 화면에 그릴 낙서. 사라지는 낙서는 열람 전 서버가 본문(url·text)을 잠가서 내려주므로
+  // 열람 처리 후 잠금 해제된 본문을 다시 받아 이 값을 교체한다(#1 빈 화면 방지).
+  late Doodle _d = widget.doodle;
   int _count = 5;
   bool _closing = false;
   bool _liked = false; // 로컬 좋아요(서버 리액션 API 미제공)
@@ -43,8 +46,18 @@ class _ViewerScreenState extends State<ViewerScreen>
     // 카드(latestFromPartner)가 사라진다. 예전엔 ephemeral 만 markViewed 해서
     // 일반 낙서는 계속 미열람으로 남아 카드가 안 없어졌다.
     if (!widget.doodle.fromMe && !widget.doodle.viewed) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        mock.markViewed(widget.doodle);
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        await mock.markViewed(widget.doodle);
+        // 사라지는 낙서는 열람 전 서버가 url·text 를 null 로 잠가 내려준다 → 그대로 열면
+        // 빈 화면(#1). 열람 처리 뒤 잠금 해제된 본문을 다시 받아 채운다.
+        if (widget.doodle.ephemeral && mock.real) {
+          try {
+            final full = await mock.api!.getDoodle(widget.doodle.id);
+            if (mounted) setState(() => _d = full);
+          } catch (_) {
+            // 이미 만료됐거나 조회 실패면 기존(잠긴) 낙서 그대로 둔다.
+          }
+        }
       });
     }
     if (_showCountdown) _tick();
@@ -104,12 +117,12 @@ class _ViewerScreenState extends State<ViewerScreen>
 
   @override
   Widget build(BuildContext context) {
-    final d = widget.doodle;
     return Scaffold(
       backgroundColor: ink,
       body: ListenableBuilder(
         listenable: mock,
         builder: (context, _) {
+          final d = _d; // 잠금 해제되면 교체된 낙서를 그린다(#1)
           return Stack(
             fit: StackFit.expand,
             children: [
