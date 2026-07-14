@@ -145,7 +145,11 @@ class Api {
   }
 
   Future<void> updateGroup(String gid, {String? name, String? bgColor}) async {
-    await _patch('/groups/$gid', {'name': ?name, 'background_color': ?bgColor});
+    // 널이 아닌 필드만 명시적으로 담는다(널-어웨어 맵 요소에 의존하지 않게 — #1).
+    final body = <String, dynamic>{};
+    if (name != null) body['name'] = name;
+    if (bgColor != null) body['background_color'] = bgColor;
+    await _patch('/groups/$gid', body);
   }
 
   Future<void> setNickname(String gid, String targetUserId, String nick) async {

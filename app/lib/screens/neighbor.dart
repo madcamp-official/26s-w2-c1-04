@@ -24,6 +24,13 @@ class _NeighborScreenState extends State<NeighborScreen> {
   // 방문 히스토리(#14) — < > 로 이전/다음 집 이동. 끝에서 > 면 새 랜덤 이웃.
   final List<Map<String, dynamic>> _history = [];
   int _idx = -1;
+  // 이미 방문한 이웃(pet_id) — 같은 집이 다음 집으로 다시 나오는 것을 막는다(#3).
+  final Set<String> _seen = {};
+  // 더 놀러갈 새 집이 없음(#3) — > 버튼을 흐리게 비활성해 "넘어가는 척"을 막는다.
+  bool _exhausted = false;
+  bool _loadingNext = false;
+
+  String _key(Map<String, dynamic> n) => '${n['pet_id'] ?? n['group_id'] ?? ''}';
 
   void _pushNeighbor(Map<String, dynamic> n) {
     setState(() {
@@ -31,6 +38,7 @@ class _NeighborScreenState extends State<NeighborScreen> {
       _likes = (n['likes'] as num?)?.toInt() ?? 0;
       _history.add(n);
       _idx = _history.length - 1;
+      _seen.add(_key(n));
     });
   }
 
@@ -44,6 +52,7 @@ class _NeighborScreenState extends State<NeighborScreen> {
   }
 
   Future<void> _goNext() async {
+    // 히스토리 안에서 앞으로 이동(이미 본 집).
     if (_idx < _history.length - 1) {
       setState(() {
         _idx++;
@@ -56,16 +65,32 @@ class _NeighborScreenState extends State<NeighborScreen> {
       _toast('데모에선 다음 집이 없어요');
       return;
     }
+    if (_loadingNext || _exhausted) return;
+    _loadingNext = true;
     try {
-      final n = await mock.api!.randomNeighbor();
+      // 서버 randomNeighbor 는 rand() 라 방문한 집이 또 나올 수 있다. 안 본 집을
+      // 몇 번 시도해 찾고, 못 찾으면 더 없는 것으로 보고 > 를 비활성한다(#3).
+      Map<String, dynamic>? fresh;
+      for (var i = 0; i < 6; i++) {
+        final n = await mock.api!.randomNeighbor();
+        if (!mounted) return;
+        if (n == null) break; // 공개된 다른 집이 아예 없음
+        if (!_seen.contains(_key(n))) {
+          fresh = n;
+          break;
+        }
+      }
       if (!mounted) return;
-      if (n == null) {
+      if (fresh == null) {
+        setState(() => _exhausted = true); // 더 없음 → 버튼 흐리게
         _toast('더 놀러갈 집이 없어요');
         return;
       }
-      _pushNeighbor(n);
+      _pushNeighbor(fresh);
     } catch (_) {
       if (mounted) _toast('다음 집을 불러오지 못했어요');
+    } finally {
+      _loadingNext = false;
     }
   }
 
@@ -544,7 +569,13 @@ class _NeighborScreenState extends State<NeighborScreen> {
                     ),
                   ),
                   const SizedBox(width: 16),
-                  _navButton(forward: true, onTap: _goNext),
+                  // 히스토리 끝 + 더 없음이면 흐리게 비활성 — "넘어가는 척" 방지(#3).
+                  _navButton(
+                    forward: true,
+                    onTap: (_exhausted && _idx >= _history.length - 1)
+                        ? null
+                        : _goNext,
+                  ),
                 ],
               ),
             ),

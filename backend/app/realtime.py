@@ -206,3 +206,9 @@ async def emit_member_left(group_id: int, user_id: int) -> None:
     """한쪽이 커플 연결을 끊었음(#24)을 남은 상대에게 알린다.
     남은 앱은 이 이벤트로 즉시 온보딩으로 되돌아간다(스스로 폴링할 때까지 방치 금지)."""
     await _emit(group_id, "member:left", {"user_id": str(user_id)})
+
+
+async def emit_question_answered(group_id: int, user_id: int) -> None:
+    """오늘의 질문에 누군가 답했음을 그룹에 알린다(#6). 상대 앱이 질문을 다시 받아
+    (둘 다 답한 경우) 상대 답변을 즉시 볼 수 있게 한다 — 콜드스타트 전까지 못 보던 문제."""
+    await _emit(group_id, "question:answered", {"user_id": str(user_id)})

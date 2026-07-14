@@ -13,7 +13,7 @@ from fastapi import APIRouter
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
-from .. import services
+from .. import realtime, services
 from ..deps import CurrentUser, SessionDep
 from ..models import QuestionAnswer
 from ..schemas import AnswerIn, QuestionOut
@@ -112,4 +112,7 @@ async def answer_today_question(
         await session.rollback()
         await _upsert()
 
+    # 상대 앱에 "누가 답했다"고 알린다(#6) — 상대가 질문을 다시 받아, 둘 다 답했으면
+    # 콜드스타트 없이 바로 상대 답변을 볼 수 있다.
+    await realtime.emit_question_answered(group_id, user.id)
     return await _build(session, group_id, user.id, day)

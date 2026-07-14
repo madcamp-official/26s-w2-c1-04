@@ -60,18 +60,37 @@ class _Root extends StatefulWidget {
   State<_Root> createState() => _RootState();
 }
 
-class _RootState extends State<_Root> {
+class _RootState extends State<_Root> with WidgetsBindingObserver {
   late final Future<void>? _boot;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this); // 포그라운드 복귀 재동기화(#2/#6)
     // 실서버 모드면 부팅(register→/me). 데모면 mock 그대로.
     _boot = _apiBase.isEmpty
         ? null
         : _deviceUid()
             .then((uid) => mock.bootstrapReal(_apiBase, uid, '나'))
             .then((_) => _setupPush());
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // 앱이 다시 앞으로 오면 소켓을 다시 붙이고 놓친 낙서/답변을 메운다(#2/#6).
+    // 뒤로 가면 폴링을 멈춘다. 데모 모드에선 mock 이 알아서 무시한다.
+    if (state == AppLifecycleState.resumed) {
+      mock.onAppResumed();
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden) {
+      mock.onAppPaused();
+    }
   }
 
   /// 실서버 + 안드로이드에서만 FCM 초기화. 웹 데모(firebase_options 없음)·mock 은 건드리지 않는다.

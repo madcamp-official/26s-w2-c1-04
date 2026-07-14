@@ -202,7 +202,7 @@ class Group(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     name: Mapped[str] = mapped_column(String(32))
     invite_code: Mapped[str] = mapped_column(String(8), unique=True)
-    background_color: Mapped[str] = mapped_column(String(6), server_default="FFFFFF")
+    background_color: Mapped[str] = mapped_column(String(6), server_default="FFE3DD")
     owner_user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), index=True
     )

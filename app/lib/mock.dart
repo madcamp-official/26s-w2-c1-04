@@ -1,6 +1,8 @@
 // 데모 상태 — 디자인의 샘플 세계(지우·나무늘보·모리)를 그대로 담는다.
 // 전역 싱글턴 [mock] 하나. 화면들은 이걸 읽고 쓴 뒤 notifyListeners 로 갱신된다.
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:home_widget/home_widget.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -241,6 +243,26 @@ class AppMock extends ChangeNotifier {
     return null;
   }
 
+  /// 해당 카테고리에서 착용 중인 아이템(#5). 없으면 null. 페인터가 이모지/이름으로
+  /// 어떤 모양을 그릴지 고른다(이모지 우선, 데모는 이름으로 폴백).
+  /// 미리보기 중이면(#4) 같은 슬롯을 미리보기 아이템으로 임시 대체한다.
+  StoreItem? equippedItem(String category) {
+    final pv = previewItem;
+    if (pv != null && pv.category == category) return pv;
+    if (!real) {
+      if (category == 'hat') {
+        for (final h in hats) {
+          if (h.wearing) return h;
+        }
+      }
+      return null;
+    }
+    for (final s in storeItems) {
+      if (s.category == category && s.wearing) return s;
+    }
+    return null;
+  }
+
   // ---- 월간 레포트 (1f) — 실서버 모드에선 _loadAll 에서 최신 달 값으로 교체.
   int reportPhotos = 12, reportDrawings = 8, reportTexts = 5;
   int reportPokes = 47, reportDoodles = 25, reportAnswers = 30;
@@ -309,25 +331,116 @@ class AppMock extends ChangeNotifier {
   bool _reauthing = false;
   bool get real => api != null;
 
-  /// 토큰 무효(401) 복구(#15) — 서버에서 세션이 사라졌을 때(데이터 리셋 등)
-  /// 기기 uid 로 재등록하고 온보딩으로 되돌린다. '전송 실패' 팝업 반복을 막는다.
+  // ---- 포그라운드 폴백 동기화(#2/#6) ----
+  // 소켓이 백그라운드에서 끊기면 doodle:new·question:answered 를 놓친다. 앱이
+  // 앞에 있을 때 주기적으로 REST 로 다시 맞춰, 상대 낙서/답변이 "안 나오는" 것을 막는다.
+  Timer? _pollTimer;
+  bool _foreground = true;
+
+  /// 앱이 포그라운드로 복귀했다(main.dart 의 lifecycle observer). 끊겼던 소켓을
+  /// 다시 붙이고 즉시 한 번 동기화한 뒤 폴백 폴링을 켠다(#2/#6).
+  void onAppResumed() {
+    _foreground = true;
+    if (!real || groupId == null) return;
+    try {
+      rt?.ensureConnected();
+    } catch (_) {}
+    _resync();
+    _startPolling();
+  }
+
+  /// 앱이 백그라운드로 갔다 — 폴링을 멈춰 배터리·트래픽을 아낀다.
+  void onAppPaused() {
+    _foreground = false;
+    _pollTimer?.cancel();
+    _pollTimer = null;
+  }
+
+  void _startPolling() {
+    if (!real || groupId == null) return;
+    _pollTimer?.cancel();
+    _pollTimer = Timer.periodic(const Duration(seconds: 12), (_) {
+      if (!_foreground || !real || groupId == null) return;
+      _resync();
+    });
+  }
+
+  void _stopPolling() {
+    _pollTimer?.cancel();
+    _pollTimer = null;
+  }
+
+  /// 소켓이 놓쳤을 수 있는 것들을 REST 로 다시 맞춘다(#2 낙서, #6 오늘의 질문).
+  /// 그룹 상세(roomColor 등)는 일부러 건드리지 않는다 — 방금 바꾼 배경색이 폴링에
+  /// 되돌려지지 않도록(#1). 실패는 조용히 무시하고 다음 주기에 재시도한다.
+  Future<void> _resync() async {
+    if (!real || groupId == null) return;
+    var changed = false;
+    try {
+      final fresh = await api!.doodles(groupId!);
+      doodles
+        ..clear()
+        ..addAll(fresh);
+      changed = true;
+    } catch (_) {}
+    try {
+      await _reloadQuestion();
+      changed = true;
+    } catch (_) {}
+    if (changed) notifyListeners();
+  }
+
+  Future<void> _reloadQuestion() async {
+    if (!real || groupId == null) return;
+    final q = await api!.question(groupId!);
+    question = '${q['text']}';
+    myAnswer = q['my_answer'] as String?;
+    partnerAnswered = q['partner_answered'] == true;
+    partnerAnswer = q['partner_answer'] as String?;
+  }
+
+  /// 세션이 꼬였을 때(토큰 무효·이미 그룹 소속) 서버의 진실로 다시 맞춘다.
+  /// /me 에 그룹이 있으면 그 그룹을 로드해 홈으로 보내고 true, 없으면 false.
+  /// device_uid 재등록은 같은 유저를 돌려주므로, 이미 그룹이 있는 사용자를
+  /// 온보딩에 가두는 문제(#7: 그룹 만들기·초대코드가 409 로 막히던 것)를 막는다.
+  Future<bool> _recoverFromMe() async {
+    final a = api;
+    if (a == null) return false;
+    final m = await a.me();
+    final u = m['user'] as Map?;
+    if (u != null) myName = '${u['display_name']}';
+    final g = m['group'];
+    if (g == null) return false;
+    groupId = '${(g as Map)['id']}';
+    _applyGroup(await a.group(groupId!));
+    await _enterGroupOrWait();
+    return true;
+  }
+
+  /// 토큰 무효(401) 복구(#15) — 서버에서 세션이 사라졌거나 토큰이 갈렸을 때
+  /// 기기 uid 로 재등록한다. 재등록으로 받은 유저가 이미 그룹에 있으면 그 그룹으로
+  /// 복귀하고(#7), 없을 때만 온보딩으로 되돌린다. '전송 실패' 팝업 반복을 막는다.
   void _handleAuthLost() {
     if (_reauthing || !real || _deviceUid == null) return;
     _reauthing = true;
     () async {
       try {
-        groupId = null;
-        petId = null;
-        partnerUserId = null;
-        onboarded = false;
-        awaitingPartner = false;
-        pendingNickname = false;
+        _stopPolling();
         try {
           rt?.dispose();
         } catch (_) {}
         rt = null;
-        await api!.register(myName, _deviceUid!); // 새 토큰(새 유저)
-        notifyListeners(); // 게이트 → 온보딩 이름/그룹 화면
+        await api!.register(myName, _deviceUid!); // device_uid → 같은 유저·새 토큰
+        if (!await _recoverFromMe()) {
+          // 정말 그룹이 없을 때만 온보딩으로.
+          groupId = null;
+          petId = null;
+          partnerUserId = null;
+          onboarded = false;
+          awaitingPartner = false;
+          pendingNickname = false;
+        }
+        notifyListeners();
       } catch (_) {
       } finally {
         _reauthing = false;
@@ -360,7 +473,9 @@ class AppMock extends ChangeNotifier {
       }
     } catch (e) {
       bootstrapError = '$e';
-      onboarded = false;
+      // 그룹을 이미 로드했다면 온보딩으로 되돌리지 않는다 — 부팅 중 일시적 실패로
+      // 이미 커플인 사용자를 온보딩(→409)에 가두지 않게(#7).
+      if (groupId == null) onboarded = false;
     }
     notifyListeners();
   }
@@ -439,14 +554,11 @@ class AppMock extends ChangeNotifier {
       reportLevelStart = reportLevelEnd = 0;
       reportBestImage = reportBestText = reportBestDate = null;
     }
-    final q = await a.question(gid);
-    question = '${q['text']}';
-    myAnswer = q['my_answer'] as String?;
-    partnerAnswered = q['partner_answered'] == true;
-    partnerAnswer = q['partner_answer'] as String?;
+    await _reloadQuestion();
     // 실시간 연결
     rt = Rt(a.host, a.token!)..onEvent = _onRtEvent;
     await rt!.connect();
+    _startPolling(); // 소켓이 놓친 낙서/답변을 메우는 포그라운드 폴백(#2/#6)
     _syncWidget(); // 홈 위젯 갱신(펫 이름·레벨·말풍선)
     notifyListeners();
   }
@@ -540,12 +652,25 @@ class AppMock extends ChangeNotifier {
         if ('${data['user_id']}' != api?.myUserId) {
           _handlePartnerLeft();
         }
+      case 'question:answered':
+        // 상대가 오늘의 질문에 답했다(#6). 질문을 다시 받아, 둘 다 답했으면 콜드스타트
+        // 없이 바로 상대 답변을 공개한다(내 답변이 있어야 서버가 상대 답을 내려준다).
+        if (real && groupId != null) {
+          try {
+            await _reloadQuestion();
+            notifyListeners();
+          } catch (_) {}
+        }
+      case '__reconnect':
+        // 백그라운드 등으로 끊겼다가 소켓이 다시 붙었다 — 놓친 이벤트를 메운다(#2).
+        await _resync();
     }
   }
 
   /// 상대가 커플을 나갔을 때 로컬 세션을 정리하고 온보딩으로 되돌린다(#24).
   void _handlePartnerLeft() {
     partnerLeft = true;
+    _stopPolling();
     try {
       rt?.dispose();
     } catch (_) {}
@@ -833,6 +958,37 @@ class AppMock extends ChangeNotifier {
     );
   }
 
+  // ---- 구매 전 미리보기(#4) ----
+  StoreItem? previewItem; // null 이 아니면 그 아이템을 펫에 임시 착용해 보여준다.
+
+  /// 아이템 탭(#4): 보유했으면 착용/해제, 미보유면 코인 유무와 무관하게 펫에 미리
+  /// 입혀 본다(구매는 미리보기 바의 '구매하기'로). 데모는 코인이 넉넉해 바로 착용한다.
+  Future<String?> previewOrWear(StoreItem item) async {
+    if (!real) return buyOrWear(item);
+    if (item.owned) {
+      previewItem = null;
+      return buyOrWear(item);
+    }
+    previewItem = item;
+    notifyListeners();
+    return null;
+  }
+
+  /// 미리보기 중인 아이템을 실제로 구매·착용한다(#4). 코인 부족·실패면 사유 문자열.
+  Future<String?> buyPreviewItem() async {
+    final item = previewItem;
+    if (item == null) return null;
+    final err = await buyOrWear(item); // 구매+착용(코인 부족이면 사유 반환)
+    if (err == null) previewItem = null; // 성공 시 미리보기 종료(이제 진짜 착용)
+    return err;
+  }
+
+  void clearPreview() {
+    if (previewItem == null) return;
+    previewItem = null;
+    notifyListeners();
+  }
+
   /// 아이템 탭: 미보유면 코인으로 구매 후 착용, 보유면 착용/해제 토글.
   /// 코인 부족·실패면 사유 문자열을 돌려준다(화면이 안내). 실서버는 서버에 지속화한다.
   Future<String?> buyOrWear(StoreItem item) async {
@@ -931,6 +1087,7 @@ class AppMock extends ChangeNotifier {
         await api!.leaveGroup(groupId!);
       } catch (_) {}
     }
+    _stopPolling();
     try {
       rt?.dispose();
     } catch (_) {}
@@ -965,6 +1122,15 @@ class AppMock extends ChangeNotifier {
         await _enterGroupOrWait(fresh: true);
         return;
       } catch (e) {
+        // 이미 그룹에 속해 있으면(#7: device_uid 재등록으로 같은 유저가 되어 그룹이
+        // 남아 있는 경우) 에러 팝업 대신 그 그룹으로 복귀시킨다. 그룹 만들기/초대코드가
+        // 409 로 막히며 '의문의 플로팅 에러'만 뜨던 것을 고친다.
+        if (e is ApiException &&
+            (e.code == 'already_in_group' || e.code == 'already_member')) {
+          try {
+            if (await _recoverFromMe()) return;
+          } catch (_) {}
+        }
         bootstrapError = '$e';
         notifyListeners();
         return;

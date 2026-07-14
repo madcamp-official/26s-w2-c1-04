@@ -135,7 +135,11 @@ async def create_group(
     # UNIQUE(invite_code) 충돌은 사실상 안 나지만, 나면 다시 뽑는다.
     for attempt in range(5):
         group = Group(
-            name=body.name, invite_code=_invite_code(), owner_user_id=user_id
+            name=body.name,
+            invite_code=_invite_code(),
+            owner_user_id=user_id,
+            # 흰색 대신 은은한 블러시로 시작한다(#1). 설정에서 바꿀 수 있다.
+            background_color="FFE3DD",
         )
         session.add(group)
         try:

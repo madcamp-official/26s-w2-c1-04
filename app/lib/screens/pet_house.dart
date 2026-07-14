@@ -39,6 +39,7 @@ class _PetHouseScreenState extends State<PetHouseScreen> {
   @override
   void dispose() {
     _bubbleTimer?.cancel();
+    mock.clearPreview(); // 미리보기가 다른 화면 펫으로 새지 않게(#4)
     super.dispose();
   }
 
@@ -74,10 +75,91 @@ class _PetHouseScreenState extends State<PetHouseScreen> {
                   ),
                 ),
               ),
+              if (mock.previewItem != null) _previewBar(),
               _bottomRow(context),
             ],
           );
         },
+      ),
+    );
+  }
+
+  // ------------------------------------------------------------ preview (#4)
+  // 구매할 수 없어도 펫에 미리 입혀 보고, 여기서 바로 구매한다.
+  Widget _previewBar() {
+    final item = mock.previewItem!;
+    final short = item.price - mock.coins;
+    final canBuy = short <= 0;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 0, 24, 4),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: blushSoft,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: coral.withValues(alpha: .35), width: 1.5),
+        ),
+        child: Row(
+          children: [
+            if (item.emoji != null)
+              Text(item.emoji!, style: sans(20))
+            else
+              CustomPaint(
+                size: const Size(34, 18.7),
+                painter: _HatGlyphPainter(item.name),
+              ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('${item.name} 미리보기 중',
+                      style: sans(13, w: FontWeight.w800)),
+                  const SizedBox(height: 2),
+                  Text(
+                    canBuy ? '${item.price}코인으로 구매' : '$short코인 더 모으면 살 수 있어요',
+                    style: sans(11.5,
+                        w: FontWeight.w700, c: canBuy ? brown : muted),
+                  ),
+                ],
+              ),
+            ),
+            GestureDetector(
+              onTap: mock.clearPreview,
+              behavior: HitTestBehavior.opaque,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: Text('취소', style: sans(13, w: FontWeight.w700, c: muted)),
+              ),
+            ),
+            Pressable(
+              onTap: _buyPreview,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+                decoration: BoxDecoration(
+                  color: canBuy ? coral : muted,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 13,
+                      height: 13,
+                      decoration: const BoxDecoration(
+                          color: goldCoin, shape: BoxShape.circle),
+                    ),
+                    const SizedBox(width: 6),
+                    Text('${item.price}',
+                        style: sans(13, w: FontWeight.w800, c: Colors.white)),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -298,7 +380,10 @@ class _PetHouseScreenState extends State<PetHouseScreen> {
     Widget chip(String label) {
       final active = _cat == label;
       return GestureDetector(
-        onTap: () => setState(() => _cat = label),
+        onTap: () {
+          mock.clearPreview(); // 카테고리 바꾸면 미리보기 초기화(#4)
+          setState(() => _cat = label);
+        },
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
           decoration: BoxDecoration(
@@ -333,6 +418,9 @@ class _PetHouseScreenState extends State<PetHouseScreen> {
   // ---------------------------------------------------------------- grid
   Widget _itemGrid() {
     Widget statusLine(StoreItem item) {
+      if (identical(item, mock.previewItem) && !item.owned) {
+        return Text('미리보기', style: sans(11.5, w: FontWeight.w800, c: coral));
+      }
       if (item.wearing) {
         return Text('착용 중', style: sans(11.5, w: FontWeight.w800, c: coral));
       }
@@ -450,9 +538,14 @@ class _PetHouseScreenState extends State<PetHouseScreen> {
       ));
   }
 
-  // 코인 게이팅: 미보유면 구매(코인 부족 시 안내), 보유면 착용/해제.
+  // 아이템 탭(#4): 미보유면 펫에 미리보기(구매는 미리보기 바에서), 보유면 착용/해제.
   Future<void> _onItemTap(StoreItem item) async {
-    final err = await mock.buyOrWear(item);
+    final err = await mock.previewOrWear(item);
+    if (err != null && mounted) _showTopToast(err);
+  }
+
+  Future<void> _buyPreview() async {
+    final err = await mock.buyPreviewItem();
     if (err != null && mounted) _showTopToast(err);
   }
 
