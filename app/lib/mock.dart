@@ -426,6 +426,7 @@ class AppMock extends ChangeNotifier {
             ..clear()
             ..addAll(fresh);
           notifyListeners();
+          await _refreshPetStats(); // 상대 전송으로 오른 공유 코인 반영(#12)
         }
       case 'doodle:expired':
         doodles.removeWhere((d) => d.id == '${data['doodle_id']}');
@@ -441,6 +442,7 @@ class AppMock extends ChangeNotifier {
         petLevel = (data['level'] as num?)?.toInt() ?? petLevel;
         _syncWidget();
         notifyListeners();
+        await _refreshPetStats(); // 레벨업 보너스 코인 반영(#12)
       case 'diary:new':
         // 펫이 새 그림 일기를 그렸다 — 일기 목록을 다시 불러온다.
         if (real && petId != null) {
@@ -569,6 +571,7 @@ class AppMock extends ChangeNotifier {
       // 소켓 doodle:new 리로드가 먼저 도착해 이미 넣었을 수 있으므로 중복 방지.
       if (!doodles.any((x) => x.id == d.id)) doodles.insert(0, d);
       notifyListeners();
+      await _refreshPetStats(); // 활동별 코인 증가를 화면에 반영(#12)
       return;
     }
     doodles.insert(0,
@@ -583,11 +586,25 @@ class AppMock extends ChangeNotifier {
           ephemeral: ephemeral, parentId: parentId);
       if (!doodles.any((x) => x.id == d.id)) doodles.insert(0, d);
       notifyListeners();
+      await _refreshPetStats(); // 활동별 코인 증가를 화면에 반영(#12)
       return;
     }
     doodles.insert(0,
         Doodle(id: 'local-${doodles.length}', fromMe: true, type: DoodleType.drawing, when: '방금 전', at: today, ephemeral: ephemeral));
     notifyListeners();
+  }
+
+  /// 활동 후 펫의 코인·레벨을 다시 받아 화면에 반영한다(#12).
+  /// 낙서 전송 응답엔 코인이 없어(펫에 적립됨) 따로 펫을 조회해야
+  /// "코인 안 줬다"처럼 보이지 않는다.
+  Future<void> _refreshPetStats() async {
+    if (!real || groupId == null) return;
+    try {
+      final p = await api!.pet(groupId!);
+      coins = (p['coins'] as num).toInt();
+      petLevel = (p['level'] as num).toInt();
+      notifyListeners();
+    } catch (_) {}
   }
 
   Future<void> markViewed(Doodle d) async {
