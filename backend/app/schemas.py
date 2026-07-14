@@ -203,6 +203,36 @@ class PatOut(BaseModel):
     exp_gained: int
 
 
+# ---- 스토어 (#13) ----
+class StoreItemOut(BaseModel):
+    id: str
+    category: str
+    name: str
+    price_coins: int
+    asset_url: str
+    owned: bool
+    equipped: bool
+
+
+class StoreListOut(BaseModel):
+    coins: int
+    items: list[StoreItemOut]
+
+
+class BuyResultOut(BaseModel):
+    item_id: str
+    coins: int  # 구매 후 잔액
+
+
+class EquipIn(BaseModel):
+    equipped: bool
+
+
+class EquipResultOut(BaseModel):
+    item_id: str
+    equipped: bool
+
+
 class StyleRef(BaseModel):
     kind: str
     version: int

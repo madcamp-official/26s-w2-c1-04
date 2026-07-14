@@ -33,6 +33,7 @@ from .routers import (
     pokes,
     questions,
     reports,
+    store,
     widget,
 )
 from .security import group_id_of, user_from_token
@@ -77,6 +78,13 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         logger.warning("DB 엔진 초기화 실패. db 기능 없이 계속한다.", exc_info=True)
 
     if db_ok:
+        # 스토어 카탈로그 시드(#13) — 멱등. 아이템이 없으면 채운다.
+        try:
+            from . import store_seed
+
+            await store_seed.seed_items()
+        except Exception:
+            logger.warning("스토어 시드 실패", exc_info=True)
         # 부팅 스윕. 타이머는 프로세스 인메모리라 재기동하면 전부 사라진다.
         # 이미 만료 시각이 지난 낙서는 즉시 정리하고, 아직 안 지난 것은 재스케줄한다.
         try:
@@ -128,6 +136,7 @@ v1.include_router(pokes.router)
 v1.include_router(widget.router)
 v1.include_router(reports.router)
 v1.include_router(questions.router)
+v1.include_router(store.router)
 v1.include_router(groups.router)
 
 app.include_router(v1)
