@@ -233,6 +233,29 @@ class EquipResultOut(BaseModel):
     equipped: bool
 
 
+# ---- 이웃집 (#15, EX-1) ----
+class NeighborOut(BaseModel):
+    group_id: str
+    group_name: str
+    pet_id: str
+    pet_name: str
+    pet_level: int
+    created_at: str | None  # D-day 계산용
+    background_color: str
+    likes: int
+    liked_by_me: bool
+
+
+class NeighborResp(BaseModel):
+    neighbor: NeighborOut | None  # 다른 공개 그룹이 없으면 null → 앱이 데모를 보여준다
+
+
+class LikeResultOut(BaseModel):
+    pet_id: str
+    likes: int
+    liked: bool
+
+
 class StyleRef(BaseModel):
     kind: str
     version: int

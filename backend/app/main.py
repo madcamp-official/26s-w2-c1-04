@@ -29,6 +29,7 @@ from .routers import (
     devices,
     doodles,
     groups,
+    neighbors,
     pets,
     pokes,
     questions,
@@ -137,6 +138,7 @@ v1.include_router(widget.router)
 v1.include_router(reports.router)
 v1.include_router(questions.router)
 v1.include_router(store.router)
+v1.include_router(neighbors.router)
 v1.include_router(groups.router)
 
 app.include_router(v1)
