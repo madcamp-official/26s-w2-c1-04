@@ -167,6 +167,13 @@ async def emit_doodle_expired(group_id: int, doodle_id: int) -> None:
     await _emit(group_id, "doodle:expired", {"doodle_id": str(doodle_id)})
 
 
+async def emit_doodle_updated(group_id: int, doodle_id: int) -> None:
+    """낙서가 갱신됐음(예: AI 캡션 생성 완료)을 알린다. 앱은 목록을 다시 받는다.
+    doodle:new 는 응답 직후 emit 되지만 캡션은 백그라운드로 뒤늦게 채워지므로,
+    이 이벤트가 없으면 수신자는 재접속 전까지 캡션을 못 본다."""
+    await _emit(group_id, "doodle:updated", {"doodle_id": str(doodle_id)})
+
+
 async def emit_poke(group_id: int, from_user_id: int, at: str) -> None:
     await _emit(group_id, "poke", {"from_user_id": str(from_user_id), "at": at})
 

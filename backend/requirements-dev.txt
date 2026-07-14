@@ -1,5 +1,10 @@
 -r requirements.txt
 
+# 테스트 러너 — test_gpu_clients.py 등 pytest 스위트 실행에 필요.
+# (문서의 `pytest tests/… -o asyncio_mode=auto` 를 깨끗한 환경에서 그대로 돌리려면 있어야 한다)
+pytest==9.1.1
+pytest-asyncio==1.4.0
+
 # 실제 MySQL 통합 테스트의 동기 검증 쿼리
 pymysql==1.2.0
 

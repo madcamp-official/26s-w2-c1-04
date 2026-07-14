@@ -172,6 +172,10 @@ class AppMock extends ChangeNotifier {
   // ---- 월간 레포트 (1f) — 실서버 모드에선 _loadAll 에서 최신 달 값으로 교체.
   int reportPhotos = 12, reportDrawings = 8, reportTexts = 5;
   int reportPokes = 47, reportDoodles = 25, reportAnswers = 30;
+  // 이달의 최고 낙서(실서버 best_doodle). null 이면 카드를 숨긴다. 데모는 하드코딩 카드 사용.
+  String? reportBestImage, reportBestText, reportBestDate;
+  // 펫 레벨 변화(실서버 pet_level_start/end). 성장 카드에 'Lv.a → Lv.b' 로 표시.
+  int reportLevelStart = 0, reportLevelEnd = 0;
   List<String> reportMonths = const []; // 'YYYY-MM' 오름차순(실서버)
   int _reportIdx = -1; // reportMonths 내 현재 위치(-1=데모/없음)
 
@@ -206,6 +210,20 @@ class AppMock extends ChangeNotifier {
     reportPokes = (rep['poke_count'] as num?)?.toInt() ?? 0;
     reportDoodles = reportPhotos + reportDrawings + reportTexts;
     reportAnswers = 0; // 레포트엔 질문 답변 집계 없음(백엔드 미제공)
+    reportLevelStart = (rep['pet_level_start'] as num?)?.toInt() ?? 0;
+    reportLevelEnd = (rep['pet_level_end'] as num?)?.toInt() ?? 0;
+    // 이달의 최고 낙서 — 사진/그림은 이미지, 텍스트는 문구. 없으면 카드 숨김.
+    final best = rep['best_doodle'];
+    if (best is Map) {
+      final img = best['photo_url'] ?? best['drawing_url'] ?? best['thumb_url'];
+      reportBestImage = img == null ? null : _mediaUrl('$img');
+      reportBestText = best['text_body'] as String?;
+      reportBestDate = _diaryDateLabel('${best['created_at'] ?? ''}'.split('T').first);
+    } else {
+      reportBestImage = null;
+      reportBestText = null;
+      reportBestDate = null;
+    }
   }
 
   // ==== 실서버 모드 (api != null 이면 실물, null 이면 데모) ====
@@ -234,7 +252,7 @@ class AppMock extends ChangeNotifier {
         onboarded = true;
         // /me 의 group 은 {id,name}뿐이라 상세(초대코드·상대·D-day)를 따로 복원한다.
         _applyGroup(await a.group(gid));
-        await _loadAll();
+        await _loadAllSafe();
       } else {
         onboarded = false; // 온보딩으로
       }
@@ -313,6 +331,8 @@ class AppMock extends ChangeNotifier {
       _reportIdx = -1;
       reportPhotos = reportDrawings = reportTexts = 0;
       reportPokes = reportDoodles = reportAnswers = 0;
+      reportLevelStart = reportLevelEnd = 0;
+      reportBestImage = reportBestText = reportBestDate = null;
     }
     final q = await a.question(gid);
     question = '${q['text']}';
@@ -323,6 +343,27 @@ class AppMock extends ChangeNotifier {
     await rt!.connect();
     _syncWidget(); // 홈 위젯 갱신(펫 이름·레벨·말풍선)
     notifyListeners();
+  }
+
+  /// `_loadAll` 을 일시적 네트워크 실패에 견디게 재시도한다. 그룹 생성/부팅 직후
+  /// 단 한 번의 실패로 사용자가 빈(부분 상태) 홈에 갇히지 않게 한다. 3회 모두
+  /// 실패하면 마지막 예외를 던져 호출측이 처리한다.
+  Future<void> _loadAllSafe() async {
+    Object? lastErr;
+    for (var attempt = 0; attempt < 3; attempt++) {
+      try {
+        await _loadAll();
+        return;
+      } catch (e) {
+        lastErr = e;
+        try {
+          rt?.dispose(); // 중도 실패로 열린 소켓을 정리하고 다음 시도에서 새로 연결
+        } catch (_) {}
+        rt = null;
+        await Future<void>.delayed(Duration(milliseconds: 300 * (attempt + 1)));
+      }
+    }
+    throw lastErr!;
   }
 
   // 서버 활동 키 → 말풍선. 백엔드 ACTIVITIES(eating/sleeping/…) 와 값이 같아야 한다.
@@ -352,10 +393,15 @@ class AppMock extends ChangeNotifier {
   Future<void> _onRtEvent(String event, Map data) async {
     switch (event) {
       case 'doodle:new':
+      case 'doodle:updated': // 캡션 생성 완료 등 서버측 갱신 — 목록을 다시 받는다.
         if (real && groupId != null) {
+          // 먼저 받아온 뒤 통째로 교체한다. clear() 를 await 앞에 두면 그 사이
+          // 전송 응답의 낙관적 삽입이 빈 목록에 들어가고 addAll 이 같은 항목을 다시
+          // 붙여 발신자 앨범에 낙서가 2건으로 중복된다(경합).
+          final fresh = await api!.doodles(groupId!);
           doodles
             ..clear()
-            ..addAll(await api!.doodles(groupId!));
+            ..addAll(fresh);
           notifyListeners();
         }
       case 'doodle:expired':
@@ -610,8 +656,12 @@ class AppMock extends ChangeNotifier {
             ? await api!.joinGroup(joinCode)
             : await api!.createGroup(newGroupName, petName);
         _applyGroup(res['group'] as Map);
+        // 그룹이 서버에 생성/참여됐다. 이후 로드가 실패해도 onboarded 를 되돌리지
+        // 않는다 — 온보딩으로 튕기면 재시도 시 서버가 409(already_in_group)를 던지고,
+        // 사용자는 이미 그룹이 있으므로 홈이 맞다. _loadAllSafe 로 부분 상태를 줄이고,
+        // 끝내 실패하면 bootstrapError 만 남긴다(다음 부팅의 /me 로 완전 복구).
         onboarded = true;
-        await _loadAll();
+        await _loadAllSafe();
         return;
       } catch (e) {
         bootstrapError = '$e';

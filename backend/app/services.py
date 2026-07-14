@@ -366,8 +366,11 @@ async def generate_doodle_caption(doodle_id: int, image_bytes: bytes) -> None:
         except Exception:
             korean = english
         doodle.caption = korean[:255]
+        group_id = doodle.group_id
         await session.commit()
         logger.info("낙서 캡션 저장(doodle=%s): %s", doodle_id, doodle.caption)
+    # 커밋 뒤 소켓으로 갱신을 알려 수신자가 캡션을 즉시 보게 한다(재접속 불필요).
+    await realtime.emit_doodle_updated(group_id, doodle_id)
 
 
 async def rotate_pet_activity(pet_id: int) -> None:

@@ -7,7 +7,7 @@
 > - ⚠️ **미확인** — 신뢰할 근거를 확보하지 못함. 설치해 보고 고정할 것
 > - 🔬 **실측 필요** — 숫자가 환경에 좌우됨. 반드시 직접 재야 함
 >
-> **현황(2026-07-13)** — 백엔드는 실배포·라이브(`https://anjonghwa.madcamp-kaist.org/v1`, Cloudflare Tunnel + 앱 VM systemd `memory-pager.service`), GPU 서버도 라이브(vLLM :8100 / SD :8200, systemd `mp-vllm`·`mp-sd`, health `"gpu":"ok"`, 펫 대사·그림 일기 실추론 확인). 프론트는 **front-remake** 브랜치(worktree mp-design)에서 0부터 재구축해 현재 Mock 구동(실서버 미연결). LoRA 그림체 학습은 실현성만 검증(3090 6GB·200step 46s)·미구현.
+> **현황(2026-07-14)** — 백엔드는 실배포·라이브(`https://anjonghwa.madcamp-kaist.org/v1`, Cloudflare Tunnel + 앱 VM systemd `memory-pager.service`), GPU 서버도 라이브(vLLM :8100 / SD :8200, systemd `mp-vllm`·`mp-sd`, health `"gpu":"ok"`, 펫 대사·그림 일기 실추론 확인). 프론트는 **front-remake** 브랜치(worktree mp-design)에서 재구축해 **듀얼모드로 실서버에 연결**된다(`--dart-define=API_BASE=…` 로 register→/me→그룹 로드, 웹-실서버 QA 통과; API_BASE 없으면 Mock 데모). LoRA 그림체 학습은 **구현·E2E 검증 완료**(3090 6GB·200step 46s). FCM 푸시·홈 위젯도 구현(서버 인증 dry_run OK·네이티브 provider 존재, 실기기 확인만 남음).
 
 ---
 

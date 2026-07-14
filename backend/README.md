@@ -121,10 +121,14 @@ MySQL 8과 FastAPI가 같은 4GB를 나눠 쓴다. 사용자가 둘이라 트래
 ## 스키마 적용
 
 ```bash
-mysql -u root -p < backend/schema.sql
+# 대상 DB를 커맨드라인에서 지정한다(스키마가 DB명을 강제하지 않는다).
+mysql -u root -p memory_pager < backend/schema.sql
+# 격리 테스트: 임시 DB에만 적용(기본 memory_pager 를 건드리지 않는다)
+mysql -u root -p mp_test < backend/schema.sql
 ```
 
-`schema.sql`은 맨 앞에서 기존 테이블을 전부 `DROP`한다. **개발 초기 전용이다.**
+`schema.sql`은 맨 앞에서 (선택된 DB의) 기존 테이블을 전부 `DROP`한다. **개발 초기 전용이다.**
+DB명을 파일이 아니라 호출자가 고르므로, 격리 테스트가 기본 DB를 재생성하는 사고가 없다.
 
 ## 설계상 알아둘 것
 

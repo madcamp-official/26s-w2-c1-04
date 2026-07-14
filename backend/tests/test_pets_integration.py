@@ -19,7 +19,7 @@ import os
 import sys
 import tempfile
 import warnings
-from datetime import date
+from datetime import date, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -174,10 +174,14 @@ async def run() -> None:
             check("가입 첫날 일기장은 빈 목록", d["items"] == [] and d["next_before"] is None, str(d))
             check("없는 날짜 일기는 404", (await c.get(f"/v1/pets/{pet_id}/diaries/2020-01-01", headers=A)).status_code == 404)
 
-            # 활동의 started_at 은 _now()(UTC)로 찍힌다. 로컬이 UTC 보다 앞선 시간대(KST 등)면
-            # 자정~오전 사이 date.today()(로컬)가 UTC 날짜보다 하루 앞서 일기 대상 날짜가 어긋난다.
-            # 데이터가 쓰는 UTC 날짜로 생성해 시각 의존성을 없앤다.
-            today = services._real_now().date()
+            # generate_diary 는 entry_date 를 KST 달력일로 해석해 활동을 _kst_day_range 로
+            # 버킷팅한다(프로덕션 scheduler 도 astimezone(_KST).date() 로 KST 날짜를 넘긴다).
+            # 따라서 테스트도 KST 날짜를 넘겨야 한다. UTC 날짜(_real_now().date())를 넘기면
+            # 00:00~09:00 KST(=15:00~24:00 UTC 전날)엔 UTC 날짜가 하루 뒤처져 활동이 KST-일
+            # 창 밖으로 빠지고 일기가 안 만들어져 테스트가 시각 의존적으로 깨진다.
+            today = (
+                services._real_now().replace(tzinfo=timezone.utc).astimezone(services._KST).date()
+            )
             diary_id = await services.generate_diary(int(pet_id), today)
             check("일기 생성됨", diary_id is not None, str(diary_id))
             check("일기 이미지 파일이 실제로 저장됨", (MEDIA / f"g{gid}" / f"diary_{diary_id}.png").exists())

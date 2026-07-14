@@ -2,20 +2,21 @@
 --  Memory Pager — MySQL 8 스키마
 --  근거: docs/ERD.md (v0.3), docs/SPEC.md (v0.3)
 --
---  적용:  mysql -u root -p < backend/schema.sql
+--  적용:  대상 DB를 커맨드라인에서 지정한다(스키마가 DB명을 강제하지 않는다).
+--           mysql -u root -p memory_pager < backend/schema.sql
+--         격리 테스트용으로 임시 DB에 걸 수도 있다(같은 파일, DB명만 다르게):
+--           mysql -u root -p mp_test < backend/schema.sql
+--         (DB가 없으면 먼저:  CREATE DATABASE mp_test CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;)
 --
 --  주의 1) `groups`는 MySQL 8.0의 예약어(GROUPS)다. 반드시 백틱으로 감싼다.
 --  주의 2) 그룹 정원 2명은 CHECK + BEFORE INSERT 트리거로 이중 방어한다.
 --          동시 가입 경합은 애플리케이션에서 SELECT ... FOR UPDATE로 잠근다.
 --  주의 3) 이 프로젝트는 포트폴리오용이라 보안 하드닝을 하지 않는다.
 --          auth_identities.secret_hash도 형식만 갖춘 것이다.
+--  주의 4) 예전엔 여기서 CREATE DATABASE memory_pager + USE 로 DB명을 강제해,
+--          격리 테스트에서도 기본 DB(memory_pager)를 drop-recreate 하는 사고가 났다.
+--          이제 대상 DB는 호출자가 커맨드라인으로 고른다(위 적용 예시 참고).
 -- ============================================================================
-
-CREATE DATABASE IF NOT EXISTS memory_pager
-  CHARACTER SET utf8mb4
-  COLLATE utf8mb4_0900_ai_ci;
-
-USE memory_pager;
 
 SET FOREIGN_KEY_CHECKS = 0;
 DROP TABLE IF EXISTS question_answers;

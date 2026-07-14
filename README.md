@@ -27,7 +27,7 @@
 | 레이어 | 상태 | 비고 |
 |---|---|---|
 | 백엔드 (FastAPI + Socket.IO `/rt` + MySQL 8) | **라이브** | `https://anjonghwa.madcamp-kaist.org/v1` (Cloudflare Tunnel, 앱 VM `memory-pager.service`). 라우터 전부 완성(auth/groups/devices/doodles/pokes/widget/pets/reports), 통합 테스트 198+ 그린, 하드닝(입력검증·동시성·DATETIME(6)) 완료 |
-| GPU 서버 (vLLM + SD 1.5) | **라이브** | vLLM EXAONE 3.5 7.8B AWQ(`:8100`) + SD 1.5(`:8200`), systemd `mp-vllm`/`mp-sd`, health `"gpu":"ok"`. 펫 대사·그림 일기 실추론 확인. vLLM 부팅에 `--trust-remote-code` + `VLLM_USE_FLASHINFER_SAMPLER=0` 필수. LoRA 그림체는 실현성만 검증(3090·200step 46s)·미구현 |
+| GPU 서버 (vLLM + SD 1.5) | **라이브** | vLLM EXAONE 3.5 7.8B AWQ(`:8100`) + SD 1.5(`:8200`), systemd `mp-vllm`/`mp-sd`, health `"gpu":"ok"`. 펫 대사·그림 일기 실추론 확인. vLLM 부팅에 `--trust-remote-code` + `VLLM_USE_FLASHINFER_SAMPLER=0` 필수. LoRA 그림체는 **구현·E2E 검증 완료**(3090·200step 46s, `/train/style`→learned 렌더) |
 | 프론트엔드 (Flutter, Android) | **디자인 기반 재구축·Mock** | Claude 디자인 시안(16캔버스 하이파이)을 유일 원본으로 `front-remake` 브랜치에서 0부터 재작성. Flutter 3.44.6/Dart 3.12.2, 폰트 Pretendard+Gaegu 번들, 팔레트 코랄 `#E8566B`·잉크 `#3A2E2E`. 인앱 14화면 + shell 탭바. 현재 `lib/mock.dart` 전역 싱글턴으로 Mock 구동, **실서버 미연결**. `flutter analyze` 0, 웹 빌드 성공, 골든 15 + 시나리오 8 테스트 통과 |
 | FCM 푸시 | 코드 완성·무동작 | Firebase 프로젝트 부재로 `NullPushClient` |
 
@@ -110,7 +110,8 @@
 | 실시간 소통 | Socket.IO, 찌르기, 5초 만료, FCM, 위젯 계약 | 필수 |
 | AI 펫 | 활동·대사 캐시, 쓰다듬기, SD 1.5 그림 일기 | 필수 |
 | 월간 레포트 | 유형 분포, 성장, 규칙 기반 최고의 낙서 | 선택 |
-| LoRA·스토어·탐색 | 사용자 그림체, 펫 꾸미기, 다른 그룹 탐색 | P2 미구현 |
+| LoRA 그림체 | 사용자 손그림 화풍 학습(`/train/style`→learned 일기) | **구현·E2E 검증** |
+| 스토어·탐색 | 펫 꾸미기, 다른 그룹 탐색 | P2 (세션 로컬/정적 목업) |
 
 ---
 

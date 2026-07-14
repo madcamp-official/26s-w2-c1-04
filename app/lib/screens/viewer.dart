@@ -25,7 +25,10 @@ class _ViewerScreenState extends State<ViewerScreen> {
   void initState() {
     super.initState();
     _showCountdown = widget.doodle.ephemeral && !widget.doodle.viewed;
-    if (widget.doodle.ephemeral) {
+    // 받은(상대) 낙서를 열면 열람 처리한다. 일반 낙서도 표시해야 홈의 "새 낙서"
+    // 카드(latestFromPartner)가 사라진다. 예전엔 ephemeral 만 markViewed 해서
+    // 일반 낙서는 계속 미열람으로 남아 카드가 안 없어졌다.
+    if (!widget.doodle.fromMe && !widget.doodle.viewed) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         mock.markViewed(widget.doodle);
       });

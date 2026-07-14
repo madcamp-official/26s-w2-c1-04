@@ -30,9 +30,13 @@ class ReportScreen extends StatelessWidget {
                             children: [
                               _growthCard(),
                               const SizedBox(height: 14),
-                              // '최고의 낙서'는 백엔드 집계가 없어 하드코딩이다.
-                              // 실서버 모드에선 가짜 데이터를 보여주지 않는다(데모만 표시).
+                              // 데모는 하드코딩 카드, 실서버는 백엔드 best_doodle 이 있을 때만 표시.
+                              // (best_doodle 이 null 인 달엔 가짜 데이터를 보여주지 않는다.)
                               if (!mock.real) ...[
+                                _bestDoodleCard(),
+                                const SizedBox(height: 14),
+                              ] else if (mock.reportBestImage != null ||
+                                  (mock.reportBestText?.isNotEmpty ?? false)) ...[
                                 _bestDoodleCard(),
                                 const SizedBox(height: 14),
                               ],
@@ -197,7 +201,9 @@ class ReportScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  '낙서 ${mock.reportDoodles}개를 먹고 무럭무럭 자랐어요',
+                  mock.real && mock.reportLevelEnd > 0
+                      ? '낙서 ${mock.reportDoodles}개를 먹고 Lv.${mock.reportLevelStart} → Lv.${mock.reportLevelEnd} 로 자랐어요'
+                      : '낙서 ${mock.reportDoodles}개를 먹고 무럭무럭 자랐어요',
                   style: sans(12, c: hintWarm),
                 ),
               ],
@@ -232,15 +238,26 @@ class ReportScreen extends StatelessWidget {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  Image.asset(
-                    'assets/photos/photo_field.png',
-                    fit: BoxFit.cover,
-                  ),
+                  // 실서버: best_doodle 이미지(있으면). 텍스트 낙서만 이긴 경우엔 이미지가
+                  // 없으니 배경을 어둡게 두고 문구만 보여준다. 데모는 억새밭 샘플.
+                  if (!mock.real)
+                    Image.asset('assets/photos/photo_field.png', fit: BoxFit.cover)
+                  else if (mock.reportBestImage != null)
+                    Image.network(mock.reportBestImage!,
+                        fit: BoxFit.cover,
+                        errorBuilder: (c, e, s) => Container(color: brown))
+                  else
+                    Container(color: brown),
                   Positioned(
                     left: 12,
                     bottom: 10,
+                    right: 12,
                     child: Text(
-                      '오늘 억새밭!! ♥',
+                      mock.real
+                          ? (mock.reportBestText?.isNotEmpty ?? false
+                              ? mock.reportBestText!
+                              : '이번 달 가장 사랑받은 낙서 ♥')
+                          : '오늘 억새밭!! ♥',
                       style: hand(24, c: Colors.white).copyWith(
                         shadows: [
                           Shadow(
@@ -258,7 +275,9 @@ class ReportScreen extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Text(
-            '6월 21일 · ${mock.myName} → ${mock.partnerName} · 답장 2번을 받았어요',
+            mock.real
+                ? '${mock.reportBestDate ?? ''} · 이번 달 최고의 낙서'
+                : '6월 21일 · ${mock.myName} → ${mock.partnerName} · 답장 2번을 받았어요',
             style: sans(12.5, c: Colors.white.withValues(alpha: 0.6)),
           ),
         ],
