@@ -262,14 +262,17 @@ class LevelUp:
 
 
 async def award_pet_exp(
-    session: AsyncSession, group_id: int, amount: int
+    session: AsyncSession, group_id: int, amount: int, *, coins: int = 0
 ) -> LevelUp | None:
     """그룹 펫의 누적 exp를 올리고 레벨 경계를 원자적으로 넘긴다.
 
     같은 순간 낙서·찌르기·쓰다듬기가 들어와도 `FOR UPDATE`로 손실 갱신을 막는다.
     exp는 누적값이고 `level = exp // PET_EXP_PER_LEVEL + 1`이다.
+
+    `coins`>0 이면 활동별 즉시 코인(#12)을 레벨업 보너스와 별개로 지급한다.
+    같은 잠금 안에서 더해 동시 활동에도 손실 갱신이 없다.
     """
-    if amount <= 0:
+    if amount <= 0 and coins <= 0:
         return None
     pet = (
         await session.execute(
@@ -286,7 +289,9 @@ async def award_pet_exp(
 
     settings = get_settings()
     old_level = pet.level
-    pet.exp += amount
+    pet.exp += max(amount, 0)
+    if coins > 0:
+        pet.coins += coins  # 활동별 즉시 코인 — 레벨업과 무관하게 항상 적립
     calculated = pet.exp // max(settings.pet_exp_per_level, 1) + 1
     if calculated <= old_level:
         return None

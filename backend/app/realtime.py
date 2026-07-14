@@ -200,3 +200,9 @@ async def emit_diary_new(
         "diary:new",
         {"diary_id": str(diary_id), "entry_date": entry_date, "style_kind": style_kind},
     )
+
+
+async def emit_member_left(group_id: int, user_id: int) -> None:
+    """한쪽이 커플 연결을 끊었음(#24)을 남은 상대에게 알린다.
+    남은 앱은 이 이벤트로 즉시 온보딩으로 되돌아간다(스스로 폴링할 때까지 방치 금지)."""
+    await _emit(group_id, "member:left", {"user_id": str(user_id)})

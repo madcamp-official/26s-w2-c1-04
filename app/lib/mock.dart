@@ -78,10 +78,14 @@ class AppMock extends ChangeNotifier {
   String myName = '지우';
   String partnerName = '나무';
   String partnerNick = '나무늘보';
+  // 실서버에서 상대가 그룹에 실제로 있는지. 데모는 항상 커플이 완성된 상태로 본다.
+  // #17(유령 파트너 방지)·#23(솔로 해금 방지)·#18(빈 상태 안내) 게이팅에 쓴다.
+  bool get hasPartner => real ? partnerUserId != null : true;
   String groupName = '지우 ♥ 나무';
   String inviteCode = 'PAGER-0713';
   int dDay = 412;
   bool onboarded = true; // 데모는 온보딩 완료 상태로 부팅. 설정의 로그아웃으로 리셋.
+  bool partnerLeft = false; // 상대가 커플을 나감(#24) — 온보딩에서 안내 문구 노출용.
 
   // ---- 펫
   String petName = '모리';
@@ -292,6 +296,7 @@ class AppMock extends ChangeNotifier {
     final bg = '${g['background_color']}';
     roomColor = _hexRoom(bg);
     final members = (g['members'] as List? ?? const []);
+    partnerUserId = null;
     for (final mm in members) {
       final m = mm as Map;
       if ('${m['user_id']}' != api?.myUserId) {
@@ -299,6 +304,12 @@ class AppMock extends ChangeNotifier {
         partnerName = '${m['display_name']}';
         partnerNick = m['nickname'] != null ? '${m['nickname']}' : '${m['display_name']}';
       }
+    }
+    if (partnerUserId == null) {
+      // 아직 혼자다 — 데모 기본값('나무'/'나무늘보')이 실서버로 새어 유령 파트너로
+      // 보이던 문제(#17)를 막는다. 상대가 참여하면 위 루프가 실제 이름으로 채운다.
+      partnerName = '상대';
+      partnerNick = '상대';
     }
     final created = g['created_at'];
     if (created != null) {
@@ -438,7 +449,27 @@ class AppMock extends ChangeNotifier {
             notifyListeners();
           } catch (_) {}
         }
+      case 'member:left':
+        // 상대가 커플 연결을 끊었다(#24). 내 이탈 에코는 무시하고,
+        // 상대가 나간 경우 즉시 세션을 정리하고 온보딩으로 되돌린다(방치 금지).
+        if ('${data['user_id']}' != api?.myUserId) {
+          _handlePartnerLeft();
+        }
     }
+  }
+
+  /// 상대가 커플을 나갔을 때 로컬 세션을 정리하고 온보딩으로 되돌린다(#24).
+  void _handlePartnerLeft() {
+    partnerLeft = true;
+    try {
+      rt?.dispose();
+    } catch (_) {}
+    rt = null;
+    groupId = null;
+    petId = null;
+    partnerUserId = null;
+    onboarded = false;
+    notifyListeners();
   }
 
   /// 홈 화면 위젯에 펫 상태를 밀어넣는다(Android). 다른 플랫폼/데모는 조용히 무시.
@@ -657,6 +688,7 @@ class AppMock extends ChangeNotifier {
 
   /// 온보딩 완료. 실서버면 그룹 생성 또는 참여를 서버에 반영한다.
   Future<void> completeOnboarding({String? name, String? joinCode}) async {
+    partnerLeft = false; // 새 그룹을 만들거나 참여하면 이탈 안내를 지운다.
     if (name != null && name.isNotEmpty) myName = name;
     if (real) {
       try {

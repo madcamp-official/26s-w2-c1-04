@@ -3,6 +3,7 @@
 
 import 'package:flutter/material.dart';
 
+import '../mock.dart';
 import '../pet.dart';
 import '../theme.dart';
 import 'onboarding_group.dart';
@@ -49,6 +50,22 @@ class _OnboardingNameScreenState extends State<OnboardingNameScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      // 상대가 커플을 나갔을 때(#24) — 왜 온보딩으로 돌아왔는지 설명한다.
+                      if (mock.partnerLeft)
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 20),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: blush,
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Text(
+                            '상대가 커플 연결을 끊었어요.\n새로 시작하거나 초대 코드로 다시 연결해 주세요.',
+                            textAlign: TextAlign.center,
+                            style: sans(13, w: FontWeight.w600, c: brown, h: 1.5),
+                          ),
+                        ),
                       // 88px blush 박스 + 펫 얼굴(64)
                       Container(
                         width: 88,

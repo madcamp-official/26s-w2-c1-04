@@ -204,6 +204,31 @@ async def send_poke(
         return PushResult()
 
 
+async def send_member_left(
+    session: AsyncSession, *, group_id: int, left_nickname: str
+) -> PushResult:
+    """한쪽이 커플 연결을 끊었을 때(#24) 남은 상대에게 푸시.
+    호출 시점엔 나간 사람의 GroupMember 가 이미 삭제돼 있으므로 이름은 인자로 받고,
+    수신자는 그룹에 남은 멤버(=상대)뿐이다."""
+    try:
+        recipients = await _group_user_ids(session, group_id)
+        tokens = await _tokens_for_users(session, recipients)
+        if not tokens:
+            return PushResult()
+        return await _safe_send(
+            tokens,
+            {"type": "member_left", "left_nickname": left_nickname},
+        )
+    except Exception:
+        logger.exception("커플 이탈 푸시 준비 실패")
+        return PushResult()
+
+
+async def name_in_group(session: AsyncSession, group_id: int, user_id: int) -> str:
+    """그룹 안에서 한 사용자의 표시 이름(상대가 지은 별명 우선). 외부 모듈용 공개 래퍼."""
+    return await _name_in_group(session, group_id, user_id)
+
+
 async def send_widget_refresh(session: AsyncSession, group_id: int) -> PushResult:
     try:
         user_ids = await _group_user_ids(session, group_id)

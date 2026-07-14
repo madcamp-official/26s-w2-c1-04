@@ -24,7 +24,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .. import services
+from .. import notifications, realtime, services
 from ..deps import CurrentUser, SessionDep
 from ..errors import MYSQL_SIGNAL_ERRNO, ApiError, mysql_errno
 from ..models import (
@@ -309,9 +309,16 @@ async def leave_group(
         )
     ).scalar_one_or_none()
     if member is not None:
+        # 삭제 전에 이름을 캡처한다(삭제 후엔 별명·display_name 을 못 읽는다).
+        left_name = await notifications.name_in_group(session, group_id, user.id)
         await session.delete(member)
         # member_count 는 AFTER DELETE 트리거가 내린다(schema.sql). 여기서 손대지 않는다.
         await session.commit()
+        # 남은 상대에게 즉시 알린다(#24) — 소켓으로 온보딩 복귀, FCM 로 백그라운드 통지.
+        await realtime.emit_member_left(group_id, user.id)
+        await notifications.send_member_left(
+            session, group_id=group_id, left_nickname=left_name
+        )
     return Response(status_code=204)
 
 

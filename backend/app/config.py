@@ -55,6 +55,11 @@ class Settings(BaseSettings):
     pet_poke_exp: int = 2
     pet_pat_exp: int = 1
     pet_levelup_coins: int = 50
+    # 활동별 즉시 코인(#12) — 실제 콘텐츠 생성(낙서/답장)에만 소량 지급한다.
+    # 쓰다듬기·찌르기는 연타로 파밍이 가능하므로 코인을 직접 주지 않고
+    # exp→레벨업(50코인) 경로로만 보상한다.
+    pet_doodle_coins: int = 3
+    pet_reply_coins: int = 2
 
     # --- 푸시 ---------------------------------------------------------------
     fcm_credentials_path: Path | None = None

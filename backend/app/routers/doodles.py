@@ -215,12 +215,13 @@ async def create_doodle(
         else:
             media.render_text_thumbnail(group_id, doodle.id, text_body or "")
 
-        reward = (
-            get_settings().pet_reply_exp
-            if parent is not None
-            else get_settings().pet_doodle_exp
+        _s = get_settings()
+        is_reply = parent is not None
+        reward = _s.pet_reply_exp if is_reply else _s.pet_doodle_exp
+        coins = _s.pet_reply_coins if is_reply else _s.pet_doodle_coins
+        levelup = await services.award_pet_exp(
+            session, group_id, reward, coins=coins
         )
-        levelup = await services.award_pet_exp(session, group_id, reward)
         await session.commit()
     except Exception:
         await session.rollback()
