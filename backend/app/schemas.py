@@ -197,6 +197,10 @@ class PetDetailOut(BaseModel):
     # 펫이 아직 첫 활동을 못 받았으면 null
     current_activity: ActivityOut | None
     equipped_items: list[EquippedItemOut]
+    # 학습 진행(#5) — 그룹 누적 손그림 수와 목표치. 앱은 정확한 숫자를 노출하지 않고
+    # 단계(배우는 중/거의 다/완료)로만 안내한다. 앱 목록(최근 40건) 한계를 넘어 정확하다.
+    drawing_count: int = 0
+    learn_goal: int = 20
 
 
 class PatOut(BaseModel):

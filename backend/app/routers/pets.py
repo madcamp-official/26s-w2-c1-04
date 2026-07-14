@@ -8,13 +8,13 @@ from __future__ import annotations
 from datetime import date as date_type
 
 from fastapi import APIRouter, Query
-from sqlalchemy import select
+from sqlalchemy import func, select
 from typing import Annotated
 
 from .. import services
 from ..deps import CurrentUser, SessionDep
 from ..errors import ApiError, parse_id
-from ..models import Item, Pet, PetDiary, PetItem, StyleModel
+from ..models import ContentType, Doodle, Item, Pet, PetDiary, PetItem, StyleModel
 from ..schemas import (
     ActivityOut,
     DiaryListOut,
@@ -37,6 +37,17 @@ async def get_pet(group_id: int, user: CurrentUser, session: SessionDep) -> PetD
     ).scalar_one_or_none()
     if pet is None:
         raise ApiError(404, "not_found", "펫이 없습니다")
+
+    # 학습 진행(#5) — 그룹 누적 손그림 수(앱 목록 40건 한계와 무관하게 정확).
+    drawing_count = (
+        await session.execute(
+            select(func.count(Doodle.id)).where(
+                Doodle.group_id == group_id,
+                Doodle.content_type == ContentType.DRAWING,
+                Doodle.deleted_at.is_(None),
+            )
+        )
+    ).scalar_one()
 
     act = await services.current_activity(session, pet.id)
     equipped = (
@@ -63,6 +74,8 @@ async def get_pet(group_id: int, user: CurrentUser, session: SessionDep) -> PetD
             if act
             else None
         ),
+        drawing_count=int(drawing_count),
+        learn_goal=services.LEARN_MIN_DRAWINGS,
         equipped_items=[
             EquippedItemOut(
                 item_id=str(i.id), category=i.category.value, asset_url=i.asset_url

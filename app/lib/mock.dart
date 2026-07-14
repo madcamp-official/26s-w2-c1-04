@@ -529,6 +529,8 @@ class AppMock extends ChangeNotifier {
     petName = '${p['name']}';
     petLevel = (p['level'] as num).toInt();
     coins = (p['coins'] as num).toInt();
+    _serverDrawings = (p['drawing_count'] as num?)?.toInt() ?? _serverDrawings;
+    _learnGoal = (p['learn_goal'] as num?)?.toInt() ?? _learnGoal;
     // 활동 표정: 서버의 current_activity 를 말풍선에 반영(없으면 기본 유지)
     final act = p['current_activity'];
     if (act is Map && act['activity'] != null) {
@@ -867,6 +869,8 @@ class AppMock extends ChangeNotifier {
       final p = await api!.pet(groupId!);
       coins = (p['coins'] as num).toInt();
       petLevel = (p['level'] as num).toInt();
+      _serverDrawings = (p['drawing_count'] as num?)?.toInt() ?? _serverDrawings;
+      _learnGoal = (p['learn_goal'] as num?)?.toInt() ?? _learnGoal;
       notifyListeners();
     } catch (_) {}
   }
@@ -1216,30 +1220,38 @@ class AppMock extends ChangeNotifier {
   bool get petLearned => doodles.length >= 6 && diary.isNotEmpty;
 
   // ---- 모리 학습 진행(#5) — 정확한 숫자는 숨기고 단계로만 안내 ----
-  static const int _learnGoalDrawings = 20; // 서버 LEARN_MIN_DRAWINGS 와 동일
+  // 서버가 준 그룹 누적 손그림 수(펫 응답 drawing_count). -1이면 아직 모름 →
+  // 앱 목록(최근 40건)으로 근사. 서버 값이 있으면 40건 한계 없이 정확하다.
+  int _serverDrawings = -1;
+  int _learnGoal = 20; // 서버 learn_goal(LEARN_MIN_DRAWINGS)
   int get _visibleDrawings =>
       doodles.where((d) => d.type == DoodleType.drawing).length;
+  int get _drawingsForLearn =>
+      _serverDrawings >= 0 ? _serverDrawings : _visibleDrawings;
 
-  /// 학습 단계: 0 시작 전, 1 배우는 중, 2 거의 다, 3 완료(이미 그림을 그림).
+  /// 학습 단계: 0 시작 전, 1 배우는 중, 2 거의 다, 3 완료(목표 도달).
   int get learnStage {
-    if (diary.isNotEmpty) return 3; // 모리가 이미 그림 = 학습 완료
-    final c = _visibleDrawings;
+    final c = _drawingsForLearn;
+    // 목표(손그림 20장) 도달 또는 이미 그림을 그렸으면 학습 완료.
+    if (diary.isNotEmpty || c >= _learnGoal) return 3;
     if (c <= 0) return 0;
-    if (c >= (_learnGoalDrawings * 0.7).round()) return 2; // 70%+
+    if (c >= (_learnGoal * 0.7).round()) return 2; // 70%+
     return 1;
   }
 
   /// 학습 진척(0~1) — 진행바용. 정확한 개수는 노출하지 않는다(#5).
   double get learnProgress {
     if (learnStage >= 3) return 1;
-    return (_visibleDrawings / _learnGoalDrawings).clamp(0.05, 0.95);
+    return (_drawingsForLearn / _learnGoal).clamp(0.05, 0.95);
   }
 
   /// 펫하우스 안내 문구(#5).
   String get learnMessage {
     switch (learnStage) {
       case 3:
-        return '$petName가 그림체를 다 배웠어요 🎨 가끔 직접 그린 낙서를 선물해요';
+        return diary.isNotEmpty
+            ? '$petName가 그림체를 다 배웠어요 🎨 가끔 직접 그린 낙서를 선물해요'
+            : '$petName가 그림체를 다 배웠어요! 곧 첫 그림을 선물할 거예요';
       case 2:
         return '$petName가 거의 다 배웠어요! 손그림을 조금만 더 주고받으면 그림을 그려요';
       case 1:
