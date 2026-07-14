@@ -20,6 +20,10 @@ class _AlbumScreenState extends State<AlbumScreen> {
   // 0 = 모두, 1 = 나(지우), 2 = 상대(나무)
   int _filter = 0;
   bool _grid = false; // 상단 겹사진 아이콘: 타임라인 ↔ 격자 갤러리 토글
+  DateTime? _selectedDay; // 주간 스트립에서 고른 날(그날 낙서만 표시). null=전체
+
+  static bool _sameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
 
   @override
   Widget build(BuildContext context) {
@@ -29,10 +33,16 @@ class _AlbumScreenState extends State<AlbumScreen> {
         child: ListenableBuilder(
           listenable: mock,
           builder: (context, _) {
-            final items = mock.doodles
-                .where((d) =>
-                    _filter == 0 || (_filter == 1 ? d.fromMe : !d.fromMe))
-                .toList();
+            final items = mock.doodles.where((d) {
+              if (_filter != 0 && (_filter == 1 ? !d.fromMe : d.fromMe)) {
+                return false;
+              }
+              if (_selectedDay != null) {
+                final a = d.at;
+                if (a == null || !_sameDay(a, _selectedDay!)) return false;
+              }
+              return true;
+            }).toList();
 
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -72,6 +82,10 @@ class _AlbumScreenState extends State<AlbumScreen> {
                         const SizedBox(height: 14),
                         _personChips(),
                         const SizedBox(height: 14),
+                        if (_selectedDay != null) ...[
+                          _selectedDayBar(),
+                          const SizedBox(height: 12),
+                        ],
                         if (_grid) _photoGrid(items) else ..._timeline(items),
                       ],
                     ),
@@ -141,74 +155,121 @@ class _AlbumScreenState extends State<AlbumScreen> {
   }
 
   // ------------------------------------------------------------ 주간 스트립
+  // 오늘 포함 최근 7일. 그날 주고받은 낙서가 있으면 썸네일, 없으면 빈 원.
+  // 탭하면 그날 낙서만 필터(다시 탭하면 해제). 하드코딩 샘플 사진을 없앤다.
   Widget _weekStrip() {
-    Widget day(String label, Widget circle, {bool today = false}) {
-      return Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            label,
-            style: sans(11,
-                w: today ? FontWeight.w800 : FontWeight.w700,
-                c: today ? coral : muted),
-          ),
-          const SizedBox(height: 5),
-          SizedBox(width: 40, height: 40, child: circle),
-        ],
-      );
-    }
+    const wk = ['월', '화', '수', '목', '금', '토', '일'];
+    final today = DateTime(mock.today.year, mock.today.month, mock.today.day);
+    final days = [for (var i = 6; i >= 0; i--) today.subtract(Duration(days: i))];
 
-    Widget plain(Color bg, {String? mark, Color? markColor, double? fs}) {
-      return Container(
-        decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
-        alignment: Alignment.center,
-        child: mark == null
-            ? null
-            : Text(mark, style: hand(fs ?? 15, c: markColor ?? coral)),
-      );
+    Doodle? doodleOn(DateTime day) {
+      for (final d in mock.doodles) {
+        final a = d.at;
+        if (a != null && _sameDay(a, day)) return d;
+      }
+      return null;
     }
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        day(
-          '월',
-          ClipOval(
-            child: Image.asset('assets/photos/photo_sky.png',
-                width: 40, height: 40, fit: BoxFit.cover),
+        for (final day in days)
+          _weekDay(
+            label: _sameDay(day, today) ? '오늘' : wk[day.weekday - 1],
+            day: day,
+            doodle: doodleOn(day),
+            isToday: _sameDay(day, today),
+            selected:
+                _selectedDay != null && _sameDay(day, _selectedDay!),
           ),
-        ),
-        day('화', plain(blushSoft, mark: '♥')),
-        day('수', plain(chipBg)),
-        day('목', plain(goldBg, mark: '글', markColor: goldText, fs: 14)),
-        day('금', plain(chipBg)),
-        day('토', plain(blushSoft, mark: '♥')),
-        day(
-          '오늘',
-          Stack(
-            clipBehavior: Clip.none,
-            children: [
-              ClipOval(
-                child: Image.asset('assets/photos/photo_field.png',
-                    width: 40, height: 40, fit: BoxFit.cover),
-              ),
-              Positioned(
-                left: -4,
-                top: -4,
-                right: -4,
-                bottom: -4,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: coral, width: 2.5),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          today: true,
-        ),
       ],
+    );
+  }
+
+  Widget _weekDay({
+    required String label,
+    required DateTime day,
+    required Doodle? doodle,
+    required bool isToday,
+    required bool selected,
+  }) {
+    final has = doodle != null;
+    Widget circle;
+    if (has && (doodle.asset != null || doodle.imageUrl != null)) {
+      circle = ClipOval(
+          child: SizedBox(width: 40, height: 40, child: doodleImage(doodle)));
+    } else if (has) {
+      circle = Container(
+        decoration: const BoxDecoration(color: goldBg, shape: BoxShape.circle),
+        alignment: Alignment.center,
+        child: Text('글', style: hand(14, c: goldText)),
+      );
+    } else {
+      circle = Container(
+        decoration: const BoxDecoration(color: chipBg, shape: BoxShape.circle),
+      );
+    }
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: has
+          ? () => setState(() => _selectedDay = selected
+              ? null
+              : DateTime(day.year, day.month, day.day))
+          : null,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(label,
+              style: sans(11,
+                  w: (isToday || selected) ? FontWeight.w800 : FontWeight.w700,
+                  c: (isToday || selected) ? coral : muted)),
+          const SizedBox(height: 5),
+          SizedBox(
+            width: 40,
+            height: 40,
+            child: selected
+                ? Stack(clipBehavior: Clip.none, children: [
+                    circle,
+                    Positioned(
+                      left: -4,
+                      top: -4,
+                      right: -4,
+                      bottom: -4,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(color: coral, width: 2.5),
+                        ),
+                      ),
+                    ),
+                  ])
+                : circle,
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 선택한 날 표시 + 전체 보기로 해제.
+  Widget _selectedDayBar() {
+    final d = _selectedDay!;
+    return GestureDetector(
+      onTap: () => setState(() => _selectedDay = null),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+        decoration: BoxDecoration(
+          color: chipBg,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Text('${d.month}월 ${d.day}일 낙서',
+                style: sans(12.5, w: FontWeight.w800, c: brown)),
+            const Spacer(),
+            Text('전체 보기 ✕', style: sans(12, w: FontWeight.w700, c: coral)),
+          ],
+        ),
+      ),
     );
   }
 
@@ -370,12 +431,22 @@ class _AlbumScreenState extends State<AlbumScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // 배너는 그림 일기장으로 이동한다. 실서버 모드에선 가짜 '가을 데이트'
+                // 앨범/낙서 개수(하드코딩) 대신 정직한 문구를 쓴다. AI 큐레이션 앨범은
+                // 별도 기능으로 붙일 예정. 데모는 디자인 샘플 문구를 유지.
                 Text(
-                  "${mock.petName}가 '가을 데이트' 앨범을 만들었어요",
+                  mock.real
+                      ? '${mock.petName}의 그림 일기'
+                      : "${mock.petName}가 '가을 데이트' 앨범을 만들었어요",
                   style: sans(13, w: FontWeight.w800),
                 ),
                 const SizedBox(height: 1),
-                Text('낙서 12개 · 눌러서 보기', style: sans(12, c: brownWarm)),
+                Text(
+                  mock.real
+                      ? '모리가 그려준 그림 일기를 볼 수 있어요'
+                      : '낙서 12개 · 눌러서 보기',
+                  style: sans(12, c: brownWarm),
+                ),
               ],
             ),
           ),

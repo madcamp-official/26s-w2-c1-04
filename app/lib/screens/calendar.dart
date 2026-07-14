@@ -4,7 +4,9 @@
 
 import 'package:flutter/material.dart';
 
+import '../mock.dart';
 import '../theme.dart';
+import 'viewer.dart';
 
 class CalendarScreen extends StatefulWidget {
   const CalendarScreen({super.key});
@@ -14,15 +16,33 @@ class CalendarScreen extends StatefulWidget {
 }
 
 class _CalendarScreenState extends State<CalendarScreen> {
-  DateTime _month = DateTime(2026, 7); // 표시 중인 달(1일)
-  int _selectedDay = 13; // 선택된 날
+  late DateTime _month; // 표시 중인 달(1일)
+  late DateTime _selected; // 선택된 날짜
 
-  bool get _isJuly2026 => _month.year == 2026 && _month.month == 7;
+  @override
+  void initState() {
+    super.initState();
+    final t = mock.today;
+    _month = DateTime(t.year, t.month);
+    _selected = DateTime(t.year, t.month, t.day);
+  }
+
+  static bool _sameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
+  // 그 날 주고받은 실제 낙서들(날짜별). 하드코딩 샘플을 대체한다.
+  List<Doodle> _doodlesOn(DateTime day) => mock.doodles
+      .where((d) => d.at != null && _sameDay(d.at!, day))
+      .toList();
 
   void _shiftMonth(int delta) {
     setState(() {
       _month = DateTime(_month.year, _month.month + delta);
-      _selectedDay = 1;
+      // 이동한 달의 1일을 선택(그 달에 오늘이 있으면 오늘).
+      final t = mock.today;
+      _selected = (t.year == _month.year && t.month == _month.month)
+          ? DateTime(t.year, t.month, t.day)
+          : DateTime(_month.year, _month.month, 1);
     });
   }
 
@@ -175,84 +195,30 @@ class _CalendarScreenState extends State<CalendarScreen> {
     );
   }
 
-  /// 그 날의 셀. 2026-07은 디자인 샘플 장식, 그 외엔 숫자 셀.
+  /// 그 날의 셀 — 실제 낙서 데이터로 그린다.
+  /// 사진/그림 있으면 썸네일, 텍스트만 있으면 '글' 배지, 없으면 숫자.
   Widget _cellFor(int day) {
-    if (_isJuly2026) {
-      switch (day) {
-        case 3:
-          return _photoCell(3, 'assets/photos/photo_sky.png');
-        case 5:
-          return _heartCell(5);
-        case 7:
-          return _diaryCell(7);
-        case 11:
-          return _photoCell(11, 'assets/photos/photo_sky.png');
-        case 12:
-          return _heartCell(12);
-        case 13:
-          return _photoCell(13, 'assets/photos/photo_field.png',
-              selected: _selectedDay == 13);
+    final date = DateTime(_month.year, _month.month, day);
+    final ds = _doodlesOn(date);
+    final selected = _sameDay(date, _selected);
+    final t = mock.today;
+    final dim = date.isAfter(DateTime(t.year, t.month, t.day));
+
+    if (ds.isEmpty) return _plainCell(date, day, selected, dim: dim);
+    Doodle? photo;
+    for (final d in ds) {
+      if (d.asset != null || d.imageUrl != null) {
+        photo = d;
+        break;
       }
-      return _plainCell(day, dim: day > 13);
     }
-    return _plainCell(day);
+    if (photo != null) return _photoCell(date, day, photo, selected);
+    return _markCell(date, day, selected); // 텍스트만 있던 날
   }
 
-  /// 숫자만 있는 날(탭 → 선택). [dim]은 미래 날짜.
-  Widget _plainCell(int day, {bool dim = false}) {
-    final selected = _selectedDay == day;
-    return GestureDetector(
-      onTap: () => setState(() => _selectedDay = day),
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        decoration: selected
-            ? BoxDecoration(
-                color: blushSoft, borderRadius: BorderRadius.circular(10))
-            : null,
-        child: Center(
-          child: Text('$day',
-              style: sans(12,
-                  w: selected ? FontWeight.w800 : FontWeight.w400,
-                  c: selected ? coral : (dim ? lineSoft : muted))),
-        ),
-      ),
-    );
-  }
-
-  /// 사진이 쌓인 날 — 흰 숫자 배지. [selected]면 coral 2.5 아웃라인.
-  Widget _photoCell(int day, String asset, {bool selected = false}) {
-    final photo = ClipRRect(
-      borderRadius: BorderRadius.circular(10),
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          Image.asset(asset, fit: BoxFit.cover),
-          Positioned(
-            top: 2,
-            left: 4,
-            child: Text(
-              '$day',
-              style: sans(10, w: FontWeight.w800, c: Colors.white).copyWith(
-                shadows: [
-                  Shadow(
-                    color: Colors.black.withValues(alpha: .5),
-                    blurRadius: 3,
-                    offset: const Offset(0, 1),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-    final cell = GestureDetector(
-      onTap: () => setState(() => _selectedDay = day),
-      behavior: HitTestBehavior.opaque,
-      child: photo,
-    );
+  // 선택 하이라이트: 채워진 셀도 확실히 보이도록 셀 밖으로 coral 2.5 링을 두른다.
+  Widget _wrapSelected(Widget cell, bool selected, {double radius = 13}) {
     if (!selected) return cell;
-    // outline: 2.5px solid coral, offset 1px — 셀 밖으로 살짝 벗어난 테두리.
     return Stack(
       clipBehavior: Clip.none,
       fit: StackFit.expand,
@@ -266,7 +232,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
           child: IgnorePointer(
             child: DecoratedBox(
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(13),
+                borderRadius: BorderRadius.circular(radius),
                 border: Border.all(color: coral, width: 2.5),
               ),
             ),
@@ -276,36 +242,65 @@ class _CalendarScreenState extends State<CalendarScreen> {
     );
   }
 
-  /// 하트 낙서가 있던 날.
-  Widget _heartCell(int day) {
+  /// 낙서 없는 날(탭 → 선택). 선택되면 coral 배경으로 확실히 강조.
+  Widget _plainCell(DateTime date, int day, bool selected, {bool dim = false}) {
     return GestureDetector(
-      onTap: () => setState(() => _selectedDay = day),
+      onTap: () => setState(() => _selected = date),
       behavior: HitTestBehavior.opaque,
       child: Container(
-        decoration: BoxDecoration(
-          color: blushSoft,
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            Center(child: Text('♥', style: hand(13, c: coral))),
-            Positioned(
-              top: 2,
-              left: 4,
-              child: Text('$day',
-                  style: sans(10, w: FontWeight.w700, c: brownWarm)),
-            ),
-          ],
+        decoration: selected
+            ? BoxDecoration(color: coral, borderRadius: BorderRadius.circular(10))
+            : null,
+        child: Center(
+          child: Text('$day',
+              style: sans(12,
+                  w: selected ? FontWeight.w800 : FontWeight.w400,
+                  c: selected
+                      ? Colors.white
+                      : (dim ? lineSoft : muted))),
         ),
       ),
     );
   }
 
-  /// 텍스트 낙서('글')가 있던 날.
-  Widget _diaryCell(int day) {
-    return GestureDetector(
-      onTap: () => setState(() => _selectedDay = day),
+  /// 사진/그림이 있던 날 — 썸네일 + 흰 숫자. 선택되면 coral 링.
+  Widget _photoCell(DateTime date, int day, Doodle d, bool selected) {
+    final cell = GestureDetector(
+      onTap: () => setState(() => _selected = date),
+      behavior: HitTestBehavior.opaque,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            doodleImage(d),
+            Positioned(
+              top: 2,
+              left: 4,
+              child: Text(
+                '$day',
+                style: sans(10, w: FontWeight.w800, c: Colors.white).copyWith(
+                  shadows: [
+                    Shadow(
+                      color: Colors.black.withValues(alpha: .5),
+                      blurRadius: 3,
+                      offset: const Offset(0, 1),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    return _wrapSelected(cell, selected);
+  }
+
+  /// 텍스트 낙서('글')만 있던 날. 선택되면 coral 링.
+  Widget _markCell(DateTime date, int day, bool selected) {
+    final cell = GestureDetector(
+      onTap: () => setState(() => _selected = date),
       behavior: HitTestBehavior.opaque,
       child: Container(
         decoration: BoxDecoration(
@@ -326,50 +321,64 @@ class _CalendarScreenState extends State<CalendarScreen> {
         ),
       ),
     );
+    return _wrapSelected(cell, selected);
   }
 
   // ---------------------------------------------------------------- selected
   Widget _selectedDayCard() {
-    // 2026-07-13만 샘플 콘텐츠가 있다. 그 외 날짜는 요약만.
-    final hasSample = _isJuly2026 && _selectedDay == 13;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: line, width: 1.5),
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Row(
-        children: [
-          if (hasSample) ...[
-            ClipRRect(
-              borderRadius: BorderRadius.circular(13),
-              child: Image.asset(
-                'assets/photos/photo_field.png',
-                width: 48,
-                height: 48,
-                fit: BoxFit.cover,
+    final ds = _doodlesOn(_selected);
+    final first = ds.isEmpty ? null : ds.first;
+    final hasPhoto =
+        first != null && (first.asset != null || first.imageUrl != null);
+    final preview = first == null
+        ? '이 날의 낙서가 없어요'
+        : (first.caption ?? first.text ?? '눌러서 보기');
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: first == null
+          ? null
+          : () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => ViewerScreen(doodle: first)),
+              ),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border.all(color: line, width: 1.5),
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Row(
+          children: [
+            if (hasPhoto) ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(13),
+                child: SizedBox(
+                    width: 48, height: 48, child: doodleImage(first)),
+              ),
+              const SizedBox(width: 12),
+            ],
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    ds.isEmpty
+                        ? '${_selected.month}월 ${_selected.day}일'
+                        : '${_selected.month}월 ${_selected.day}일 · 낙서 ${ds.length}개',
+                    style: sans(13, w: FontWeight.w800),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(preview,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: hand(15, c: ds.isEmpty ? muted : brown)),
+                ],
               ),
             ),
-            const SizedBox(width: 12),
+            if (first != null) Text('→', style: sans(13, c: brownWarm)),
           ],
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  hasSample
-                      ? '${_month.month}월 $_selectedDay일 · 낙서 3개'
-                      : '${_month.month}월 $_selectedDay일',
-                  style: sans(13, w: FontWeight.w800),
-                ),
-                const SizedBox(height: 2),
-                Text(hasSample ? '오늘 억새밭!! ♥' : '이 날의 낙서가 없어요',
-                    style: hand(15, c: hasSample ? brown : muted)),
-              ],
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

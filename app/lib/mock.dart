@@ -21,6 +21,7 @@ class Doodle {
     this.text,
     this.caption,
     required this.when,
+    this.at,
     this.ephemeral = false,
     this.viewed = true,
     this.replies = 0,
@@ -35,6 +36,7 @@ class Doodle {
   final String? text; // 텍스트 낙서 본문
   final String? caption; // 데모: 사진/그림 위 손글씨 오버레이
   final String when; // '방금 전' '5분 전' '어제' ...
+  final DateTime? at; // 실제 생성 시각(로컬). 날짜별 그룹핑용. 미상이면 null.
   final bool ephemeral;
   bool viewed;
   final int replies;
@@ -101,6 +103,11 @@ class AppMock extends ChangeNotifier {
   bool partnerAnswered = true;
   String? myAnswer;
 
+  // 데모 세계의 '오늘'. 골든 결정성을 위해 실서버가 아닐 땐 고정 날짜를 쓴다
+  // (데모 낙서 날짜·주간 스트립이 실행 시각에 따라 달라지지 않게).
+  static final DateTime _demoToday = DateTime(2026, 7, 13);
+  DateTime get today => real ? DateTime.now() : _demoToday;
+
   // ---- 낙서들 (디자인 샘플 콘텐츠)
   final List<Doodle> doodles = [
     Doodle(
@@ -110,6 +117,7 @@ class AppMock extends ChangeNotifier {
       asset: 'assets/photos/photo_field.png',
       caption: '오늘 억새밭!!',
       when: '방금 전',
+      at: DateTime(2026, 7, 13, 9),
       viewed: false,
       replies: 2,
     ),
@@ -119,6 +127,7 @@ class AppMock extends ChangeNotifier {
       type: DoodleType.text,
       text: '퇴근하고 떡볶이 ㄱ? ♥',
       when: '어제',
+      at: DateTime(2026, 7, 12, 19),
     ),
     Doodle(
       id: 'd3',
@@ -127,6 +136,7 @@ class AppMock extends ChangeNotifier {
       asset: 'assets/photos/photo_sky.png',
       caption: '오늘 하늘 예쁘다 ♥',
       when: '7월 11일',
+      at: DateTime(2026, 7, 11, 15),
     ),
     Doodle(
       id: 'd4',
@@ -134,6 +144,7 @@ class AppMock extends ChangeNotifier {
       type: DoodleType.text,
       text: '배고파 ♥',
       when: '7월 10일',
+      at: DateTime(2026, 7, 10, 12),
     ),
   ];
 
@@ -530,7 +541,7 @@ class AppMock extends ChangeNotifier {
       return;
     }
     doodles.insert(0,
-        Doodle(id: 'local-${doodles.length}', fromMe: true, type: DoodleType.text, text: text, when: '방금 전', ephemeral: ephemeral));
+        Doodle(id: 'local-${doodles.length}', fromMe: true, type: DoodleType.text, text: text, when: '방금 전', at: today, ephemeral: ephemeral));
     notifyListeners();
   }
 
@@ -544,7 +555,7 @@ class AppMock extends ChangeNotifier {
       return;
     }
     doodles.insert(0,
-        Doodle(id: 'local-${doodles.length}', fromMe: true, type: DoodleType.drawing, when: '방금 전', ephemeral: ephemeral));
+        Doodle(id: 'local-${doodles.length}', fromMe: true, type: DoodleType.drawing, when: '방금 전', at: today, ephemeral: ephemeral));
     notifyListeners();
   }
 

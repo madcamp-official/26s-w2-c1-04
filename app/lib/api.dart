@@ -250,6 +250,7 @@ class Api {
       text: j['text_body'] as String?,
       caption: j['caption'] as String?,
       when: _rel(j['created_at'] as String?),
+      at: DateTime.tryParse('${j['created_at']}')?.toLocal(),
       ephemeral: '${j['mode']}' == 'ephemeral',
       viewed: j['viewed_by_me'] == true,
       replies: (j['reply_count'] as num?)?.toInt() ?? 0,
