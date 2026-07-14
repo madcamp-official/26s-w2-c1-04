@@ -36,7 +36,7 @@ Future<void> _initLocalNotifs() async {
 (String, String)? _content(Map<String, dynamic> data) {
   switch ('${data['type']}') {
     case 'poke':
-      return ('콕! 삐삐-', '${data['from_nickname'] ?? '상대'}님이 콕 찔렀어요');
+      return ('콕!', '${data['from_nickname'] ?? '상대'}님이 콕 찔렀어요');
     case 'doodle_received':
       final ephemeral = '${data['is_ephemeral']}' == 'true';
       return (

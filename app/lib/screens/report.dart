@@ -68,7 +68,7 @@ class ReportScreen extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('삐삐- 월간 소식 도착!', style: hand(15, c: coral)),
+              Text('월간 소식이 도착했어요', style: hand(15, c: coral)),
               const SizedBox(height: 2),
               Text(
                   mock.real && mock.reportMonths.isEmpty

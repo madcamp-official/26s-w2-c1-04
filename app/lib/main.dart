@@ -45,7 +45,7 @@ class MemoryPagerApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Memory Pager',
+      title: '두드림',
       debugShowCheckedModeBanner: false,
       theme: appTheme,
       home: const _Root(),
@@ -129,7 +129,7 @@ class _Splash extends StatelessWidget {
           children: [
             const CircularProgressIndicator(color: coral),
             const SizedBox(height: 16),
-            Text('삐삐- 연결 중…', style: hand(20, c: coral)),
+            Text('연결하는 중…', style: hand(20, c: coral)),
           ],
         ),
       ),

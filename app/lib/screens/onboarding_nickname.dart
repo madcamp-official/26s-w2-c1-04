@@ -82,7 +82,7 @@ class _NicknameScreenState extends State<NicknameScreen> {
                         ],
                       ),
                       const SizedBox(height: 24),
-                      Text('삐삐- 연결 완료!', style: hand(16, c: coral, ls: 2)),
+                      Text('연결 완료!', style: hand(16, c: coral, ls: 2)),
                       const SizedBox(height: 6),
                       Text(
                         '${mock.partnerName}님이 들어왔어요\n별명을 지어주세요',

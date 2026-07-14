@@ -7,8 +7,9 @@ import 'package:flutter/material.dart';
 import 'mock.dart';
 import 'theme.dart';
 
-/// 펫 + 착용 아이템 이모지 오버레이(#12). 132 기준 배치를 size 에 비례해 스케일.
-/// 옷/가구/배경/소품/모자를 착용하면 캐릭터 위/주변에 이모지로 나타난다.
+/// 펫 + 착용 아이템(#12). 방 안에 펫이 앉아 있고, 착용/배치 아이템이 그 주변을
+/// 깔끔하게 꾸미는 '작은 방 장면'으로 그린다. 작은 미리보기(132)와 전체화면(200)에서
+/// 동일하게 보이도록 모든 요소를 size 비율로 배치하고 경계 안에 담는다(#3·#4).
 class DecoratedPet extends StatelessWidget {
   const DecoratedPet({
     super.key,
@@ -25,50 +26,88 @@ class DecoratedPet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final s = size / 132;
+    final s = size;
     final hat = mock.equippedEmoji('hat');
     final clothes = mock.equippedEmoji('clothes');
     final acc = mock.equippedEmoji('accessory');
     final prop = mock.equippedEmoji('prop');
     final furniture = mock.equippedEmoji('furniture');
     final bg = mock.equippedEmoji('background');
+
+    Widget glyph(String e, double f, {double opacity = 1}) => Opacity(
+          opacity: opacity,
+          child: Text(e, style: TextStyle(fontSize: s * f, height: 1)),
+        );
+
     return SizedBox(
-      width: size,
-      height: size,
+      width: s,
+      height: s,
       child: Stack(
         clipBehavior: Clip.none,
-        alignment: Alignment.center,
         children: [
+          // 배경 장식(#4) — 큰 반투명 이모지 하나 대신, 벽에 붙인 작은 스티커 3개로
+          // 방을 꾸민 느낌을 준다(가운데가 조금 더 큼).
           if (showBackground && bg != null)
-            Center(
-              child: Opacity(
-                opacity: .3,
-                child: Text(bg, style: TextStyle(fontSize: 96 * s)),
+            Positioned(
+              top: s * 0.015,
+              left: s * 0.06,
+              right: s * 0.06,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  glyph(bg, 0.12, opacity: .5),
+                  glyph(bg, 0.16, opacity: .85),
+                  glyph(bg, 0.12, opacity: .5),
+                ],
               ),
             ),
-          Center(child: PetFace(size: size, color: color, faceInk: faceInk)),
-          if (hat != null)
-            Positioned(
-                top: -8 * s, child: Text(hat, style: TextStyle(fontSize: 36 * s))),
-          if (acc != null)
-            Positioned(
-                top: 38 * s,
-                right: 6 * s,
-                child: Text(acc, style: TextStyle(fontSize: 24 * s))),
+          // 바닥 그림자 — 펫·소품이 바닥에 앉아 있는 느낌.
+          Positioned(
+            bottom: s * 0.05,
+            left: s * 0.16,
+            right: s * 0.16,
+            child: Container(
+              height: s * 0.05,
+              decoration: BoxDecoration(
+                color: ink.withValues(alpha: .08),
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+          ),
+          // 가구 — 바닥 왼쪽에 배치.
+          if (furniture != null)
+            Positioned(bottom: s * 0.04, left: 0, child: glyph(furniture, 0.26)),
+          // 소품 — 바닥 오른쪽에 배치.
+          if (prop != null)
+            Positioned(bottom: s * 0.04, right: 0, child: glyph(prop, 0.24)),
+          // 펫 — 바닥 중앙에 앉는다. 아이템 자리를 위해 살짝 작게(0.82).
+          Positioned(
+            bottom: s * 0.08,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: PetFace(size: s * 0.82, color: color, faceInk: faceInk),
+            ),
+          ),
+          // 옷 — 몸통 아래(배~발치)에 얹어 얼굴을 가리지 않는다.
           if (clothes != null)
             Positioned(
-                bottom: 18 * s,
-                child: Text(clothes, style: TextStyle(fontSize: 30 * s))),
-          if (prop != null)
+              bottom: s * 0.14,
+              left: 0,
+              right: 0,
+              child: Center(child: glyph(clothes, 0.22)),
+            ),
+          // 액세서리 — 얼굴 오른쪽 볼 옆(안경·목걸이 등).
+          if (acc != null)
+            Positioned(top: s * 0.44, right: s * 0.17, child: glyph(acc, 0.16)),
+          // 모자 — 머리 위 정중앙.
+          if (hat != null)
             Positioned(
-                bottom: 0,
-                right: -6 * s,
-                child: Text(prop, style: TextStyle(fontSize: 26 * s))),
-          if (furniture != null)
-            Positioned(
-                bottom: 0,
-                left: -6 * s,
-                child: Text(furniture, style: TextStyle(fontSize: 26 * s))),
+              top: s * 0.02,
+              left: 0,
+              right: 0,
+              child: Center(child: glyph(hat, 0.28)),
+            ),
         ],
       ),
     );

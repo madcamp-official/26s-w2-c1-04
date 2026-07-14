@@ -116,7 +116,7 @@ void main() {
     mock.onboarded = false;
     await t.pumpWidget(const MemoryPagerApp());
     await t.pump();
-    expect(find.text('Memory Pager'), findsWidgets);
+    expect(find.text('두드림'), findsWidgets);
     await t.enterText(find.byType(TextField).first, '세온');
     await t.tap(find.text('시작하기'));
     await t.pumpAndSettle();

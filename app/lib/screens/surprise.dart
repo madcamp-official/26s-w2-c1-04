@@ -40,7 +40,7 @@ class SurpriseScreen extends StatelessWidget {
                   right: 0,
                   child: Column(
                     children: [
-                      Text(learning ? '삐삐- 조금만 기다려줘' : '삐삐- 깜짝 선물!',
+                      Text(learning ? '조금만 기다려줘' : '깜짝 선물이야!',
                           style: hand(17, c: coral, ls: 2)),
                       const SizedBox(height: 4),
                       Text(

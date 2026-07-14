@@ -11,6 +11,10 @@ import 'screens/home.dart';
 import 'screens/pet_house.dart';
 import 'theme.dart';
 
+/// 현재 하단 탭(0 홈 · 1 사진첩 · 2 펫). 답장 전송 후 홈으로 돌아오기(#5)처럼
+/// 화면 밖에서 탭을 바꿔야 할 때 이 전역 노티파이어를 통해 전환한다.
+final ValueNotifier<int> appTab = ValueNotifier<int>(0);
+
 class AppShell extends StatefulWidget {
   const AppShell({super.key});
 
@@ -19,8 +23,6 @@ class AppShell extends StatefulWidget {
 }
 
 class _AppShellState extends State<AppShell> {
-  int _tab = 0; // 0 홈 · 1 사진첩 · 2 펫 (낙서는 push)
-
   void _openCanvas() {
     Navigator.of(context).push(
       MaterialPageRoute<void>(builder: (_) => const DrawCanvasScreen()),
@@ -30,48 +32,51 @@ class _AppShellState extends State<AppShell> {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: mock,
-      builder: (context, _) => Scaffold(
-        backgroundColor: paperCard,
-        body: IndexedStack(
-          index: _tab,
-          children: const [HomeScreen(), AlbumScreen(), PetHouseScreen()],
-        ),
-        bottomNavigationBar: Container(
-          height: 86,
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            border: Border(top: BorderSide(color: line)),
+      listenable: Listenable.merge([mock, appTab]),
+      builder: (context, _) {
+        final tab = appTab.value;
+        return Scaffold(
+          backgroundColor: paperCard,
+          body: IndexedStack(
+            index: tab,
+            children: const [HomeScreen(), AlbumScreen(), PetHouseScreen()],
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _NavItem(
-                active: _tab == 0,
-                icon: _HomeIcon(color: _tab == 0 ? coral : muted),
-                onTap: () => setState(() => _tab = 0),
-              ),
-              _NavItem(
-                active: false,
-                icon: const _ScribbleIcon(color: muted),
-                onTap: _openCanvas,
-              ),
-              _NavItem(
-                active: _tab == 1,
-                icon: Icon(Icons.photo_outlined,
-                    size: 23, color: _tab == 1 ? coral : muted),
-                onTap: () => setState(() => _tab = 1),
-              ),
-              _NavItem(
-                active: _tab == 2,
-                icon: PetTabIcon(color: _tab == 2 ? coral : muted),
-                onTap: () => setState(() => _tab = 2),
-              ),
-            ],
+          bottomNavigationBar: Container(
+            height: 86,
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              border: Border(top: BorderSide(color: line)),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _NavItem(
+                  active: tab == 0,
+                  icon: _HomeIcon(color: tab == 0 ? coral : muted),
+                  onTap: () => appTab.value = 0,
+                ),
+                _NavItem(
+                  active: false,
+                  icon: const _ScribbleIcon(color: muted),
+                  onTap: _openCanvas,
+                ),
+                _NavItem(
+                  active: tab == 1,
+                  icon: Icon(Icons.photo_outlined,
+                      size: 23, color: tab == 1 ? coral : muted),
+                  onTap: () => appTab.value = 1,
+                ),
+                _NavItem(
+                  active: tab == 2,
+                  icon: PetTabIcon(color: tab == 2 ? coral : muted),
+                  onTap: () => appTab.value = 2,
+                ),
+              ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }

@@ -62,3 +62,50 @@ Widget viewToggle({
     ),
   );
 }
+
+/// [격자 | 목록] 보기 방식 토글(#7). 겹사진 아이콘이 직관적이지 않다는 피드백으로,
+/// 격자/목록 두 아이콘을 나란히 둔 세그먼트 토글로 바꿨다(활성 쪽 흰 배경 강조).
+Widget gridListToggle({
+  required bool gridActive,
+  required VoidCallback onGrid,
+  required VoidCallback onList,
+}) {
+  Widget seg(IconData icon, bool active, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: active ? null : onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+        decoration: active
+            ? BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(99),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: .08),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              )
+            : null,
+        child: Icon(icon, size: 17, color: active ? ink : muted),
+      ),
+    );
+  }
+
+  return Container(
+    padding: const EdgeInsets.all(3),
+    decoration: BoxDecoration(
+      color: chipBg,
+      borderRadius: BorderRadius.circular(99),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        seg(Icons.grid_view_rounded, gridActive, onGrid),
+        seg(Icons.view_agenda_outlined, !gridActive, onList),
+      ],
+    ),
+  );
+}

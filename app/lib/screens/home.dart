@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import '../mock.dart';
 import '../pet.dart';
 import '../theme.dart';
+import '../widgets/pressable.dart';
 import 'draw_canvas.dart';
 import 'report.dart';
 import 'settings.dart';
@@ -21,17 +22,93 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen>
+    with SingleTickerProviderStateMixin {
   int _pats = 0;
+  bool _giftUp = false; // 그림 선물 팝업 중복 방지
+  late final AnimationController _petBounce = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 340),
+  );
+
+  @override
+  void dispose() {
+    _petBounce.dispose();
+    super.dispose();
+  }
 
   void _onPat() {
     mock.pat();
+    _petBounce.forward(from: 0); // 쓰다듬으면 살짝 통통 튀는 반응(imp4)
     _pats += 1;
-    if (_pats % 5 == 0) {
+    if (!mock.petLearned) {
+      // 아직 우리 그림체를 못 배웠으면 '어린이 그림' 기본 낙서를 선물한다(#9).
+      if (_pats == 1 || _pats % 3 == 0) _showPetGift();
+    } else if (_pats % 5 == 0) {
       Navigator.of(context).push(
         MaterialPageRoute(builder: (_) => const SurpriseScreen()),
       );
     }
+  }
+
+  // 아직 학습 전 — 모리가 서툴게 끄적인 크레용 그림 선물(#9).
+  Future<void> _showPetGift() async {
+    if (_giftUp) return;
+    _giftUp = true;
+    final variant = _pats % 3;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('${mock.petName}의 그림 선물 🎨',
+                  style: sans(15, w: FontWeight.w800)),
+              const SizedBox(height: 12),
+              Container(
+                decoration: BoxDecoration(
+                  color: paperDiary,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: goldDash, width: 2),
+                ),
+                padding: const EdgeInsets.all(10),
+                child: CustomPaint(
+                  size: const Size(216, 168),
+                  painter: _KidDrawingPainter(variant),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text('아직 우리 그림체를 배우는 중이라\n서툴게 끄적여 봤어!',
+                  textAlign: TextAlign.center, style: hand(18, c: brown)),
+              const SizedBox(height: 6),
+              Text('낙서가 쌓이면 우리 그림체로 그려줄게요',
+                  textAlign: TextAlign.center,
+                  style: sans(12, c: coral, w: FontWeight.w700)),
+              const SizedBox(height: 16),
+              GestureDetector(
+                onTap: () => Navigator.of(ctx).pop(),
+                child: Container(
+                  height: 46,
+                  width: double.infinity,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: coral,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Text('고마워!',
+                      style: sans(14, w: FontWeight.w800, c: Colors.white)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (mounted) _giftUp = false;
   }
 
   Future<void> _openAnswerDialog() async {
@@ -192,7 +269,16 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(height: 10),
                   GestureDetector(
                     onTap: _onPat,
-                    child: PetFace(size: mock.petSize),
+                    child: AnimatedBuilder(
+                      animation: _petBounce,
+                      builder: (_, child) {
+                        final t = _petBounce.value;
+                        // 통통 튀는 반응 — 살짝 커졌다 돌아온다(imp4)
+                        final scale = 1 + math.sin(t * math.pi) * 0.09;
+                        return Transform.scale(scale: scale, child: child);
+                      },
+                      child: PetFace(size: mock.petSize),
+                    ),
                   ),
                   const SizedBox(height: 10),
                   Row(
@@ -246,7 +332,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Row(
       children: [
         Expanded(
-          child: GestureDetector(
+          child: Pressable(
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const DrawCanvasScreen()),
             ),
@@ -276,7 +362,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
         const SizedBox(width: 12),
-        GestureDetector(
+        Pressable(
           onTap: mock.poke,
           child: Container(
             width: 110,
@@ -411,7 +497,11 @@ class _HomeScreenState extends State<HomeScreen> {
                       style: sans(14, w: FontWeight.w700)),
                   const SizedBox(height: 3),
                   Text(
-                    d.caption ?? d.text ?? '',
+                    // 낙서엔 모리 멘트(caption)를 붙이지 않는다(#10). 텍스트 낙서면
+                    // 본문을, 사진/그림이면 담백한 안내만.
+                    (d.text != null && d.text!.isNotEmpty)
+                        ? d.text!
+                        : '새 낙서가 도착했어요',
                     style: hand(16, c: brown),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -548,6 +638,124 @@ class _BarChartPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter old) => false;
+}
+
+/// 아직 그림체를 못 배운 모리가 서툴게 끄적인 '어린이 크레용 그림'(#9).
+/// variant 0: 해와 집 · 1: 손잡은 우리 + 하트 · 2: 커다란 꽃과 웃는 구름.
+class _KidDrawingPainter extends CustomPainter {
+  const _KidDrawingPainter(this.variant);
+
+  final int variant;
+
+  static const _green = Color(0xFF5FBF6B);
+  static const _sky = Color(0xFF7FB6F0);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width, h = size.height;
+    Paint crayon(Color c, double sw) => Paint()
+      ..color = c
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = sw
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    // 바닥(잔디) — 세 그림 공통.
+    canvas.drawLine(Offset(w * .05, h * .9), Offset(w * .95, h * .88),
+        crayon(_green, 5));
+
+    switch (variant) {
+      case 1:
+        // 하트
+        final heart = Path();
+        final hx = w * .5, hy = h * .22, r = w * .06;
+        heart.moveTo(hx, hy + r * .6);
+        heart.cubicTo(hx - r * 1.6, hy - r, hx - r * .2, hy - r * 1.4, hx,
+            hy - r * .2);
+        heart.cubicTo(hx + r * .2, hy - r * 1.4, hx + r * 1.6, hy - r, hx,
+            hy + r * .6);
+        canvas.drawPath(heart, crayon(coralHot, 4)..style = PaintingStyle.fill);
+        // 두 사람(막대 인간) 손잡기
+        _stick(canvas, Offset(w * .36, h * .55), h * .3, partnerBlue);
+        _stick(canvas, Offset(w * .62, h * .55), h * .3, coral);
+        // 맞잡은 손
+        canvas.drawLine(Offset(w * .43, h * .68), Offset(w * .55, h * .68),
+            crayon(brown, 3));
+      case 2:
+        // 웃는 구름/해
+        canvas.drawCircle(Offset(w * .22, h * .24), w * .1, crayon(goldCoin, 5));
+        canvas.drawArc(
+            Rect.fromCircle(center: Offset(w * .22, h * .26), radius: w * .05),
+            0.2,
+            2.7,
+            false,
+            crayon(brown, 2.5));
+        canvas.drawCircle(Offset(w * .19, h * .22), 2, Paint()..color = brown);
+        canvas.drawCircle(Offset(w * .25, h * .22), 2, Paint()..color = brown);
+        // 큰 꽃
+        final cx = w * .62, cy = h * .5;
+        canvas.drawLine(
+            Offset(cx, cy), Offset(cx, h * .88), crayon(_green, 4));
+        for (var i = 0; i < 6; i++) {
+          final a = i * math.pi / 3;
+          canvas.drawCircle(
+              Offset(cx + math.cos(a) * w * .1, cy + math.sin(a) * w * .1),
+              w * .055,
+              crayon(coral, 4));
+        }
+        canvas.drawCircle(Offset(cx, cy), w * .06, Paint()..color = goldCoin);
+      default:
+        // 해
+        canvas.drawCircle(Offset(w * .22, h * .24), w * .09, crayon(goldCoin, 5));
+        for (var i = 0; i < 8; i++) {
+          final a = i * math.pi / 4;
+          canvas.drawLine(
+            Offset(w * .22 + math.cos(a) * w * .12,
+                h * .24 + math.sin(a) * w * .12),
+            Offset(w * .22 + math.cos(a) * w * .16,
+                h * .24 + math.sin(a) * w * .16),
+            crayon(goldCoin, 3),
+          );
+        }
+        // 집 몸통
+        final body = Rect.fromLTWH(w * .5, h * .45, w * .34, h * .43);
+        canvas.drawRect(body, crayon(brown, 4));
+        // 지붕
+        canvas.drawPath(
+          Path()
+            ..moveTo(w * .47, h * .45)
+            ..lineTo(w * .67, h * .25)
+            ..lineTo(w * .87, h * .45),
+          crayon(coral, 4),
+        );
+        // 문
+        canvas.drawRect(
+            Rect.fromLTWH(w * .6, h * .66, w * .1, h * .22), crayon(_sky, 3.5));
+    }
+  }
+
+  // 막대 인간 — 머리(원) + 몸통 + 팔다리.
+  void _stick(Canvas canvas, Offset head, double bodyLen, Color c) {
+    final p = Paint()
+      ..color = c
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3.5
+      ..strokeCap = StrokeCap.round;
+    canvas.drawCircle(head, bodyLen * .18, p);
+    final neck = head.translate(0, bodyLen * .18);
+    final hip = neck.translate(0, bodyLen * .45);
+    canvas.drawLine(neck, hip, p);
+    // 팔
+    canvas.drawLine(neck.translate(-bodyLen * .22, bodyLen * .18),
+        neck.translate(bodyLen * .22, bodyLen * .18), p);
+    // 다리
+    canvas.drawLine(hip, hip.translate(-bodyLen * .2, bodyLen * .35), p);
+    canvas.drawLine(hip, hip.translate(bodyLen * .2, bodyLen * .35), p);
+  }
+
+  @override
+  bool shouldRepaint(covariant _KidDrawingPainter old) =>
+      old.variant != variant;
 }
 
 /// 설정 톱니(기어) 아이콘 — 짧고 굵은 톱니 8개 + 몸통 링 + 가운데 구멍.

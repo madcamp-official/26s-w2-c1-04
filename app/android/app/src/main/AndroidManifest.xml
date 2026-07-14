@@ -5,7 +5,7 @@
     <!-- FCM 알림 표시(Android 13+). 런타임 권한도 앱에서 요청한다. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <application
-        android:label="memory_pager"
+        android:label="두드림"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

@@ -20,97 +20,12 @@ class AlbumScreen extends StatefulWidget {
 class _AlbumScreenState extends State<AlbumScreen> {
   // 0 = 모두, 1 = 나(지우), 2 = 상대(나무)
   int _filter = 0;
-  bool _grid = false; // 상단 겹사진 아이콘: 타임라인 ↔ 격자 갤러리 토글
+  bool _grid = false; // 격자 갤러리 ↔ 타임라인(목록) 토글(#7)
   DateTime? _selectedDay; // 주간 스트립에서 고른 날(그날 낙서만 표시). null=전체
   String? _album; // AI 큐레이션 앨범(#6). null = 모두
-  bool _diaryDialogUp = false; // 그림 일기 팝업 중복 방지(#10)
 
   static bool _sameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
-
-  // 새 그림 일기 팝업(#10) — 볼 수 있게 된 순간 노출. 닫으면 확인 처리해 다시 안 뜬다.
-  Future<void> _showDiaryDialog(DiaryEntry d) async {
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: true,
-      builder: (ctx) => Dialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('${mock.petName}의 새 그림 일기 🎨',
-                  style: sans(15, w: FontWeight.w800)),
-              const SizedBox(height: 4),
-              Text(d.dateLabel, style: sans(12, c: muted)),
-              const SizedBox(height: 14),
-              if (d.imageUrl != null && d.imageUrl!.isNotEmpty)
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: AspectRatio(
-                    aspectRatio: 1,
-                    child: Image.network(d.imageUrl!,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) =>
-                            Container(color: paperCard)),
-                  ),
-                ),
-              if (d.caption.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                Text(d.caption,
-                    textAlign: TextAlign.center, style: hand(17, c: brown)),
-              ],
-              const SizedBox(height: 18),
-              Row(
-                children: [
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => Navigator.of(ctx).pop(),
-                      child: Container(
-                        height: 46,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: chipBg,
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Text('닫기',
-                            style: sans(14, w: FontWeight.w700, c: brown)),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () {
-                        Navigator.of(ctx).pop();
-                        Navigator.of(context).push(MaterialPageRoute(
-                            builder: (_) => const DiaryScreen()));
-                      },
-                      child: Container(
-                        height: 46,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: coral,
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Text('보러 가기',
-                            style:
-                                sans(14, w: FontWeight.w800, c: Colors.white)),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-    mock.ackDiaryPopup();
-    if (mounted) _diaryDialogUp = false;
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -135,14 +50,9 @@ class _AlbumScreenState extends State<AlbumScreen> {
               return true;
             }).toList();
 
-            // 새 그림 일기가 있으면 팝업으로 알린다(#10) — 볼 수 있게 된 순간.
+            // 새 그림 일기 알림(#6) — 낙서들 맨 위에 배너로 뜨고, X 로 닫는다.
+            // (격자/목록 어느 보기에서도 보인다.)
             final pendingDiary = mock.pendingDiaryPopup;
-            if (pendingDiary != null && !_diaryDialogUp) {
-              _diaryDialogUp = true;
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (mounted) _showDiaryDialog(pendingDiary);
-              });
-            }
 
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -156,11 +66,14 @@ class _AlbumScreenState extends State<AlbumScreen> {
                       Text('낙서 사진첩', style: sans(22, w: FontWeight.w800)),
                       Row(
                         children: [
-                          _iconBtn(const _StackPhotosIcon(),
-                              onTap: () => setState(() => _grid = !_grid)),
+                          // 격자/목록 보기 토글(#7) — 겹사진 아이콘 대체.
+                          gridListToggle(
+                            gridActive: _grid,
+                            onGrid: () => setState(() => _grid = true),
+                            onList: () => setState(() => _grid = false),
+                          ),
                           const SizedBox(width: 8),
-                          // 목록/달력 토글 — 달력 화면과 동일한 세그먼트 필로 통일해
-                          // 두 화면을 오갈 때 연속성이 유지된다(#9).
+                          // 목록/달력 토글 — 달력 화면과 동일한 세그먼트 필로 통일(#9).
                           viewToggle(
                             listActive: true,
                             onList: () {},
@@ -179,13 +92,17 @@ class _AlbumScreenState extends State<AlbumScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
+                        // 그림 일기 알림 배너(#6) — 맨 위, 양쪽 보기 공통, X 로 닫기.
+                        if (pendingDiary != null) ...[
+                          _diaryAlertBanner(pendingDiary),
+                          const SizedBox(height: 14),
+                        ],
                         _weekStrip(),
                         const SizedBox(height: 14),
                         _personChips(),
-                        if (mock.albums.isNotEmpty) ...[
-                          const SizedBox(height: 12),
-                          _albumChips(),
-                        ],
+                        const SizedBox(height: 12),
+                        // AI 큐레이션 앨범 진입(#8) — 항상 노출. 없으면 '모두'만.
+                        _albumSection(),
                         const SizedBox(height: 14),
                         if (_selectedDay != null) ...[
                           _selectedDayBar(),
@@ -204,26 +121,9 @@ class _AlbumScreenState extends State<AlbumScreen> {
     );
   }
 
-  // ------------------------------------------------------------ 헤더 버튼
-  Widget _iconBtn(Widget icon, {required VoidCallback onTap}) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 38,
-        height: 38,
-        decoration: BoxDecoration(
-          color: blushSoft,
-          borderRadius: BorderRadius.circular(13),
-        ),
-        alignment: Alignment.center,
-        child: icon,
-      ),
-    );
-  }
-
   // ------------------------------------------------------------ 격자 갤러리
   Widget _photoGrid(List<Doodle> items) {
-    if (items.isEmpty) return _moriBanner();
+    if (items.isEmpty) return _emptyHint();
     return GridView.count(
       crossAxisCount: 3,
       mainAxisSpacing: 8,
@@ -411,12 +311,16 @@ class _AlbumScreenState extends State<AlbumScreen> {
     );
   }
 
-  // AI 큐레이션 앨범 칩(#6) — [모두] + 모리가 묶어준 주제 앨범들. 탭하면 그 앨범만.
-  Widget _albumChips() {
+  // AI 큐레이션 앨범 섹션(#8) — 항상 노출한다. 앨범이 없으면 '모두' 하나 + 안내 문구,
+  // 앨범이 생기면 칩으로 보여주고 새 앨범엔 'NEW' 배지로 알린다.
+  Widget _albumSection() {
     Widget chip(String label, String? value) {
       final active = _album == value;
       return GestureDetector(
-        onTap: () => setState(() => _album = value),
+        onTap: () {
+          setState(() => _album = value);
+          if (mock.hasNewAlbums) mock.ackAlbums(); // 확인 처리(#8)
+        },
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
           decoration: BoxDecoration(
@@ -432,6 +336,7 @@ class _AlbumScreenState extends State<AlbumScreen> {
       );
     }
 
+    final hasAlbums = mock.albums.isNotEmpty;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -439,6 +344,18 @@ class _AlbumScreenState extends State<AlbumScreen> {
           children: [
             Text('✨ ${mock.petName}가 묶어준 앨범',
                 style: sans(11.5, w: FontWeight.w800, c: brownWarm)),
+            if (mock.hasNewAlbums) ...[
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: coral,
+                  borderRadius: BorderRadius.circular(99),
+                ),
+                child: Text('NEW',
+                    style: sans(9, w: FontWeight.w800, c: Colors.white, ls: .5)),
+              ),
+            ],
           ],
         ),
         const SizedBox(height: 8),
@@ -454,23 +371,23 @@ class _AlbumScreenState extends State<AlbumScreen> {
             ],
           ),
         ),
+        if (!hasAlbums) ...[
+          const SizedBox(height: 6),
+          Text('낙서가 쌓이면 ${mock.petName}가 주제별 앨범을 만들어줘요',
+              style: sans(11.5, c: muted)),
+        ],
       ],
     );
   }
 
   // ------------------------------------------------------------ 타임라인
   List<Widget> _timeline(List<Doodle> items) {
+    if (items.isEmpty) return [_emptyHint()];
     final children = <Widget>[];
     for (var i = 0; i < items.length; i++) {
-      final d = items[i];
       if (i > 0) children.add(const SizedBox(height: 14));
-      children.add(_section(d));
-      if (i == 0) {
-        children.add(const SizedBox(height: 14));
-        children.add(_moriBanner());
-      }
+      children.add(_section(items[i]));
     }
-    if (items.isEmpty) children.add(_moriBanner());
     return children;
   }
 
@@ -532,113 +449,79 @@ class _AlbumScreenState extends State<AlbumScreen> {
     );
   }
 
-  // ------------------------------------------------------------ 모리 앨범 배너
-  Widget _moriBanner() {
+  // ------------------------------------------------------------ 그림 일기 알림 배너(#6)
+  // 낙서 목록 맨 위에 뜨는 '새 그림 일기' 알림. 탭하면 일기장으로, X 로 닫는다.
+  Widget _diaryAlertBanner(DiaryEntry d) {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: () => Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => const DiaryScreen()),
-      ),
+      onTap: () {
+        mock.ackDiaryPopup();
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const DiaryScreen()),
+        );
+      },
       child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-      decoration: BoxDecoration(
-        color: blushSoft,
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: blush,
-              borderRadius: BorderRadius.circular(12),
+        padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+        decoration: BoxDecoration(
+          color: blushSoft,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: dashPeach, width: 1.5),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: blush,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              alignment: Alignment.center,
+              child: Text('🎨', style: sans(18)),
             ),
-            alignment: Alignment.center,
-            child: Text('♥', style: hand(14, c: coral)),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // 배너는 그림 일기장으로 이동한다. 실서버 모드에선 가짜 '가을 데이트'
-                // 앨범/낙서 개수(하드코딩) 대신 정직한 문구를 쓴다. AI 큐레이션 앨범은
-                // 별도 기능으로 붙일 예정. 데모는 디자인 샘플 문구를 유지.
-                Text(
-                  mock.real
-                      ? '${mock.petName}의 그림 일기'
-                      : "${mock.petName}가 '가을 데이트' 앨범을 만들었어요",
-                  style: sans(13, w: FontWeight.w800),
-                ),
-                const SizedBox(height: 1),
-                Text(
-                  mock.real
-                      ? '모리가 그려준 그림 일기를 볼 수 있어요'
-                      : '낙서 12개 · 눌러서 보기',
-                  style: sans(12, c: brownWarm),
-                ),
-              ],
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('${mock.petName}의 새 그림 일기',
+                      style: sans(13, w: FontWeight.w800)),
+                  const SizedBox(height: 1),
+                  Text('${d.dateLabel} · 눌러서 보기',
+                      style: sans(12, c: brownWarm)),
+                ],
+              ),
             ),
-          ),
-          Text('→', style: sans(13, c: brownWarm)),
-        ],
+            // X — 알림만 닫는다(일기는 그대로 일기장에 남는다).
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: mock.ackDiaryPopup,
+              child: Container(
+                width: 34,
+                height: 34,
+                alignment: Alignment.center,
+                child: Icon(Icons.close_rounded, size: 18, color: brownWarm),
+              ),
+            ),
+          ],
+        ),
       ),
+    );
+  }
+
+  // 낙서가 아직 없을 때 담백한 빈 상태 안내.
+  Widget _emptyHint() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
+      alignment: Alignment.center,
+      child: Text(
+        _album != null
+            ? '이 앨범엔 아직 낙서가 없어요'
+            : '아직 주고받은 낙서가 없어요\n첫 낙서를 보내보세요',
+        textAlign: TextAlign.center,
+        style: sans(13, w: FontWeight.w600, c: muted, h: 1.5),
       ),
     );
   }
-}
-
-// ---------------------------------------------------------------- icons
-// 모아보기 — 겹친 사진 두 장 (design svg 재현).
-class _StackPhotosIcon extends StatelessWidget {
-  const _StackPhotosIcon();
-
-  @override
-  Widget build(BuildContext context) {
-    return const CustomPaint(
-      size: Size(17, 17),
-      painter: _StackPhotosPainter(),
-    );
-  }
-}
-
-class _StackPhotosPainter extends CustomPainter {
-  const _StackPhotosPainter();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final s = size.width / 24;
-    final stroke = Paint()
-      ..color = coral
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2 * s
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-
-    // 뒤 사진
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-          Rect.fromLTWH(8 * s, 4 * s, 13 * s, 13 * s), Radius.circular(3 * s)),
-      stroke,
-    );
-    // 앞 사진 (채움 + 테두리)
-    final front = RRect.fromRectAndRadius(
-        Rect.fromLTWH(3 * s, 8 * s, 13 * s, 13 * s), Radius.circular(3 * s));
-    canvas.drawRRect(front, Paint()..color = blushSoft);
-    canvas.drawRRect(front, stroke);
-    // 해 + 산
-    canvas.drawCircle(
-        Offset(7.5 * s, 12.5 * s), 1.3 * s, Paint()..color = coral);
-    final path = Path()
-      ..moveTo(5 * s, 18 * s)
-      ..lineTo(8.5 * s, 14.8 * s)
-      ..lineTo(11 * s, 17 * s)
-      ..lineTo(13 * s, 15.4 * s);
-    canvas.drawPath(path, stroke..strokeWidth = 1.8 * s);
-  }
-
-  @override
-  bool shouldRepaint(covariant _StackPhotosPainter oldDelegate) => false;
 }
 

@@ -1,5 +1,7 @@
 // 4b 받은 낙서 뷰어 — full-bleed. 실시간(ephemeral) 모드는 5초 카운트 후 사라진다.
 
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../mock.dart';
@@ -15,15 +17,27 @@ class ViewerScreen extends StatefulWidget {
   State<ViewerScreen> createState() => _ViewerScreenState();
 }
 
-class _ViewerScreenState extends State<ViewerScreen> {
+class _ViewerScreenState extends State<ViewerScreen>
+    with TickerProviderStateMixin {
   late final bool _showCountdown;
   int _count = 5;
   bool _closing = false;
   bool _liked = false; // 로컬 좋아요(서버 리액션 API 미제공)
 
+  // 하트/콕 인터랙션 애니메이션(imp5)
+  late final AnimationController _heartBtn; // 하트 버튼 팝(눌림) 바운스
+  late final AnimationController _pokeBtn; // 콕 버튼 흔들림
+  final List<int> _floaters = []; // 떠오르는 하트들(고유 id 목록)
+  int _floatId = 0;
+  bool _pokeFlash = false; // '콕 찔렀어요!' 배지 표시 여부
+
   @override
   void initState() {
     super.initState();
+    _heartBtn = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 260));
+    _pokeBtn = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 420));
     _showCountdown = widget.doodle.ephemeral && !widget.doodle.viewed;
     // 받은(상대) 낙서를 열면 열람 처리한다. 일반 낙서도 표시해야 홈의 "새 낙서"
     // 카드(latestFromPartner)가 사라진다. 예전엔 ephemeral 만 markViewed 해서
@@ -54,6 +68,37 @@ class _ViewerScreenState extends State<ViewerScreen> {
       } else {
         _tick();
       }
+    });
+  }
+
+  @override
+  void dispose() {
+    _heartBtn.dispose();
+    _pokeBtn.dispose();
+    super.dispose();
+  }
+
+  // 하트: 좋아요 토글 + 버튼 팝 + 하트가 위로 떠오르는 애니메이션(imp5).
+  void _onLike() {
+    setState(() {
+      _liked = !_liked;
+      if (_liked) _floaters.add(++_floatId);
+    });
+    _heartBtn.forward(from: 0);
+  }
+
+  void _removeFloater(int id) {
+    if (!mounted) return;
+    setState(() => _floaters.remove(id));
+  }
+
+  // 콕: 서버로 찌르고, 버튼을 흔들며 '콕 찔렀어요!' 배지를 잠깐 띄운다(imp5).
+  void _onPoke() {
+    mock.poke();
+    _pokeBtn.forward(from: 0);
+    setState(() => _pokeFlash = true);
+    Future.delayed(const Duration(milliseconds: 1100), () {
+      if (mounted) setState(() => _pokeFlash = false);
     });
   }
 
@@ -115,32 +160,6 @@ class _ViewerScreenState extends State<ViewerScreen> {
                   ),
                 ),
               ),
-
-              // ---- 손글씨 캡션 (Gaegu, -6deg)
-              if (d.caption != null)
-                Positioned(
-                  top: 400,
-                  left: 26,
-                  child: Transform.rotate(
-                    angle: -0.10471975511965977, // -6deg
-                    child: Text(
-                      d.caption!,
-                      style: hand(
-                        38,
-                        w: FontWeight.w700,
-                        c: coralHot,
-                      ).copyWith(
-                        shadows: [
-                          Shadow(
-                            offset: const Offset(0, 2),
-                            blurRadius: 8,
-                            color: Colors.black.withValues(alpha: .2),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
 
               // ---- 컨트롤 레이어
               SafeArea(
@@ -305,36 +324,106 @@ class _ViewerScreenState extends State<ViewerScreen> {
                             ),
                           ),
                           const SizedBox(width: 10),
-                          _roundAction(
-                            onTap: () {
-                              setState(() => _liked = !_liked);
-                              if (_liked) {
-                                ScaffoldMessenger.of(context)
-                                  ..hideCurrentSnackBar()
-                                  ..showSnackBar(SnackBar(
-                                    behavior: SnackBarBehavior.floating,
-                                    content: Text('이 낙서를 좋아해요 ♥',
-                                        style: sans(13, c: Colors.white)),
-                                  ));
-                              }
+                          AnimatedBuilder(
+                            animation: _heartBtn,
+                            builder: (_, child) {
+                              final scale =
+                                  1 + math.sin(_heartBtn.value * math.pi) * 0.35;
+                              return Transform.scale(scale: scale, child: child);
                             },
-                            child: Text(
-                              '♥',
-                              style: sans(19,
-                                  c: _liked ? coral : Colors.black26),
+                            child: _roundAction(
+                              onTap: _onLike,
+                              child: Text(
+                                '♥',
+                                style: sans(19,
+                                    c: _liked ? coral : Colors.black26),
+                              ),
                             ),
                           ),
                           const SizedBox(width: 10),
-                          _roundAction(
-                            onTap: mock.poke,
-                            child: const CustomPaint(
-                              size: Size(19, 19),
-                              painter: _PokePainter(coral),
+                          AnimatedBuilder(
+                            animation: _pokeBtn,
+                            builder: (_, child) {
+                              final t = _pokeBtn.value;
+                              final ang =
+                                  math.sin(t * math.pi * 4) * 0.28 * (1 - t);
+                              return Transform.rotate(angle: ang, child: child);
+                            },
+                            child: _roundAction(
+                              onTap: _onPoke,
+                              child: const CustomPaint(
+                                size: Size(19, 19),
+                                painter: _PokePainter(coral),
+                              ),
                             ),
                           ),
                         ],
                       ),
                     ),
+
+                    // 떠오르는 하트(imp5) — 좋아요를 누를 때마다 위로 날아오른다.
+                    if (!d.fromMe)
+                      Positioned(
+                        right: 84,
+                        bottom: 96,
+                        child: IgnorePointer(
+                          child: SizedBox(
+                            width: 60,
+                            height: 170,
+                            child: Stack(
+                              alignment: Alignment.bottomCenter,
+                              children: [
+                                for (final id in _floaters)
+                                  _FloatingHeart(
+                                    key: ValueKey(id),
+                                    seed: id,
+                                    onDone: () => _removeFloater(id),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+
+                    // '콕 찔렀어요!' 배지(imp5) — 콕을 누르면 잠깐 팝업된다.
+                    if (!d.fromMe)
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 104,
+                        child: IgnorePointer(
+                          child: Center(
+                            child: AnimatedScale(
+                              scale: _pokeFlash ? 1 : 0.6,
+                              duration: const Duration(milliseconds: 180),
+                              curve: Curves.easeOutBack,
+                              child: AnimatedOpacity(
+                                opacity: _pokeFlash ? 1 : 0,
+                                duration: const Duration(milliseconds: 180),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 16, vertical: 9),
+                                  decoration: BoxDecoration(
+                                    color: coral,
+                                    borderRadius: BorderRadius.circular(99),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color:
+                                            Colors.black.withValues(alpha: .25),
+                                        blurRadius: 12,
+                                        offset: const Offset(0, 4),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Text('콕 찔렀어요!',
+                                      style: sans(13.5,
+                                          w: FontWeight.w800, c: Colors.white)),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -365,6 +454,63 @@ class _ViewerScreenState extends State<ViewerScreen> {
         ),
         child: child,
       ),
+    );
+  }
+}
+
+/// 좋아요를 누를 때 위로 떠오르며 사라지는 하트(imp5). 자기 애니메이션이 끝나면
+/// [onDone] 으로 부모에게 제거를 알린다.
+class _FloatingHeart extends StatefulWidget {
+  const _FloatingHeart({super.key, required this.onDone, required this.seed});
+
+  final VoidCallback onDone;
+  final int seed;
+
+  @override
+  State<_FloatingHeart> createState() => _FloatingHeartState();
+}
+
+class _FloatingHeartState extends State<_FloatingHeart>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1100),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _c.addStatusListener((s) {
+      if (s == AnimationStatus.completed) widget.onDone();
+    });
+    _c.forward();
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (_, _) {
+        final t = _c.value;
+        final dx = math.sin((t * 3.2) + widget.seed) * 15; // 좌우로 살랑
+        final scale = 0.6 + (t < .3 ? t / .3 : 1) * 0.7;
+        return Transform.translate(
+          offset: Offset(dx, -150 * t),
+          child: Opacity(
+            opacity: (1 - t).clamp(0.0, 1.0),
+            child: Transform.scale(
+              scale: scale,
+              child: Text('♥', style: sans(26, c: coral)),
+            ),
+          ),
+        );
+      },
     );
   }
 }

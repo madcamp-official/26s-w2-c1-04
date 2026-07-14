@@ -110,8 +110,9 @@ class AppMock extends ChangeNotifier {
   Color roomColor = roomColors[0];
 
   // ---- 상호작용
-  int pokesToday = 3;
-  String petBubble = '오늘도 낙서 기다리는 중… 삐삐!';
+  int pokesToday = 0; // 오늘 콕 찌른 횟수. 실서버는 부팅 시 기기에 저장된 오늘치를 복원(#2).
+  String? _pokeDay; // pokesToday 가 어느 날짜의 값인지(자정 넘어가면 리셋)
+  String petBubble = '오늘도 낙서 기다리는 중이야';
 
   // ---- 오늘의 질문 (1c)
   String question = '서로 처음 만난 날, 가장 기억에 남는 순간은?';
@@ -342,6 +343,7 @@ class AppMock extends ChangeNotifier {
     _deviceUid = deviceUid;
     a.onAuthLost = _handleAuthLost; // 401 → 재등록+온보딩 복구(#15)
     try {
+      await _loadPokesToday(); // 오늘 콕 찌른 횟수 복원(#2) — 껐다 켜도 유지
       await a.register(name, deviceUid);
       final m = await a.me();
       final u = m['user'] as Map?;
@@ -616,13 +618,42 @@ class AppMock extends ChangeNotifier {
 
   // ---- 행동 (dual-mode) ----
   Future<void> poke() async {
+    final day = _todayKey();
+    if (_pokeDay != day) {
+      pokesToday = 0; // 자정을 넘겼으면 새 날 카운트로 리셋
+      _pokeDay = day;
+    }
     pokesToday += 1;
     notifyListeners();
+    _persistPokes(); // 껐다 켜도 오늘치가 유지되도록 저장(#2)
     if (real && groupId != null && partnerUserId != null) {
       try {
         await api!.poke(groupId!, partnerUserId!);
       } catch (_) {}
     }
+  }
+
+  String _todayKey() {
+    final d = DateTime.now();
+    return '${d.year}-${d.month.toString().padLeft(2, '0')}-'
+        '${d.day.toString().padLeft(2, '0')}';
+  }
+
+  Future<void> _loadPokesToday() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      final day = _todayKey();
+      pokesToday = p.getInt('pokes_$day') ?? 0;
+      _pokeDay = day;
+    } catch (_) {}
+  }
+
+  void _persistPokes() {
+    final day = _pokeDay;
+    if (day == null) return;
+    SharedPreferences.getInstance()
+        .then((p) => p.setInt('pokes_$day', pokesToday))
+        .catchError((Object _) => false);
   }
 
   Future<void> pat() async {
@@ -635,9 +666,9 @@ class AppMock extends ChangeNotifier {
       } catch (_) {}
     }
     petBubble = [
-      '삐삐! 나 여기 있어',
+      '헤헤, 나 여기 있어',
       '쓰다듬 최고야…',
-      '오늘도 낙서 기다리는 중… 삐삐!',
+      '오늘도 낙서 기다리는 중이야',
       '억새밭 얘기 또 해줘!',
     ][DateTime.now().second % 4];
     notifyListeners();
@@ -730,12 +761,38 @@ class AppMock extends ChangeNotifier {
 
   /// 실서버 AI 큐레이션 앨범을 받는다(#6). 실패·빈 목록이면 '모두'만 보인다.
   Future<void> _loadAlbums() async {
+    await _loadSeenAlbums();
     try {
       final list = await api!.albums(groupId!);
       albums
         ..clear()
         ..addAll(list);
     } catch (_) {}
+  }
+
+  // ---- AI 앨범 새 알림(#8) ----
+  int _seenAlbumCount = 0;
+  bool _seenAlbumLoaded = false;
+
+  /// 아직 확인 안 한 새 앨범이 있는지 — 사진첩에서 'NEW' 배지로 알린다(#8).
+  bool get hasNewAlbums => albums.length > _seenAlbumCount;
+
+  Future<void> _loadSeenAlbums() async {
+    if (_seenAlbumLoaded) return;
+    try {
+      final p = await SharedPreferences.getInstance();
+      _seenAlbumCount = p.getInt('seen_album_count') ?? 0;
+    } catch (_) {}
+    _seenAlbumLoaded = true;
+  }
+
+  /// 새 앨범 배지 확인 처리 — 다시 뜨지 않게 개수를 기록한다.
+  void ackAlbums() {
+    _seenAlbumCount = albums.length;
+    SharedPreferences.getInstance()
+        .then((p) => p.setInt('seen_album_count', _seenAlbumCount))
+        .catchError((Object _) => false);
+    notifyListeners();
   }
 
   /// 앨범 제목의 낙서 id 집합. 없으면 빈 집합.
@@ -905,7 +962,7 @@ class AppMock extends ChangeNotifier {
         // 그룹이 서버에 생성/참여됐다. 참여(상대 있음)면 홈, 생성(솔로)이면 초대 대기(#23).
         // 이후 로드가 실패해도 상태를 되돌리지 않는다 — 재시도 시 서버가 409를 던지고,
         // 사용자는 이미 그룹이 있으므로 여기가 맞다. 끝내 실패하면 bootstrapError 만 남는다.
-        await _enterGroupOrWait();
+        await _enterGroupOrWait(fresh: true);
         return;
       } catch (e) {
         bootstrapError = '$e';
@@ -918,11 +975,13 @@ class AppMock extends ChangeNotifier {
   }
 
   /// 그룹 적용 후: 상대가 있으면 홈을 해금하고, 없으면 초대 코드 대기로 둔다(#23).
-  Future<void> _enterGroupOrWait() async {
+  /// [fresh] 는 '방금 그룹을 만들거나 참여한' 흐름일 때만 true — 이때만 별명 짓기를
+  /// 띄운다. 앱 재시작으로 이미 커플인 상태를 복원할 땐(fresh=false) 다시 안 띄운다(#1).
+  Future<void> _enterGroupOrWait({bool fresh = false}) async {
     if (hasPartner) {
       awaitingPartner = false;
-      pendingNickname = true; // 참여 직후 별명 짓기 단계로(#2)
       onboarded = true;
+      pendingNickname = fresh && !(await _nicknameDone(groupId));
       await _loadAllSafe();
       notifyListeners();
     } else {
@@ -943,7 +1002,7 @@ class AppMock extends ChangeNotifier {
         _applyGroup(g);
         if (hasPartner) {
           awaitingPartner = false;
-          pendingNickname = true; // 생성자도 상대 참여 시 별명 짓기 단계로(#2)
+          pendingNickname = !(await _nicknameDone(groupId)); // 상대 참여 = fresh 전환(#2)
           onboarded = true;
           notifyListeners();
           await _loadAllSafe();
@@ -963,10 +1022,32 @@ class AppMock extends ChangeNotifier {
   }
 
   /// 별명 짓기 단계 종료(#2) — 게이트가 홈(AppShell)을 드러낸다.
+  /// 이 그룹은 별명 단계를 지났다고 기기에 표시해, 껐다 켜도 다시 안 뜨게 한다(#1).
   void finishNickname() {
     pendingNickname = false;
+    final gid = groupId;
+    if (gid != null) {
+      SharedPreferences.getInstance()
+          .then((p) => p.setBool('nick_done_$gid', true))
+          .catchError((Object _) => false);
+    }
     notifyListeners();
   }
+
+  /// 이 그룹에서 별명 짓기 단계를 이미 지났는지(#1). 기기에 영속화된 플래그.
+  Future<bool> _nicknameDone(String? gid) async {
+    if (gid == null) return false;
+    try {
+      final p = await SharedPreferences.getInstance();
+      return p.getBool('nick_done_$gid') ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// 펫이 우리 그림체를 배웠는지(대략). 낙서가 어느 정도 쌓이고 그림 일기가 생기면 true.
+  /// 아직이면(#9) 홈에서 쓰다듬을 때 '어린이 그림' 기본 낙서를 선물하고 안내 문구를 띄운다.
+  bool get petLearned => doodles.length >= 6 && diary.isNotEmpty;
 }
 
 final AppMock mock = AppMock();

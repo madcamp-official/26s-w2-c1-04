@@ -81,18 +81,18 @@ class _OnboardingNameScreenState extends State<OnboardingNameScreen> {
                       Padding(
                         padding: const EdgeInsets.only(bottom: 6),
                         child: Text(
-                          '삐- 삐-',
+                          '똑 똑',
                           style: hand(16, c: coral, ls: 2),
                         ),
                       ),
                       Text(
-                        'Memory Pager',
+                        '두드림',
                         style: sans(26, w: FontWeight.w800, ls: -0.5),
                       ),
                       Padding(
                         padding: const EdgeInsets.only(top: 8),
                         child: Text(
-                          '둘만의 낙서와 추억을 담는\n우리들의 작은 호출기',
+                          '둘만의 낙서와 추억을 담는\n우리 둘만의 작은 공간',
                           textAlign: TextAlign.center,
                           style: sans(14, c: hintWarm, h: 1.5),
                         ),

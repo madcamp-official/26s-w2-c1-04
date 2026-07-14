@@ -13,6 +13,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../mock.dart';
 import '../pet.dart';
+import '../shell.dart';
 import '../theme.dart';
 
 const double _pi = 3.1415926535897932;
@@ -161,7 +162,7 @@ class _DrawCanvasScreenState extends State<DrawCanvasScreen> {
         if (!mounted) return;
         // 화면을 먼저 넘기고(#4) 업로드는 백그라운드로 — 전송은 금방 끝나고
         // mock 이 도착한 낙서를 반영한다. 401 등 오류는 mock 이 복구 처리(#15).
-        navigator.pop();
+        _leaveAfterSend(navigator);
         unawaited(mock
             .sendDrawing(png, json,
                 ephemeral: _vanish, parentId: widget.replyTo?.id)
@@ -190,7 +191,17 @@ class _DrawCanvasScreenState extends State<DrawCanvasScreen> {
       ),
     );
     mock.refresh();
-    Navigator.of(context).pop();
+    _leaveAfterSend(Navigator.of(context));
+  }
+
+  /// 전송 후 화면 이탈. 답장이면 홈으로 돌아간다(#5: 답장 뒤 다시 낙서/뷰어로 안 감).
+  void _leaveAfterSend(NavigatorState navigator) {
+    if (_isReply) {
+      appTab.value = 0; // 홈 탭으로 전환
+      navigator.popUntil((r) => r.isFirst);
+    } else {
+      navigator.pop();
+    }
   }
 
   String _hex(Color c) =>

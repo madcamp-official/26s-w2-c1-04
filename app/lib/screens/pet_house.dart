@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import '../mock.dart';
 import '../pet.dart';
 import '../theme.dart';
+import '../widgets/pressable.dart';
 import 'diary.dart';
 import 'house_full.dart';
 import 'neighbor.dart';
@@ -246,7 +247,7 @@ class _PetHouseScreenState extends State<PetHouseScreen> {
                                   ],
                                 ),
                                 child:
-                                    Text('삐삐!', style: hand(15, c: inkSoft)),
+                                    Text('헤헤!', style: hand(15, c: inkSoft)),
                               ),
                             ),
                         ],
@@ -557,7 +558,7 @@ class _PetHouseScreenState extends State<PetHouseScreen> {
         child: Row(
           children: [
             Expanded(
-              child: GestureDetector(
+              child: Pressable(
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => NeighborScreen()),
@@ -585,7 +586,7 @@ class _PetHouseScreenState extends State<PetHouseScreen> {
               ),
             ),
             const SizedBox(width: 10),
-            GestureDetector(
+            Pressable(
               onTap: _onSave,
               child: Container(
                 width: 120,
