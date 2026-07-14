@@ -64,13 +64,17 @@ class DiaryEntry {
 }
 
 class StoreItem {
-  StoreItem(this.name, this.price, {this.wearing = false, bool? owned})
+  StoreItem(this.name, this.price,
+      {this.wearing = false, bool? owned, this.id, this.category, this.emoji})
       : owned = owned ?? (price == 0); // 무료(중절모)는 기본 보유
 
   final String name;
   final int price;
+  final String? id; // 실서버 아이템 id(데모는 null)
+  final String? category; // 실서버 카테고리(hat/clothes/accessory/furniture/background/prop)
+  final String? emoji; // 이모지 글리프(asset_url "emoji:🎩" 파싱). null 이면 페인터로 그림
   bool wearing;
-  bool owned; // 구매했는지(세션 로컬 — 서버 구매 API 없음)
+  bool owned; // 보유 여부(실서버는 pet_items, 데모는 세션 로컬)
 }
 
 class AppMock extends ChangeNotifier {
@@ -186,6 +190,30 @@ class AppMock extends ChangeNotifier {
     StoreItem('새싹핀', 150),
     StoreItem('리본', 200),
   ];
+
+  // 실서버 스토어 카탈로그(#13). 데모는 위 hats 만 쓴다.
+  final List<StoreItem> storeItems = [];
+
+  // UI 탭(한글) → 서버 카테고리 집합. 소품 탭에 액세서리도 함께 노출한다.
+  static const Map<String, List<String>> _catMap = {
+    '모자': ['hat'],
+    '옷': ['clothes'],
+    '가구': ['furniture'],
+    '배경': ['background'],
+    '소품': ['prop', 'accessory'],
+  };
+
+  /// 탭 카테고리의 아이템 목록. 실서버는 카탈로그에서, 데모는 모자만.
+  List<StoreItem> itemsForCategory(String korCat) {
+    if (!real) return korCat == '모자' ? hats : const [];
+    final wanted = _catMap[korCat] ?? const [];
+    return storeItems.where((s) => wanted.contains(s.category)).toList();
+  }
+
+  /// 펫 얼굴에 모자를 씌울지. 실서버는 카탈로그의 hat 착용 여부.
+  bool get wearingHat => real
+      ? storeItems.any((s) => s.category == 'hat' && s.wearing)
+      : hats.any((h) => h.wearing);
 
   // ---- 월간 레포트 (1f) — 실서버 모드에선 _loadAll 에서 최신 달 값으로 교체.
   int reportPhotos = 12, reportDrawings = 8, reportTexts = 5;
@@ -334,14 +362,8 @@ class AppMock extends ChangeNotifier {
     if (act is Map && act['activity'] != null) {
       petBubble = _activityUtterance('${act['activity']}');
     }
-    // 착용 아이템: hat 카테고리가 걸려 있으면 모자를 씌운다(실서버 상태 반영)
-    final items = (p['equipped_items'] as List?) ?? const [];
-    final wearingHat =
-        items.any((it) => it is Map && it['category'] == 'hat');
-    for (final h in hats) {
-      h.wearing = false;
-    }
-    if (wearingHat && hats.isNotEmpty) hats.first.wearing = true;
+    // 스토어 카탈로그(#13) — 보유·착용 상태 포함. 펫 얼굴 모자는 wearingHat 게터가 본다.
+    await _loadStore();
     doodles
       ..clear()
       ..addAll(await a.doodles(gid));
@@ -622,12 +644,66 @@ class AppMock extends ChangeNotifier {
   /// 화면이 상태를 직접 바꾼 뒤 갱신을 트리거할 때(데모 전송 등).
   void refresh() => notifyListeners();
 
+  /// 실서버 스토어 카탈로그를 받아 storeItems 를 채운다(#13).
+  Future<void> _loadStore() async {
+    try {
+      final s = await api!.store(groupId!);
+      final list = (s['items'] as List? ?? const []);
+      storeItems
+        ..clear()
+        ..addAll([for (final it in list) _storeItemFrom(it as Map)]);
+      coins = (s['coins'] as num?)?.toInt() ?? coins;
+    } catch (_) {
+      // 스토어 로드 실패는 앱 사용을 막지 않는다(홈/펫은 그려진다).
+    }
+  }
+
+  StoreItem _storeItemFrom(Map j) {
+    final asset = '${j['asset_url']}';
+    final emoji = asset.startsWith('emoji:') ? asset.substring(6) : null;
+    return StoreItem(
+      '${j['name']}',
+      (j['price_coins'] as num).toInt(),
+      id: '${j['id']}',
+      category: '${j['category']}',
+      emoji: emoji,
+      owned: j['owned'] == true,
+      wearing: j['equipped'] == true,
+    );
+  }
+
   /// 아이템 탭: 미보유면 코인으로 구매 후 착용, 보유면 착용/해제 토글.
-  /// 코인 부족이면 착용하지 않고 사유 문자열을 돌려준다(화면이 안내).
-  String? buyOrWear(StoreItem item) {
+  /// 코인 부족·실패면 사유 문자열을 돌려준다(화면이 안내). 실서버는 서버에 지속화한다.
+  Future<String?> buyOrWear(StoreItem item) async {
+    if (real && item.id != null) {
+      try {
+        if (!item.owned) {
+          if (coins < item.price) return '코인이 ${item.price - coins} 더 필요해요';
+          coins = await api!.buyItem(groupId!, item.id!);
+          item.owned = true;
+        }
+        final wantEquip = !item.wearing;
+        await api!.equipItem(groupId!, item.id!, wantEquip);
+        if (wantEquip) {
+          // 같은 서버 카테고리 배타 착용(서버와 동일 규칙을 로컬에도 반영).
+          for (final s in storeItems) {
+            if (s.category == item.category) s.wearing = false;
+          }
+        }
+        item.wearing = wantEquip;
+        notifyListeners();
+        return null;
+      } on ApiException catch (e) {
+        if (e.code == 'insufficient_coins') return '코인이 부족해요';
+        return '잠시 후 다시 시도해 주세요';
+      } catch (_) {
+        return '잠시 후 다시 시도해 주세요';
+      }
+    }
+    // 데모 — 세션 로컬 차감/착용.
     if (!item.owned) {
       if (coins < item.price) return '코인이 ${item.price - coins} 더 필요해요';
-      coins -= item.price; // 세션 로컬 차감(서버 구매 API 미제공)
+      coins -= item.price;
       item.owned = true;
     }
     if (item.wearing) {

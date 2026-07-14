@@ -198,7 +198,7 @@ class _PetHouseScreenState extends State<PetHouseScreen> {
                           Center(
                             child: PetFace(
                               size: 132,
-                              hat: mock.hats.any((h) => h.wearing),
+                              hat: mock.wearingHat,
                             ),
                           ),
                           // 말풍선
@@ -349,9 +349,16 @@ class _PetHouseScreenState extends State<PetHouseScreen> {
                 children: [
                   Opacity(
                     opacity: item.owned ? 1 : 0.75,
-                    child: CustomPaint(
-                      size: const Size(44, 24.2),
-                      painter: _HatGlyphPainter(item.name),
+                    child: SizedBox(
+                      height: 26,
+                      child: Center(
+                        child: item.emoji != null
+                            ? Text(item.emoji!, style: sans(22))
+                            : CustomPaint(
+                                size: const Size(44, 24.2),
+                                painter: _HatGlyphPainter(item.name),
+                              ),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -367,18 +374,9 @@ class _PetHouseScreenState extends State<PetHouseScreen> {
           ),
         );
 
-    Widget rowOf(List<StoreItem> items) => Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            for (int i = 0; i < items.length; i++) ...[
-              if (i > 0) const SizedBox(width: 10),
-              card(items[i]),
-            ],
-          ],
-        );
 
-    // 현재는 '모자'만 아이템이 있다. 다른 카테고리는 준비 중 안내(정직).
-    if (_cat != '모자') {
+    final items = mock.itemsForCategory(_cat);
+    if (items.isEmpty) {
       return Container(
         margin: const EdgeInsets.only(top: 8),
         padding: const EdgeInsets.symmetric(vertical: 40),
@@ -387,18 +385,36 @@ class _PetHouseScreenState extends State<PetHouseScreen> {
             style: sans(13, w: FontWeight.w700, c: muted)),
       );
     }
-    final hats = mock.hats;
-    return Column(
-      children: [
-        rowOf(hats.sublist(0, 3)),
-        const SizedBox(height: 10),
-        rowOf(hats.sublist(3, 6)),
-      ],
-    );
+    // 3열 그리드 — 개수에 맞춰 줄을 나눈다. 마지막 줄은 빈 칸으로 채워 정렬 유지.
+    final rows = <Widget>[];
+    for (var i = 0; i < items.length; i += 3) {
+      final chunk = items.sublist(i, (i + 3).clamp(0, items.length));
+      final padded = <StoreItem?>[...chunk];
+      while (padded.length < 3) {
+        padded.add(null);
+      }
+      if (rows.isNotEmpty) rows.add(const SizedBox(height: 10));
+      rows.add(Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (var k = 0; k < padded.length; k++) ...[
+            if (k > 0) const SizedBox(width: 10),
+            padded[k] == null
+                ? const Expanded(child: SizedBox())
+                : card(padded[k]!),
+          ],
+        ],
+      ));
+    }
+    return Column(children: rows);
   }
 
   void _onSave() {
-    final worn = mock.hats.where((h) => h.wearing).map((h) => h.name).toList();
+    final worn = mock
+        .itemsForCategory('모자')
+        .where((h) => h.wearing)
+        .map((h) => h.name)
+        .toList();
     final msg = worn.isEmpty ? '기본 모습으로 저장했어요' : '${worn.first} 착용을 저장했어요';
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
@@ -409,9 +425,9 @@ class _PetHouseScreenState extends State<PetHouseScreen> {
   }
 
   // 코인 게이팅: 미보유면 구매(코인 부족 시 안내), 보유면 착용/해제.
-  void _onItemTap(StoreItem item) {
-    final err = mock.buyOrWear(item);
-    if (err != null) _showTopToast(err);
+  Future<void> _onItemTap(StoreItem item) async {
+    final err = await mock.buyOrWear(item);
+    if (err != null && mounted) _showTopToast(err);
   }
 
   // 화면 '상단'에 잠깐 떴다 사라지는 토스트. 하단 스낵바는 탭바를 가려 다른 탭으로

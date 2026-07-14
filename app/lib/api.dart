@@ -222,6 +222,20 @@ class Api {
     await _post('/groups/$gid/pokes', {'to_user_id': toUserId});
   }
 
+  // ---- 스토어 (#13) ----
+  Future<Map<String, dynamic>> store(String gid) async =>
+      Map<String, dynamic>.from(await _get('/groups/$gid/store') as Map);
+
+  /// 구매 → 구매 후 잔액 코인.
+  Future<int> buyItem(String gid, String itemId) async {
+    final j = await _post('/groups/$gid/store/$itemId/buy') as Map;
+    return (j['coins'] as num).toInt();
+  }
+
+  Future<void> equipItem(String gid, String itemId, bool equipped) async {
+    await _post('/groups/$gid/store/$itemId/equip', {'equipped': equipped});
+  }
+
   // ---- 오늘의 질문 (E-1) ----
   Future<Map<String, dynamic>> question(String gid) async =>
       Map<String, dynamic>.from(await _get('/groups/$gid/question/today') as Map);
