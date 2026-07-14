@@ -3,6 +3,7 @@
 
 import 'package:flutter/material.dart';
 
+import '../mock.dart';
 import '../pet.dart';
 import '../theme.dart';
 
@@ -18,23 +19,100 @@ class _NeighborScreenState extends State<NeighborScreen> {
   int _likes = 128;
   final _code = TextEditingController();
 
+  // 실서버에서 매칭된 이웃(#15). null 이면 데모 방(별이네)을 보여준다.
+  Map<String, dynamic>? _neighbor;
+
+  @override
+  void initState() {
+    super.initState();
+    if (mock.real) _loadNeighbor();
+  }
+
+  Future<void> _loadNeighbor() async {
+    try {
+      final n = await mock.api!.randomNeighbor();
+      if (!mounted) return;
+      setState(() {
+        _neighbor = n; // null 이면 이웃이 아직 없음 → 데모 방 유지
+        if (n != null) _likes = (n['likes'] as num?)?.toInt() ?? 0;
+      });
+    } catch (_) {
+      // 실패해도 데모 방으로 보여준다(방문 자체가 부가 기능).
+    }
+  }
+
+  bool get _isReal => _neighbor != null;
+  String get _petName => _isReal ? '${_neighbor!['pet_name']}' : '별이';
+  int get _petLevel =>
+      _isReal ? (_neighbor!['pet_level'] as num?)?.toInt() ?? 1 : 6;
+  String get _subtitle {
+    if (!_isReal) return '하늘 ♥ 바다 · D+89';
+    final c = DateTime.tryParse('${_neighbor!['created_at']}');
+    if (c == null) return '${_neighbor!['group_name']}';
+    final d = DateTime.now().toUtc().difference(c).inDays + 1;
+    return 'D+$d';
+  }
+
   @override
   void dispose() {
     _code.dispose();
     super.dispose();
   }
 
-  // 이웃 방문(백엔드 이웃 방문 API 미제공 — 입력·피드백만 동작).
-  void _visit() {
+  // 코드로 특정 집 방문(#15). 실서버면 by-code 조회, 데모면 안내만.
+  Future<void> _visit() async {
     final code = _code.text.trim();
     if (code.isEmpty) return;
     FocusScope.of(context).unfocus();
+    if (!mock.real) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content:
+              Text("'$code' 집은 데모에선 열리지 않아요", style: sans(13, c: Colors.white)),
+        ));
+      return;
+    }
+    try {
+      final n = await mock.api!.neighborByCode(code);
+      if (!mounted) return;
+      if (n == null) {
+        _toast('그런 집이 없어요');
+        return;
+      }
+      setState(() {
+        _neighbor = n;
+        _likes = (n['likes'] as num?)?.toInt() ?? 0;
+        _showSearch = false;
+        _code.clear();
+      });
+    } catch (_) {
+      if (mounted) _toast('그 집을 찾지 못했어요');
+    }
+  }
+
+  Future<void> _like() async {
+    if (_isReal) {
+      final petId = '${_neighbor!['pet_id']}';
+      setState(() => _likes += 1); // 낙관적
+      try {
+        final likes = await mock.api!.likeNeighbor(petId);
+        if (mounted) setState(() => _likes = likes);
+      } catch (_) {
+        if (mounted) setState(() => _likes -= 1); // 되돌림
+      }
+    } else {
+      setState(() => _likes += 1); // 데모
+    }
+  }
+
+  void _toast(String msg) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(
         behavior: SnackBarBehavior.floating,
-        content: Text("'$code' 집을 찾는 중… 이웃 방문은 곧 열려요",
-            style: sans(13, c: Colors.white)),
+        content: Text(msg, style: sans(13, c: Colors.white)),
       ));
   }
 
@@ -190,11 +268,11 @@ class _NeighborScreenState extends State<NeighborScreen> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text('별이네 집',
+                          Text('$_petName네 집',
                               style: sans(14, w: FontWeight.w800)),
                           const SizedBox(width: 8),
                           Text(
-                            '하늘 ♥ 바다 · D+89',
+                            _subtitle,
                             style: sans(12,
                                 w: FontWeight.w700,
                                 c: const Color(0xFF8A7A9B)),
@@ -332,7 +410,7 @@ class _NeighborScreenState extends State<NeighborScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text('별이', style: sans(17, w: FontWeight.w800)),
+                Text(_petName, style: sans(17, w: FontWeight.w800)),
                 const SizedBox(width: 8),
                 Container(
                   padding:
@@ -342,7 +420,7 @@ class _NeighborScreenState extends State<NeighborScreen> {
                     borderRadius: BorderRadius.circular(99),
                   ),
                   child: Text(
-                    'Lv.6',
+                    'Lv.$_petLevel',
                     style: sans(12, w: FontWeight.w800, c: Colors.white),
                   ),
                 ),
@@ -357,7 +435,7 @@ class _NeighborScreenState extends State<NeighborScreen> {
             bottom: 32,
             child: Center(
               child: GestureDetector(
-                onTap: () => setState(() => _likes += 1),
+                onTap: _like,
                 child: Container(
                   height: 52,
                   padding: const EdgeInsets.symmetric(horizontal: 24),

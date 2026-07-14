@@ -236,6 +236,25 @@ class Api {
     await _post('/groups/$gid/store/$itemId/equip', {'equipped': equipped});
   }
 
+  // ---- 이웃집 (#15) ----
+  Future<Map<String, dynamic>?> randomNeighbor() async {
+    final j = await _get('/neighbors/random') as Map;
+    final n = j['neighbor'];
+    return n == null ? null : Map<String, dynamic>.from(n as Map);
+  }
+
+  Future<Map<String, dynamic>?> neighborByCode(String code) async {
+    final j = await _get('/neighbors/by-code/$code') as Map;
+    final n = j['neighbor'];
+    return n == null ? null : Map<String, dynamic>.from(n as Map);
+  }
+
+  /// 이웃 펫 좋아요 → 갱신된 좋아요 수.
+  Future<int> likeNeighbor(String petId) async {
+    final j = await _post('/neighbors/$petId/like') as Map;
+    return (j['likes'] as num).toInt();
+  }
+
   // ---- 오늘의 질문 (E-1) ----
   Future<Map<String, dynamic>> question(String gid) async =>
       Map<String, dynamic>.from(await _get('/groups/$gid/question/today') as Map);
