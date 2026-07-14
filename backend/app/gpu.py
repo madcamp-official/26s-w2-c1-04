@@ -14,6 +14,7 @@ from __future__ import annotations
 import io
 import logging
 import random
+import re
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -95,6 +96,17 @@ ALBUM_CURATION_SCHEMA = {
     "required": ["albums"],
     "additionalProperties": False,
 }
+
+
+_ID_DIGITS = re.compile(r"\d+")
+
+
+def _norm_doodle_id(x: object) -> str:
+    """LLM 이 프롬프트의 '[id] 본문' 표기를 통째로 흉내내 '1] 오늘...' 처럼 돌려주는 경우가
+    있어, 반환값의 첫 숫자열(=실제 doodle id)만 뽑는다. id 는 항상 숫자이고 본문은
+    한글로 시작하므로 안전. 매칭 실패로 앨범이 통째로 비는 것을 방지(#6)."""
+    m = _ID_DIGITS.search(str(x))
+    return m.group(0) if m else str(x).strip()
 
 
 def _heuristic_albums(items: list[dict]) -> list[dict]:
@@ -286,7 +298,7 @@ class HttpLlmClient:
         if not items:
             return []
         lines = "\n".join(
-            f'- id={it["id"]}: {(it.get("text") or "").strip()[:60]}' for it in items
+            f'[{it["id"]}] {(it.get("text") or "").strip()[:60]}' for it in items
         )
         prompt = (
             "아래는 커플이 주고받은 낙서/사진에 대한 설명 목록이야. "
@@ -301,7 +313,7 @@ class HttpLlmClient:
             return [
                 {
                     "title": a["title"],
-                    "doodle_ids": [str(x) for x in a.get("doodle_ids", [])],
+                    "doodle_ids": [_norm_doodle_id(x) for x in a.get("doodle_ids", [])],
                 }
                 for a in data.get("albums", [])
             ]
