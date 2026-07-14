@@ -1,4 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <!-- 실서버(HTTPS) 통신에 필수. 이게 없으면 release APK가 네트워크를 못 쓴다. -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <!-- FCM 알림 표시(Android 13+). 런타임 권한도 앱에서 요청한다. -->
@@ -34,6 +35,20 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+
+        <!-- WorkManager 자동 초기화(androidx.startup)를 끈다. home_widget 이 androidx.work 를
+             끌어오지만 이 앱은 포그라운드 위젯 갱신만 써서 WorkManager 가 필요 없다. 시작 시
+             WorkDatabase 초기화가 앱을 죽이던 경로를 원천 차단한다(방어). -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                android:value="androidx.startup"
+                tools:node="remove" />
+        </provider>
 
         <!-- 홈 화면 위젯(펫 상태) -->
         <receiver

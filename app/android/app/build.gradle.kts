@@ -35,6 +35,12 @@ android {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
+            // R8 코드 축소를 끈다. 켜져 있으면 keep 규칙 없이 WorkManager 의 Room 구현
+            // 클래스(WorkDatabase_Impl 등)를 제거해, 실기기에서 앱 시작 시
+            // "Failed to create an instance of androidx.work.impl.WorkDatabase" 로 즉사한다.
+            // 이 앱은 minify 가 필요 없고(크기 여유), 이게 실기기 부팅 크래시의 근본 원인이었다.
+            isMinifyEnabled = false
+            isShrinkResources = false
         }
     }
 }
