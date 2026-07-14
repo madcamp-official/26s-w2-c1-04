@@ -7,6 +7,7 @@ import '../mock.dart';
 import '../theme.dart';
 import 'calendar.dart';
 import 'diary.dart';
+import 'view_toggle.dart';
 import 'viewer.dart';
 
 class AlbumScreen extends StatefulWidget {
@@ -59,12 +60,13 @@ class _AlbumScreenState extends State<AlbumScreen> {
                           _iconBtn(const _StackPhotosIcon(),
                               onTap: () => setState(() => _grid = !_grid)),
                           const SizedBox(width: 8),
-                          _iconBtn(
-                            const _CalendarIcon(),
-                            onTap: () => Navigator.of(context).push(
-                              MaterialPageRoute(
-                                  builder: (_) => const CalendarScreen()),
-                            ),
+                          // 목록/달력 토글 — 달력 화면과 동일한 세그먼트 필로 통일해
+                          // 두 화면을 오갈 때 연속성이 유지된다(#9).
+                          viewToggle(
+                            listActive: true,
+                            onList: () {},
+                            onCalendar: () => Navigator.of(context)
+                                .push(instantRoute(const CalendarScreen())),
                           ),
                         ],
                       ),
@@ -511,41 +513,3 @@ class _StackPhotosPainter extends CustomPainter {
   bool shouldRepaint(covariant _StackPhotosPainter oldDelegate) => false;
 }
 
-// 달력 아이콘 (design svg 재현).
-class _CalendarIcon extends StatelessWidget {
-  const _CalendarIcon();
-
-  @override
-  Widget build(BuildContext context) {
-    return const CustomPaint(
-      size: Size(17, 17),
-      painter: _CalendarPainter(),
-    );
-  }
-}
-
-class _CalendarPainter extends CustomPainter {
-  const _CalendarPainter();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final s = size.width / 24;
-    final stroke = Paint()
-      ..color = coral
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2 * s
-      ..strokeCap = StrokeCap.round;
-
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-          Rect.fromLTWH(4 * s, 5 * s, 16 * s, 15 * s), Radius.circular(3 * s)),
-      stroke,
-    );
-    canvas.drawLine(Offset(4 * s, 10 * s), Offset(20 * s, 10 * s), stroke);
-    canvas.drawLine(Offset(9 * s, 3.5 * s), Offset(9 * s, 7 * s), stroke);
-    canvas.drawLine(Offset(15 * s, 3.5 * s), Offset(15 * s, 7 * s), stroke);
-  }
-
-  @override
-  bool shouldRepaint(covariant _CalendarPainter oldDelegate) => false;
-}

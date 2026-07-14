@@ -81,31 +81,61 @@ class _PetHouseScreenState extends State<PetHouseScreen> {
                 children: [
                   Text('${mock.petName}네 집',
                       style: sans(20, w: FontWeight.w800)),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 7),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.8),
-                      borderRadius: BorderRadius.circular(99),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          width: 16,
-                          height: 16,
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // 일기장 버튼 — 코인 옆에 둔다(#14).
+                      GestureDetector(
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => DiaryScreen()),
+                        ),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 7),
                           decoration: BoxDecoration(
-                            color: goldCoin,
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                                color: const Color(0xFFE09E00), width: 2),
+                            color: Colors.white.withValues(alpha: 0.8),
+                            borderRadius: BorderRadius.circular(99),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text('📖', style: sans(13)),
+                              const SizedBox(width: 5),
+                              Text('일기장',
+                                  style: sans(13, w: FontWeight.w800, c: brown)),
+                            ],
                           ),
                         ),
-                        const SizedBox(width: 6),
-                        Text(_comma(mock.coins),
-                            style: sans(14, w: FontWeight.w800)),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 7),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.8),
+                          borderRadius: BorderRadius.circular(99),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 16,
+                              height: 16,
+                              decoration: BoxDecoration(
+                                color: goldCoin,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                    color: const Color(0xFFE09E00), width: 2),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(_comma(mock.coins),
+                                style: sans(14, w: FontWeight.w800)),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -202,14 +232,14 @@ class _PetHouseScreenState extends State<PetHouseScreen> {
               ),
             ),
           ),
-          // 확대(일기장) 버튼
+          // 확대(전체화면) 버튼 — 이웃 집 방문의 전체화면으로 들어간다(#14).
           Positioned(
             right: 18,
             bottom: 6,
             child: GestureDetector(
               onTap: () => Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => DiaryScreen()),
+                MaterialPageRoute(builder: (_) => NeighborScreen()),
               ),
               child: Container(
                 padding:

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import '../mock.dart';
 import '../theme.dart';
+import 'view_toggle.dart';
 import 'viewer.dart';
 
 class CalendarScreen extends StatefulWidget {
@@ -86,44 +87,11 @@ class _CalendarScreenState extends State<CalendarScreen> {
         ),
         Text('낙서 사진첩', style: sans(20, w: FontWeight.w800)),
         const Spacer(),
-        // 세그먼트 필: [목록 | 달력(활성)]
-        Container(
-          padding: const EdgeInsets.all(3),
-          decoration: BoxDecoration(
-            color: chipBg,
-            borderRadius: BorderRadius.circular(99),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              GestureDetector(
-                onTap: () => Navigator.of(context).maybePop(),
-                behavior: HitTestBehavior.opaque,
-                child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 13, vertical: 6),
-                  child:
-                      Text('목록', style: sans(12, w: FontWeight.w600, c: muted)),
-                ),
-              ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 13, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(99),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: .08),
-                      blurRadius: 6,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Text('달력', style: sans(12, w: FontWeight.w800)),
-              ),
-            ],
-          ),
+        // 사진첩과 동일한 세그먼트 필(#9). 달력 활성, 목록 → 사진첩으로 즉시 복귀.
+        viewToggle(
+          listActive: false,
+          onList: () => Navigator.of(context).maybePop(),
+          onCalendar: () {},
         ),
       ],
     );
