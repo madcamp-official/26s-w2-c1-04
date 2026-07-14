@@ -82,7 +82,7 @@ def code_of(r) -> str | None:
 def main() -> int:
     reset_db()
     with TestClient(app) as c:
-        ra = c.post("/v1/auth/register", json={"display_name": "종화", "device_uid": "dev-a"})
+        ra = c.post("/v1/auth/register", json={"display_name": "종화", "device_uid": "device-aaaa"})
         A = {"Authorization": f"Bearer {ra.json()['token']}"}
         rg = c.post("/v1/groups", json={"name": "우리집", "pet_name": "삐삐"}, headers=A)
         gid = rg.json()["group"]["id"]
