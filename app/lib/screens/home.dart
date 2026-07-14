@@ -82,7 +82,7 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
               ),
               const SizedBox(height: 14),
-              Text('아직 우리 그림체를 배우는 중이라\n서툴게 끄적여 봤어!',
+              Text('아직 우리 그림체를 배우는 중이라\n서툴지만 그려 봤어!',
                   textAlign: TextAlign.center, style: hand(18, c: brown)),
               const SizedBox(height: 6),
               Text('낙서가 쌓이면 우리 그림체로 그려줄게요',

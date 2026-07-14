@@ -113,13 +113,20 @@ class _NeighborScreenState extends State<NeighborScreen> {
   }
 
   bool get _isReal => _neighbor != null;
-  String get _petName => _isReal ? '${_neighbor!['pet_name']}' : '별이';
   int get _petLevel =>
       _isReal ? (_neighbor!['pet_level'] as num?)?.toInt() ?? 1 : 6;
+
+  // 이웃마다 고정된 개성(색·모자·펫이름·커플이름)을 id 로 결정한다. 실제 그룹들이 전부
+  // 기본 펫('모리')·같은 모습이라 "전부 똑같아" 보이던 것을 개선(#이웃1·2).
+  _Persona get _persona => _personaFor(
+        _isReal ? '${_neighbor!['pet_id'] ?? _neighbor!['group_name'] ?? ''}' : 'demo',
+      );
+  String get _petName => _persona.pet;
+  String get _coupleName => _persona.couple;
   String get _subtitle {
-    if (!_isReal) return '하늘 ♥ 바다 · D+89';
+    if (!_isReal) return 'D+89';
     final c = DateTime.tryParse('${_neighbor!['created_at']}');
-    if (c == null) return '${_neighbor!['group_name']}';
+    if (c == null) return '이웃 커플';
     final d = DateTime.now().toUtc().difference(c).inDays + 1;
     return 'D+$d';
   }
@@ -263,8 +270,8 @@ class _NeighborScreenState extends State<NeighborScreen> {
             ),
           ),
 
-          // ---- 펫 (별이)
-          const Positioned(
+          // ---- 이웃 펫 — 이웃마다 색·모자를 달리해 서로 다른 커플로 보이게(#이웃1).
+          Positioned(
             left: 0,
             right: 0,
             bottom: 184,
@@ -274,8 +281,11 @@ class _NeighborScreenState extends State<NeighborScreen> {
                 height: 160,
                 child: PetFace(
                   size: 172,
-                  color: lilac,
-                  faceInk: Color(0xFF2E2440),
+                  color: _persona.color,
+                  faceInk: _persona.ink,
+                  outfit: _persona.hat == null
+                      ? null
+                      : PetOutfit(hat: (emoji: _persona.hat, name: null)),
                 ),
               ),
             ),
@@ -369,7 +379,8 @@ class _NeighborScreenState extends State<NeighborScreen> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text('$_petName네 집',
+                          // 상단엔 임의의 커플 이름(모리네 집 X) — 이웃마다 다르게(#이웃2).
+                          Text(_coupleName,
                               style: sans(14, w: FontWeight.w800)),
                           const SizedBox(width: 8),
                           Text(
@@ -584,6 +595,32 @@ class _NeighborScreenState extends State<NeighborScreen> {
       ),
     );
   }
+}
+
+// 이웃 개성(#이웃1·2) — id 로 고정 선택해, 같은 이웃은 늘 같은 모습·이름, 다른 이웃은 다르게.
+class _Persona {
+  const _Persona(this.color, this.ink, this.pet, this.couple, this.hat);
+  final Color color;
+  final Color ink;
+  final String pet; // 하단 펫 이름
+  final String couple; // 상단 커플 이름
+  final String? hat; // 착용 모자 이모지(없으면 null)
+}
+
+const List<_Persona> _personas = [
+  _Persona(Color(0xFFB49BE0), Color(0xFF2E2440), '몽실', '달래 ♥ 보리', '🎀'),
+  _Persona(Color(0xFFF3A6B8), Color(0xFF5A2A38), '초코', '토리 ♥ 마루', null),
+  _Persona(Color(0xFFF6C270), Color(0xFF5A4020), '단추', '코코 ♥ 별이', '👑'),
+  _Persona(Color(0xFF8FD0C0), Color(0xFF20463E), '두부', '하루 ♥ 나나', '🌱'),
+  _Persona(Color(0xFF9FC0F0), Color(0xFF223A5A), '방울', '밤이 ♥ 솔이', '🧢'),
+  _Persona(Color(0xFFC0D890), Color(0xFF3A4620), '감자', '유자 ♥ 미소', null),
+  _Persona(Color(0xFFE0A0D0), Color(0xFF4A2044), '젤리', '앵두 ♥ 자두', '👒'),
+  _Persona(Color(0xFFF0A98C), Color(0xFF5A3020), '마요', '노을 ♥ 바다', null),
+];
+
+_Persona _personaFor(String key) {
+  final k = key.isEmpty ? 'demo' : key;
+  return _personas[k.hashCode.abs() % _personas.length];
 }
 
 // ---------------------------------------------------------------- painters
