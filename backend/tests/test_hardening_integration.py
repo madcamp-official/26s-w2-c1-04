@@ -351,12 +351,14 @@ async def run() -> None:
                 str(recorder.messages[-1]),
             )
 
-            # exp: 일반 낙서 6 + 사진 6 + 찌르기 3 = 15 -> level 2, coins 7.
+            # exp: 일반 낙서 6 + 사진 6 + 찌르기 3 = 15 -> level 2.
+            # 코인: 레벨업 보너스 7 + 활동별 코인(낙서 2건 × 3, #12) = 13.
+            #   찌르기는 활동 코인을 주지 않는다(연타 파밍 방지).
             pet = (
                 await client.get(f"/v1/groups/{group_id}/pet", headers=auth_a)
             ).json()
             check("누적 exp로 레벨업", pet["exp"] == 15 and pet["level"] == 2, str(pet))
-            check("레벨업 코인 1회", pet["coins"] == 7, str(pet))
+            check("레벨업 7 + 활동 코인 6 = 13", pet["coins"] == 13, str(pet))
 
             before_exp = pet["exp"]
             results = await asyncio.gather(
