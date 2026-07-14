@@ -43,6 +43,7 @@ class _DrawCanvasScreenState extends State<DrawCanvasScreen> {
   Uint8List? _photoBytes; // 카메라/갤러리에서 고른 실제 사진(표시용)
   ui.Image? _photoImage; // 래스터 합성용 디코드 이미지
   bool _vanish = false;
+  bool _showTools = false; // 펜 도구 패널(색·굵기) 표시 여부 — 펜 버튼으로 토글, 그리면 닫힘
   _Tool _tool = _Tool.pen;
   Color _color = coralHot;
   int _wheelIdx = 0;
@@ -72,6 +73,7 @@ class _DrawCanvasScreenState extends State<DrawCanvasScreen> {
 
   void _startStroke(Offset at) {
     setState(() {
+      _showTools = false; // 캔버스를 그리기 시작하면 도구 팝업을 닫는다
       _strokes.add(
         _Stroke(color: _color, width: _strokeWidth, tool: _tool)..points.add(at),
       );
@@ -144,60 +146,6 @@ class _DrawCanvasScreenState extends State<DrawCanvasScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('사진을 불러오지 못했어요', style: sans(13))),
-        );
-      }
-    }
-  }
-
-  // 텍스트 낙서 — 짧은 글을 입력받아 sendText 로 전송.
-  Future<void> _sendTextDoodle() async {
-    final ctrl = TextEditingController();
-    final text = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-        title: Text('텍스트 낙서', style: sans(15, w: FontWeight.w800, c: coral)),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          maxLines: 3,
-          minLines: 1,
-          textInputAction: TextInputAction.done,
-          onSubmitted: (_) => Navigator.of(ctx).pop(ctrl.text.trim()),
-          style: sans(14),
-          decoration: InputDecoration(
-            hintText: '한마디 남겨보세요…',
-            hintStyle: sans(13.5, c: muted),
-            filled: true,
-            fillColor: paper,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(13),
-              borderSide: BorderSide.none,
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: Text('취소', style: sans(13.5, w: FontWeight.w600, c: muted)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(ctrl.text.trim()),
-            child: Text('보내기', style: sans(13.5, w: FontWeight.w800, c: coral)),
-          ),
-        ],
-      ),
-    );
-    if (text == null || text.isEmpty) return;
-    try {
-      await mock.sendText(text, ephemeral: _vanish, parentId: widget.replyTo?.id);
-      if (mounted) Navigator.of(context).pop();
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('전송에 실패했어요. 다시 시도해 주세요', style: sans(13))),
         );
       }
     }
@@ -405,7 +353,11 @@ class _DrawCanvasScreenState extends State<DrawCanvasScreen> {
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
                           GestureDetector(
-                            onTap: () => setState(() => _tool = _Tool.pen),
+                            // 펜 버튼: 도구 패널(색·굵기)을 토글한다. 다시 누르면 닫힌다.
+                            onTap: () => setState(() {
+                              _tool = _Tool.pen;
+                              _showTools = !_showTools;
+                            }),
                             child: Container(
                               width: 46,
                               height: 46,
@@ -436,24 +388,7 @@ class _DrawCanvasScreenState extends State<DrawCanvasScreen> {
                             onTap: () => setState(() => _vanish = !_vanish),
                             child: _vanishToggle(),
                           ),
-                          const SizedBox(height: 12),
-                          // 텍스트 낙서 보내기
-                          GestureDetector(
-                            onTap: _sendTextDoodle,
-                            child: Container(
-                              width: 46,
-                              height: 46,
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                shape: BoxShape.circle,
-                                border: Border.all(color: coralHot, width: 2.5),
-                              ),
-                              alignment: Alignment.center,
-                              child: Text('T',
-                                  style: sans(20,
-                                      w: FontWeight.w800, c: coralHot)),
-                            ),
-                          ),
+                          // 텍스트(T) 보내기 버튼 제거 — 낙서는 손그림으로 통일.
                         ],
                       ),
                     ),
@@ -487,9 +422,10 @@ class _DrawCanvasScreenState extends State<DrawCanvasScreen> {
                         ),
                       ),
 
-                    // 도구 패널 — 우상단 버튼 컬럼(펜·휘발·T, ~top174까지) 아래로 내려
-                    // T 버튼과 겹쳐 형광펜 히트를 가로채던 문제를 없앤다.
-                    Positioned(top: 190, right: 20, child: _toolPanel()),
+                    // 도구 패널(색·굵기) — 펜 버튼을 눌렀을 때만 뜨는 팝업.
+                    // 펜 버튼을 다시 누르거나 캔버스를 그리면 닫힌다.
+                    if (_showTools)
+                      Positioned(top: 190, right: 20, child: _toolPanel()),
 
                     // 답장 모드 — 받은 낙서 썸네일 카드
                     if (_isReply)
@@ -914,7 +850,7 @@ class _DrawCanvasScreenState extends State<DrawCanvasScreen> {
               const SizedBox(width: 9),
             ],
             Text(
-              _isReply ? '답장 보내기' : '${mock.partnerName}에게 보내기',
+              _isReply ? '답장 보내기' : '${mock.partnerNick}에게 보내기',
               style: sans(15, w: FontWeight.w800, c: Colors.white),
             ),
           ],

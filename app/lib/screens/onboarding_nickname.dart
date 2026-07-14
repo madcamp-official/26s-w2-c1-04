@@ -16,7 +16,9 @@ class NicknameScreen extends StatefulWidget {
 }
 
 class _NicknameScreenState extends State<NicknameScreen> {
-  final TextEditingController _nick = TextEditingController(text: '나무늘보');
+  // 프리필을 비운다. 예전엔 '나무늘보'가 채워져 있어, 안 바꾸고 넘기면 상대 별명이
+  // 자동으로 '나무늘보'가 됐다. 빈 값이면 _submit 이 별명을 설정하지 않는다.
+  final TextEditingController _nick = TextEditingController();
 
   static const List<String> _suggestions = ['자기', '곰돌이', '우리 강아지', '여보'];
 
@@ -99,9 +101,11 @@ class _NicknameScreenState extends State<NicknameScreen> {
                           cursorWidth: 2,
                           cursorHeight: 22,
                           cursorRadius: const Radius.circular(2),
-                          decoration: const InputDecoration(
+                          decoration: InputDecoration(
                             isCollapsed: true,
                             border: InputBorder.none,
+                            hintText: '별명을 입력해 주세요',
+                            hintStyle: sans(17, w: FontWeight.w600, c: hintWarm),
                           ),
                           textInputAction: TextInputAction.done,
                           onSubmitted: (_) => _submit(),

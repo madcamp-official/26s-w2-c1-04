@@ -292,7 +292,8 @@ class AppMock extends ChangeNotifier {
     final created = g['created_at'];
     if (created != null) {
       final c = DateTime.tryParse('$created');
-      if (c != null) dDay = DateTime.now().toUtc().difference(c).inDays;
+      // 커플 관례: 만난 첫날이 D+1 이다(경과일 + 1).
+      if (c != null) dDay = DateTime.now().toUtc().difference(c).inDays + 1;
     }
   }
 

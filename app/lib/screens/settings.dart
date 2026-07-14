@@ -76,18 +76,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                       ]),
                       const SizedBox(height: 16),
-                      // ---- 그룹
+                      // ---- 그룹 (그룹 이름은 제거 — 서로 별명 짓는 기능으로 대체)
                       _section('그룹', [
-                        _navRow(
-                          '그룹 이름',
-                          mock.groupName,
-                          () => _editField(
-                            title: '그룹 이름',
-                            initial: mock.groupName,
-                            onSave: mock.setGroupName,
-                          ),
-                        ),
-                        _divider(),
                         Padding(
                           padding: const EdgeInsets.symmetric(
                               horizontal: 20, vertical: 13),

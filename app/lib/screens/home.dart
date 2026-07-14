@@ -1,6 +1,8 @@
 // 홈 (design 1c) — 펫 + 오늘의 질문 + 찌르기.
 // Header: roomColor + 펫, Body: CTA / 오늘의 질문 / 새 낙서.
 
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../mock.dart';
@@ -158,7 +160,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const SizedBox(width: 8),
                   _headerIconBtn(
-                    child: const _SunIcon(),
+                    child: const _GearIcon(),
                     onTap: () => Navigator.of(context).push(
                       MaterialPageRoute(
                           builder: (_) => const SettingsScreen()),
@@ -518,39 +520,49 @@ class _BarChartPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter old) => false;
 }
 
-/// 해 아이콘 (설정) — 원 + 광선 8개.
-class _SunIcon extends StatelessWidget {
-  const _SunIcon();
+/// 설정 톱니(기어) 아이콘 — 짧고 굵은 톱니 8개 + 몸통 링 + 가운데 구멍.
+/// (예전 '해' 아이콘은 광선처럼 보여 설정으로 안 읽혔다.)
+class _GearIcon extends StatelessWidget {
+  const _GearIcon();
 
   @override
   Widget build(BuildContext context) {
-    return CustomPaint(
-      size: const Size(17, 17),
-      painter: _SunPainter(),
+    return const CustomPaint(
+      size: Size(17, 17),
+      painter: _GearPainter(),
     );
   }
 }
 
-class _SunPainter extends CustomPainter {
+class _GearPainter extends CustomPainter {
+  const _GearPainter();
+
   @override
   void paint(Canvas canvas, Size size) {
     final s = size.width / 24;
-    final p = Paint()
+    final c = Offset(12 * s, 12 * s);
+    // 톱니: 짧고 굵게(광선처럼 길고 얇지 않게) — 기어로 읽히게 한다.
+    final teeth = Paint()
       ..color = ink
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2 * s
+      ..strokeWidth = 3 * s
       ..strokeCap = StrokeCap.round;
-    canvas.drawCircle(Offset(12 * s, 12 * s), 4 * s, p);
-    void ray(double x1, double y1, double x2, double y2) =>
-        canvas.drawLine(Offset(x1 * s, y1 * s), Offset(x2 * s, y2 * s), p);
-    ray(12, 2.5, 12, 5.5);
-    ray(12, 18.5, 12, 21.5);
-    ray(2.5, 12, 5.5, 12);
-    ray(18.5, 12, 21.5, 12);
-    ray(5.3, 5.3, 7.4, 7.4);
-    ray(16.6, 16.6, 18.7, 18.7);
-    ray(18.7, 5.3, 16.6, 7.4);
-    ray(7.4, 16.6, 5.3, 18.7);
+    for (var i = 0; i < 8; i++) {
+      final a = i * math.pi / 4;
+      final dx = math.cos(a), dy = math.sin(a);
+      canvas.drawLine(
+        Offset(c.dx + dx * 6.5 * s, c.dy + dy * 6.5 * s),
+        Offset(c.dx + dx * 9.5 * s, c.dy + dy * 9.5 * s),
+        teeth,
+      );
+    }
+    // 몸통 링 + 가운데 구멍
+    final body = Paint()
+      ..color = ink
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2 * s;
+    canvas.drawCircle(c, 6 * s, body);
+    canvas.drawCircle(c, 2.4 * s, body);
   }
 
   @override

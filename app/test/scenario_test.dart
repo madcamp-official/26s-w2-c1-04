@@ -78,7 +78,7 @@ void main() {
     final before = mock.doodles.length;
     await t.pumpWidget(_wrap(const DrawCanvasScreen()));
     await t.pump();
-    await t.tap(find.text('나무에게 보내기'));
+    await t.tap(find.text('${mock.partnerNick}에게 보내기'));
     await t.pump();
     expect(mock.doodles.length, greaterThan(before));
     expect(mock.doodles.first.fromMe, isTrue);

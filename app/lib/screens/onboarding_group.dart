@@ -307,7 +307,7 @@ class _OnboardingGroupScreenState extends State<OnboardingGroupScreen> {
               TextSpan(
                 style: sans(13, c: brown, h: 1.5),
                 children: [
-                  const TextSpan(text: '친구가 들어오면 서로에게 '),
+                  const TextSpan(text: '연인이 들어오면 서로에게 '),
                   TextSpan(
                     text: '별명',
                     style: sans(13, w: FontWeight.w700, c: coral, h: 1.5),

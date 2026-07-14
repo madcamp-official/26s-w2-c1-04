@@ -381,14 +381,64 @@ class _PetHouseScreenState extends State<PetHouseScreen> {
   // 코인 게이팅: 미보유면 구매(코인 부족 시 안내), 보유면 착용/해제.
   void _onItemTap(StoreItem item) {
     final err = mock.buyOrWear(item);
-    if (err != null) {
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(
-          behavior: SnackBarBehavior.floating,
-          content: Text(err, style: sans(13, c: Colors.white)),
-        ));
+    if (err != null) _showTopToast(err);
+  }
+
+  // 화면 '상단'에 잠깐 떴다 사라지는 토스트. 하단 스낵바는 탭바를 가려 다른 탭으로
+  // 넘어가기 불편했다(코인 부족 안내가 대표적). 상단 배너로 올린다.
+  void _showTopToast(String message) {
+    final overlay = Overlay.of(context);
+    late OverlayEntry entry;
+    var removed = false;
+    void remove() {
+      if (removed) return;
+      removed = true;
+      entry.remove();
     }
+
+    entry = OverlayEntry(
+      builder: (ctx) => Positioned(
+        top: MediaQuery.of(ctx).padding.top + 12,
+        left: 20,
+        right: 20,
+        child: IgnorePointer(
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
+              decoration: BoxDecoration(
+                color: ink,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.15),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('🪙', style: sans(15)),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      message,
+                      style:
+                          sans(13.5, w: FontWeight.w700, c: Colors.white),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    overlay.insert(entry);
+    Future.delayed(const Duration(milliseconds: 1900), remove);
   }
 
   // ---------------------------------------------------------------- info
