@@ -22,6 +22,7 @@ class _AlbumScreenState extends State<AlbumScreen> {
   int _filter = 0;
   bool _grid = false; // 상단 겹사진 아이콘: 타임라인 ↔ 격자 갤러리 토글
   DateTime? _selectedDay; // 주간 스트립에서 고른 날(그날 낙서만 표시). null=전체
+  String? _album; // AI 큐레이션 앨범(#6). null = 모두
 
   static bool _sameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
@@ -34,6 +35,9 @@ class _AlbumScreenState extends State<AlbumScreen> {
         child: ListenableBuilder(
           listenable: mock,
           builder: (context, _) {
+            // 선택한 AI 앨범(#6)의 낙서 id 집합. null 이면 전체.
+            final albumIds =
+                _album == null ? null : mock.albumDoodleIds(_album!);
             final items = mock.doodles.where((d) {
               if (_filter != 0 && (_filter == 1 ? !d.fromMe : d.fromMe)) {
                 return false;
@@ -42,6 +46,7 @@ class _AlbumScreenState extends State<AlbumScreen> {
                 final a = d.at;
                 if (a == null || !_sameDay(a, _selectedDay!)) return false;
               }
+              if (albumIds != null && !albumIds.contains(d.id)) return false;
               return true;
             }).toList();
 
@@ -83,6 +88,10 @@ class _AlbumScreenState extends State<AlbumScreen> {
                         _weekStrip(),
                         const SizedBox(height: 14),
                         _personChips(),
+                        if (mock.albums.isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          _albumChips(),
+                        ],
                         const SizedBox(height: 14),
                         if (_selectedDay != null) ...[
                           _selectedDayBar(),
@@ -304,6 +313,53 @@ class _AlbumScreenState extends State<AlbumScreen> {
         chip(mock.myName, 1),
         const SizedBox(width: 8),
         chip(mock.partnerName, 2),
+      ],
+    );
+  }
+
+  // AI 큐레이션 앨범 칩(#6) — [모두] + 모리가 묶어준 주제 앨범들. 탭하면 그 앨범만.
+  Widget _albumChips() {
+    Widget chip(String label, String? value) {
+      final active = _album == value;
+      return GestureDetector(
+        onTap: () => setState(() => _album = value),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+          decoration: BoxDecoration(
+            color: active ? coral : blushSoft,
+            borderRadius: BorderRadius.circular(99),
+          ),
+          child: Text(
+            label,
+            style: sans(12.5,
+                w: FontWeight.w700, c: active ? Colors.white : coral),
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text('✨ ${mock.petName}가 묶어준 앨범',
+                style: sans(11.5, w: FontWeight.w800, c: brownWarm)),
+          ],
+        ),
+        const SizedBox(height: 8),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              chip('모두', null),
+              for (final a in mock.albums) ...[
+                const SizedBox(width: 8),
+                chip('${a['title']} ${a['count']}', '${a['title']}'),
+              ],
+            ],
+          ),
+        ),
       ],
     );
   }

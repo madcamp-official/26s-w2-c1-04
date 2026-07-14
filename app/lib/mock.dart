@@ -194,6 +194,9 @@ class AppMock extends ChangeNotifier {
   // 실서버 스토어 카탈로그(#13). 데모는 위 hats 만 쓴다.
   final List<StoreItem> storeItems = [];
 
+  // 사진첩 AI 큐레이션 앨범(#6). [{title, doodle_ids:[..], cover_url}]. 실서버만 채운다.
+  final List<Map<String, dynamic>> albums = [];
+
   // UI 탭(한글) → 서버 카테고리 집합. 소품 탭에 액세서리도 함께 노출한다.
   static const Map<String, List<String>> _catMap = {
     '모자': ['hat'],
@@ -364,6 +367,7 @@ class AppMock extends ChangeNotifier {
     }
     // 스토어 카탈로그(#13) — 보유·착용 상태 포함. 펫 얼굴 모자는 wearingHat 게터가 본다.
     await _loadStore();
+    await _loadAlbums();
     doodles
       ..clear()
       ..addAll(await a.doodles(gid));
@@ -643,6 +647,26 @@ class AppMock extends ChangeNotifier {
 
   /// 화면이 상태를 직접 바꾼 뒤 갱신을 트리거할 때(데모 전송 등).
   void refresh() => notifyListeners();
+
+  /// 실서버 AI 큐레이션 앨범을 받는다(#6). 실패·빈 목록이면 '모두'만 보인다.
+  Future<void> _loadAlbums() async {
+    try {
+      final list = await api!.albums(groupId!);
+      albums
+        ..clear()
+        ..addAll(list);
+    } catch (_) {}
+  }
+
+  /// 앨범 제목의 낙서 id 집합. 없으면 빈 집합.
+  Set<String> albumDoodleIds(String title) {
+    for (final a in albums) {
+      if ('${a['title']}' == title) {
+        return {for (final i in (a['doodle_ids'] as List? ?? const [])) '$i'};
+      }
+    }
+    return const {};
+  }
 
   /// 실서버 스토어 카탈로그를 받아 storeItems 를 채운다(#13).
   Future<void> _loadStore() async {

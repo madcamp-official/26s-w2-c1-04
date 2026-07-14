@@ -236,6 +236,13 @@ class Api {
     await _post('/groups/$gid/store/$itemId/equip', {'equipped': equipped});
   }
 
+  // ---- 사진첩 AI 큐레이션 (#6) ----
+  Future<List<Map<String, dynamic>>> albums(String gid) async {
+    final j = await _get('/groups/$gid/albums') as Map;
+    final items = (j['albums'] as List? ?? const []);
+    return [for (final a in items) Map<String, dynamic>.from(a as Map)];
+  }
+
   // ---- 이웃집 (#15) ----
   Future<Map<String, dynamic>?> randomNeighbor() async {
     final j = await _get('/neighbors/random') as Map;
