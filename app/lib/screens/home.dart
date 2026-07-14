@@ -277,7 +277,9 @@ class _HomeScreenState extends State<HomeScreen>
                         final scale = 1 + math.sin(t * math.pi) * 0.09;
                         return Transform.scale(scale: scale, child: child);
                       },
-                      child: PetFace(size: mock.petSize),
+                      // 꾸미기(모자·옷·액세서리)를 홈 히어로 펫에도 반영(UX-1).
+                      // 상대 홈도 스토어 동기화(_resync)로 함께 갱신된다.
+                      child: PetFace(size: mock.petSize, outfit: wornOutfit()),
                     ),
                   ),
                   const SizedBox(height: 10),

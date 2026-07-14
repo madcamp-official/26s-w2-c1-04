@@ -18,6 +18,15 @@ typedef WornItem = ({String? emoji, String? name});
 WornItem? _wi(StoreItem? it) =>
     it == null ? null : (emoji: it.emoji, name: it.name);
 
+/// mock 의 현재 착용 아이템(모자·옷·액세서리)으로 PetOutfit 을 만든다.
+/// 홈 히어로 펫과 펫하우스 DecoratedPet 이 공유한다 — 꾸미기가 홈/상대 홈에도
+/// 반영되도록(UX-1). 방 배경·가구·소품은 펫하우스 장면에만 쓰이므로 여기 없음.
+PetOutfit wornOutfit() => PetOutfit(
+      hat: _wi(mock.equippedItem('hat')),
+      clothes: _wi(mock.equippedItem('clothes')),
+      acc: _wi(mock.equippedItem('accessory')),
+    );
+
 /// 펫이 입고/쓰고 있는 것(#5). null 이면 해당 부위 미착용.
 class PetOutfit {
   const PetOutfit({this.hat, this.clothes, this.acc});
@@ -121,11 +130,7 @@ class DecoratedPet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = size;
-    final outfit = PetOutfit(
-      hat: _wi(mock.equippedItem('hat')),
-      clothes: _wi(mock.equippedItem('clothes')),
-      acc: _wi(mock.equippedItem('accessory')),
-    );
+    final outfit = wornOutfit();
     final bg = _wi(mock.equippedItem('background'));
     final furn = _wi(mock.equippedItem('furniture'));
     final prop = _wi(mock.equippedItem('prop'));
