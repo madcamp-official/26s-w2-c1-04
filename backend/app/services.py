@@ -708,6 +708,62 @@ async def generate_diary(pet_id: int, entry_date: date) -> int | None:
     return diary_id
 
 
+# 앨범 큐레이션 캐시(#6) — group_id -> (낙서 수 시그니처, albums). 프로세스 메모리.
+# 낙서 수가 바뀌면(새 낙서) 무효화. 재기동하면 사라지고 다음 요청에 재생성한다.
+_ALBUM_CACHE: dict[int, tuple[int, list[dict]]] = {}
+
+
+async def curate_albums(group_id: int) -> list[dict]:
+    """그룹 낙서를 LLM 이 주제별 앨범으로 묶는다(#6).
+    각 앨범: {"title": str, "doodle_ids": [str], "cover_url": str|None}.
+    LLM 캡션을 근거로 EXAONE 이 묶고, GPU 가 죽으면 키워드 휴리스틱으로 열화한다."""
+    async with session_factory()() as session:
+        rows = (
+            await session.execute(
+                select(Doodle)
+                .where(
+                    Doodle.group_id == group_id,
+                    Doodle.mode == DoodleMode.NORMAL,
+                    Doodle.deleted_at.is_(None),
+                )
+                .order_by(Doodle.id.desc())
+                .limit(60)
+            )
+        ).scalars().all()
+    sig = len(rows)
+    cached = _ALBUM_CACHE.get(group_id)
+    if cached is not None and cached[0] == sig:
+        return cached[1]
+    items = [
+        {"id": str(d.id), "text": (d.caption or d.text_body or "")}
+        for d in rows
+        if (d.caption or d.text_body)
+    ]
+    if len(items) < 3:  # 앨범으로 묶을 만큼 쌓이지 않았다 — '모두'만 보여준다
+        _ALBUM_CACHE[group_id] = (sig, [])
+        return []
+    raw = await gpu.get_llm_client().curate_albums(items)
+    by_id = {str(d.id): d for d in rows}
+    albums: list[dict] = []
+    seen: set[str] = set()
+    for a in raw:
+        ids = [i for i in a.get("doodle_ids", []) if i in by_id and i not in seen]
+        if len(ids) < 2:
+            continue
+        seen.update(ids)
+        cover = next(
+            (
+                by_id[i].photo_url or by_id[i].drawing_url
+                for i in ids
+                if by_id[i].photo_url or by_id[i].drawing_url
+            ),
+            None,
+        )
+        albums.append({"title": a["title"], "doodle_ids": ids, "cover_url": cover})
+    _ALBUM_CACHE[group_id] = (sig, albums)
+    return albums
+
+
 # ---------------------------------------------------------------------------
 # 월간 레포트 (MR-1 ~ MR-4) — docs/API.md 6절, SPEC 6.5
 # ---------------------------------------------------------------------------

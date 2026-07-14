@@ -25,6 +25,7 @@ from .ephemeral import ExpiryScheduler
 from .errors import install_error_handlers
 from .realtime import sio
 from .routers import (
+    albums,
     auth,
     devices,
     doodles,
@@ -139,6 +140,7 @@ v1.include_router(reports.router)
 v1.include_router(questions.router)
 v1.include_router(store.router)
 v1.include_router(neighbors.router)
+v1.include_router(albums.router)
 v1.include_router(groups.router)
 
 app.include_router(v1)

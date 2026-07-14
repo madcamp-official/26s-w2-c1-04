@@ -71,7 +71,51 @@ class LlmClient(Protocol):
     async def doodle_caption(
         self, english: str, pet_name: str, sender_name: str
     ) -> str: ...
+    async def curate_albums(self, items: list[dict]) -> list[dict]: ...
     async def health(self) -> bool: ...
+
+
+# 앨범 큐레이션(#6) 출력 스키마 — 2~4개 앨범, 각 제목 + 소속 낙서 id.
+ALBUM_CURATION_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "albums": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string", "maxLength": 24},
+                    "doodle_ids": {"type": "array", "items": {"type": "string"}},
+                },
+                "required": ["title", "doodle_ids"],
+                "additionalProperties": False,
+            },
+        }
+    },
+    "required": ["albums"],
+    "additionalProperties": False,
+}
+
+
+def _heuristic_albums(items: list[dict]) -> list[dict]:
+    """GPU 없이도 앨범을 만드는 폴백 — 캡션 키워드로 묶는다."""
+    themes = [
+        ("맛있는 날", ["음식", "맛", "먹", "카페", "커피", "디저트", "케이크", "밥", "떡볶이", "food", "eat"]),
+        ("우리의 풍경", ["하늘", "노을", "바다", "산", "꽃", "풍경", "야경", "별", "억새", "sky", "sea"]),
+        ("함께한 나들이", ["데이트", "나들이", "여행", "공원", "산책", "축제", "길", "park"]),
+    ]
+    out: list[dict] = []
+    used: set[str] = set()
+    for title, kws in themes:
+        ids = [
+            str(it["id"])
+            for it in items
+            if str(it["id"]) not in used and any(k in (it.get("text") or "") for k in kws)
+        ]
+        if len(ids) >= 2:
+            out.append({"title": title, "doodle_ids": ids})
+            used.update(ids)
+    return out
 
 
 class ImageClient(Protocol):
@@ -111,6 +155,9 @@ class StubLlmClient:
         self, english: str, pet_name: str, sender_name: str
     ) -> str:
         return f"{sender_name}가 그려준 낙서 ♥"
+
+    async def curate_albums(self, items: list[dict]) -> list[dict]:
+        return _heuristic_albums(items)
 
     async def health(self) -> bool:
         return True
@@ -233,6 +280,33 @@ class HttpLlmClient:
         except Exception:
             logger.warning("낙서 캡션 한국어 변환 실패.", exc_info=True)
             return await self._fallback.doodle_caption(english, pet_name, sender_name)
+
+    async def curate_albums(self, items: list[dict]) -> list[dict]:
+        if not items:
+            return []
+        lines = "\n".join(
+            f'- id={it["id"]}: {(it.get("text") or "").strip()[:60]}' for it in items
+        )
+        prompt = (
+            "아래는 커플이 주고받은 낙서/사진에 대한 설명 목록이야. "
+            "비슷한 주제끼리 묶어 2~4개의 앨범으로 정리해줘. 각 앨범엔 어울리는 짧은 "
+            "한국어 제목(예: '맛있는 날', '우리의 풍경', '함께한 나들이')을 붙이고, "
+            "그 앨범에 속하는 id 들을 doodle_ids 에 넣어. 되도록 모든 id 를 한 번씩만 "
+            "넣고, 한국어 제목만 써(외국어 금지).\n"
+            f"{lines}\n"
+        )
+        try:
+            data = await self._chat(prompt, ALBUM_CURATION_SCHEMA, temperature=0.5)
+            return [
+                {
+                    "title": a["title"],
+                    "doodle_ids": [str(x) for x in a.get("doodle_ids", [])],
+                }
+                for a in data.get("albums", [])
+            ]
+        except Exception:
+            logger.warning("LLM 앨범 큐레이션 실패. 스텁으로 열화.", exc_info=True)
+            return await self._fallback.curate_albums(items)
 
     async def _chat(
         self, prompt: str, schema: dict, temperature: float | None = None

@@ -256,6 +256,18 @@ class LikeResultOut(BaseModel):
     liked: bool
 
 
+# ---- 사진첩 AI 큐레이션 (#6) ----
+class AlbumOut(BaseModel):
+    title: str
+    cover_url: str | None
+    doodle_ids: list[str]
+    count: int
+
+
+class AlbumsResp(BaseModel):
+    albums: list[AlbumOut]  # AI 가 묶은 앨범들. 비어 있으면 앱이 '모두'만 보여준다
+
+
 class StyleRef(BaseModel):
     kind: str
     version: int
