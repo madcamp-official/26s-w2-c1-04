@@ -91,7 +91,11 @@ def start() -> None:
         rotate_all_activities,
         IntervalTrigger(minutes=settings.activity_interval_minutes),
         id="rotate_activities",
-        # 서버가 오래 꺼져 있었어도 밀린 실행을 몰아서 돌리지 않는다.
+        # IntervalTrigger 는 기본적으로 start+interval(=180분) 뒤에야 처음 돈다.
+        # 개발 중 재시작이 잦으면 그때마다 타이머가 리셋돼 활동이 영영 기록되지 않고,
+        # 활동이 없으면 자정 일기도 만들어지지 않는다(#18). 시작 30초 뒤 첫 갱신을 돌려
+        # 서버가 살아 있는 동안 활동이 실제로 쌓이게 한다.
+        next_run_time=datetime.now(timezone.utc) + timedelta(seconds=30),
         coalesce=True,
         max_instances=1,
     )
