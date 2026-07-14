@@ -3,6 +3,7 @@
 // 실제 프리핸드 드로잉: 스트로크(색·굵기·포인트) 기록 → CustomPainter로 라운드캡 페인팅.
 
 import 'dart:convert';
+import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -44,19 +45,11 @@ class _DrawCanvasScreenState extends State<DrawCanvasScreen> {
   ui.Image? _photoImage; // 래스터 합성용 디코드 이미지
   bool _vanish = false;
   bool _showTools = false; // 펜 도구 패널(색·굵기) 표시 여부 — 펜 버튼으로 토글, 그리면 닫힘
+  bool _showWheel = false; // 확장 색상환 표시 여부 — 색환 링 탭으로 토글(#3)
   _Tool _tool = _Tool.pen;
   Color _color = coralHot;
-  int _wheelIdx = 0;
   double _sizeT = .55; // 디자인 슬라이더 thumb left:55%
   final List<_Stroke> _strokes = [];
-
-  static const List<Color> _wheel = [
-    coralHot,
-    goldCoin,
-    Color(0xFF41B979),
-    partnerBlue,
-    lilac,
-  ];
 
   bool get _isReply => widget.replyTo != null;
 
@@ -74,6 +67,7 @@ class _DrawCanvasScreenState extends State<DrawCanvasScreen> {
   void _startStroke(Offset at) {
     setState(() {
       _showTools = false; // 캔버스를 그리기 시작하면 도구 팝업을 닫는다
+      _showWheel = false;
       _strokes.add(
         _Stroke(color: _color, width: _strokeWidth, tool: _tool)..points.add(at),
       );
@@ -427,6 +421,10 @@ class _DrawCanvasScreenState extends State<DrawCanvasScreen> {
                     if (_showTools)
                       Positioned(top: 190, right: 20, child: _toolPanel()),
 
+                    // 확장 색상환 — 색환 링을 눌렀을 때 도구 패널 아래로 펼쳐진다.
+                    if (_showTools && _showWheel)
+                      Positioned(top: 350, right: 20, child: _colorWheelPanel()),
+
                     // 답장 모드 — 받은 낙서 썸네일 카드
                     if (_isReply)
                       Positioned(
@@ -624,16 +622,14 @@ class _DrawCanvasScreenState extends State<DrawCanvasScreen> {
           Row(
             children: [
               GestureDetector(
-                onTap: () => setState(() {
-                  _wheelIdx = (_wheelIdx + 1) % _wheel.length;
-                  _color = _wheel[_wheelIdx];
-                }),
+                // 색환 링 탭 → 확장 색상환 토글(#3). 임의 색을 고른다.
+                onTap: () => setState(() => _showWheel = !_showWheel),
                 child: Container(
                   width: 42,
                   height: 42,
-                  decoration: const BoxDecoration(
+                  decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    gradient: SweepGradient(
+                    gradient: const SweepGradient(
                       colors: [
                         coralHot,
                         goldCoin,
@@ -643,6 +639,9 @@ class _DrawCanvasScreenState extends State<DrawCanvasScreen> {
                         coralHot,
                       ],
                     ),
+                    border: _showWheel
+                        ? Border.all(color: ink, width: 2)
+                        : null,
                   ),
                   alignment: Alignment.center,
                   child: Container(
@@ -678,6 +677,105 @@ class _DrawCanvasScreenState extends State<DrawCanvasScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  // 확장 색상환 — 임의 색을 드래그로 고른다(HSV 휠). easeOutBack 로 팝 하며 펼쳐짐.
+  Widget _colorWheelPanel() {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.55, end: 1.0),
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOutBack,
+      builder: (_, t, child) => Transform.scale(
+        scale: t,
+        alignment: Alignment.topRight,
+        child: Opacity(opacity: t.clamp(0.0, 1.0), child: child),
+      ),
+      child: Container(
+        width: 196, // 168 휠 + 좌우 패딩 14*2 — 무한 너비(NaN) 방지
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: _dark ? Colors.white.withValues(alpha: .97) : Colors.white,
+          borderRadius: BorderRadius.circular(22),
+          boxShadow: [
+            BoxShadow(
+              color: _dark
+                  ? Colors.black.withValues(alpha: .28)
+                  : const Color(0xFFA05A50).withValues(alpha: .24),
+              blurRadius: 28,
+              offset: const Offset(0, 12),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _ColorWheel(
+              size: 168,
+              color: _color,
+              onChanged: (c) => setState(() => _color = c),
+            ),
+            const SizedBox(height: 12),
+            // 명도 조절 슬라이더(흑↔현재 색상). 색상환은 순수 색상만 다루므로 분리.
+            _brightnessSlider(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _brightnessSlider() {
+    final hsv = HSVColor.fromColor(_color);
+    return LayoutBuilder(
+      builder: (context, cons) {
+        final w = cons.maxWidth;
+        void setFrom(double dx) {
+          final v = (dx / w).clamp(0.02, 1.0);
+          setState(() => _color = hsv.withValue(v).toColor());
+        }
+
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapDown: (d) => setFrom(d.localPosition.dx),
+          onHorizontalDragUpdate: (d) => setFrom(d.localPosition.dx),
+          child: SizedBox(
+            height: 20,
+            child: Stack(
+              alignment: Alignment.centerLeft,
+              children: [
+                Container(
+                  height: 8,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(99),
+                    gradient: LinearGradient(colors: [
+                      Colors.black,
+                      hsv.withValue(1).toColor(),
+                    ]),
+                  ),
+                ),
+                Positioned(
+                  left: (hsv.value * (w - 18)).clamp(0.0, w - 18),
+                  child: Container(
+                    width: 18,
+                    height: 18,
+                    decoration: BoxDecoration(
+                      color: _color,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 2.5),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: .2),
+                          blurRadius: 4,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -858,6 +956,110 @@ class _DrawCanvasScreenState extends State<DrawCanvasScreen> {
       ),
     );
   }
+}
+
+// ================================================================ 색상환
+
+/// 확장 색상환 — 각도=색상(hue), 반지름=채도(sat). 드래그로 임의 색 선택(#3).
+/// 명도(value)는 별도 슬라이더가 다루므로 여기선 현재 색의 value 를 유지한다.
+class _ColorWheel extends StatelessWidget {
+  const _ColorWheel({
+    required this.size,
+    required this.color,
+    required this.onChanged,
+  });
+
+  final double size;
+  final Color color;
+  final ValueChanged<Color> onChanged;
+
+  void _pick(Offset local) {
+    final r = size / 2;
+    final dx = local.dx - r, dy = local.dy - r;
+    final dist = math.sqrt(dx * dx + dy * dy);
+    final sat = (dist / r).clamp(0.0, 1.0);
+    var deg = math.atan2(dy, dx) * 180 / math.pi; // -180..180
+    if (deg < 0) deg += 360;
+    final v = HSVColor.fromColor(color).value;
+    onChanged(HSVColor.fromAHSV(1, deg, sat, v == 0 ? 1 : v).toColor());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hsv = HSVColor.fromColor(color);
+    final r = size / 2;
+    final thumbR = hsv.saturation * r;
+    final ang = hsv.hue * math.pi / 180;
+    final tx = r + thumbR * math.cos(ang);
+    final ty = r + thumbR * math.sin(ang);
+    return GestureDetector(
+      onPanDown: (d) => _pick(d.localPosition),
+      onPanStart: (d) => _pick(d.localPosition),
+      onPanUpdate: (d) => _pick(d.localPosition),
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: Stack(
+          children: [
+            CustomPaint(
+                size: Size.square(size), painter: const _WheelPainter()),
+            Positioned(
+              left: tx - 9,
+              top: ty - 9,
+              child: Container(
+                width: 18,
+                height: 18,
+                decoration: BoxDecoration(
+                  color: color,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 3),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: .25),
+                      blurRadius: 4,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 색상환 페인터 — 색상 스윕 + 중심 흰색 방사(채도). 항상 최대 명도로 그린다.
+class _WheelPainter extends CustomPainter {
+  const _WheelPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final r = size.width / 2;
+    final center = Offset(r, r);
+    final rect = Rect.fromCircle(center: center, radius: r);
+    final hues = <Color>[
+      for (var i = 0; i <= 360; i += 30)
+        HSVColor.fromAHSV(1, i % 360.0, 1, 1).toColor(),
+    ];
+    canvas.drawCircle(
+      center,
+      r,
+      Paint()..shader = SweepGradient(colors: hues).createShader(rect),
+    );
+    canvas.drawCircle(
+      center,
+      r,
+      Paint()
+        ..shader = RadialGradient(colors: [
+          Colors.white,
+          Colors.white.withValues(alpha: 0),
+        ]).createShader(rect),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _WheelPainter old) => false;
 }
 
 // ================================================================ painters
