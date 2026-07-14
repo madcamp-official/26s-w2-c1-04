@@ -53,11 +53,16 @@ async def _build(session, group_id: int, user_id: int, day: date) -> QuestionOut
         )
     ).scalars().all()
     mine = next((r for r in rows if r.user_id == user_id), None)
+    partner = next((r for r in rows if r.user_id != user_id), None)
     return QuestionOut(
         date=day.isoformat(),
         text=question_for(day),
         my_answer=mine.answer if mine else None,
-        partner_answered=any(r.user_id != user_id for r in rows),
+        partner_answered=partner is not None,
+        # 내가 답한 뒤에만 상대 답변을 공개(스포일러 방지, 둘 다 답하면 확인 가능) — #6
+        partner_answer=(
+            partner.answer if (partner is not None and mine is not None) else None
+        ),
     )
 
 

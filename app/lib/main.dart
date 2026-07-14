@@ -12,6 +12,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'mock.dart';
 import 'push.dart';
 import 'screens/onboarding_name.dart';
+import 'screens/onboarding_nickname.dart';
 import 'screens/onboarding_wait.dart';
 import 'shell.dart';
 import 'theme.dart';
@@ -104,6 +105,10 @@ class _RootState extends State<_Root> {
         builder: (context, _) {
           // 초대 코드 대기(#23) — 그룹은 만들었지만 상대가 아직 안 들어온 상태.
           if (mock.awaitingPartner) return const OnboardingWaitScreen();
+          // 상대가 들어옴 — 별명 짓기 단계(#2). 생성자·참여자 모두 여기서 별명을 짓는다.
+          if (mock.pendingNickname) {
+            return NicknameScreen(myName: mock.myName);
+          }
           return mock.onboarded
               ? const AppShell()
               : const OnboardingNameScreen();

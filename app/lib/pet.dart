@@ -4,7 +4,76 @@
 
 import 'package:flutter/material.dart';
 
+import 'mock.dart';
 import 'theme.dart';
+
+/// 펫 + 착용 아이템 이모지 오버레이(#12). 132 기준 배치를 size 에 비례해 스케일.
+/// 옷/가구/배경/소품/모자를 착용하면 캐릭터 위/주변에 이모지로 나타난다.
+class DecoratedPet extends StatelessWidget {
+  const DecoratedPet({
+    super.key,
+    required this.size,
+    this.color = salmon,
+    this.faceInk = ink,
+    this.showBackground = true,
+  });
+
+  final double size;
+  final Color color;
+  final Color faceInk;
+  final bool showBackground;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = size / 132;
+    final hat = mock.equippedEmoji('hat');
+    final clothes = mock.equippedEmoji('clothes');
+    final acc = mock.equippedEmoji('accessory');
+    final prop = mock.equippedEmoji('prop');
+    final furniture = mock.equippedEmoji('furniture');
+    final bg = mock.equippedEmoji('background');
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.center,
+        children: [
+          if (showBackground && bg != null)
+            Center(
+              child: Opacity(
+                opacity: .3,
+                child: Text(bg, style: TextStyle(fontSize: 96 * s)),
+              ),
+            ),
+          Center(child: PetFace(size: size, color: color, faceInk: faceInk)),
+          if (hat != null)
+            Positioned(
+                top: -8 * s, child: Text(hat, style: TextStyle(fontSize: 36 * s))),
+          if (acc != null)
+            Positioned(
+                top: 38 * s,
+                right: 6 * s,
+                child: Text(acc, style: TextStyle(fontSize: 24 * s))),
+          if (clothes != null)
+            Positioned(
+                bottom: 18 * s,
+                child: Text(clothes, style: TextStyle(fontSize: 30 * s))),
+          if (prop != null)
+            Positioned(
+                bottom: 0,
+                right: -6 * s,
+                child: Text(prop, style: TextStyle(fontSize: 26 * s))),
+          if (furniture != null)
+            Positioned(
+                bottom: 0,
+                left: -6 * s,
+                child: Text(furniture, style: TextStyle(fontSize: 26 * s))),
+        ],
+      ),
+    );
+  }
+}
 
 class PetFace extends StatelessWidget {
   const PetFace({

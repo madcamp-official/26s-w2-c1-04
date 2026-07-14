@@ -351,6 +351,36 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               child: Text(mock.myAnswer!, style: hand(19)),
             ),
+          // 내가 답한 뒤에만 상대 답변이 공개된다(#6). 서버가 partnerAnswer 를 채워줌.
+          if (mock.myAnswer != null) ...[
+            const SizedBox(height: 10),
+            if (mock.partnerAnswer != null)
+              Container(
+                width: double.infinity,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                decoration: BoxDecoration(
+                  color: paper,
+                  borderRadius: BorderRadius.circular(13),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('${mock.partnerName}님의 답변',
+                        style: sans(11, w: FontWeight.w800, c: coral, ls: .5)),
+                    const SizedBox(height: 4),
+                    Text(mock.partnerAnswer!, style: hand(19)),
+                  ],
+                ),
+              )
+            else
+              Text(
+                mock.partnerAnswered
+                    ? '${mock.partnerName}님도 답했어요'
+                    : '${mock.partnerName}님이 답하면 여기서 볼 수 있어요',
+                style: sans(12.5, c: muted),
+              ),
+          ],
         ],
       ),
     );

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import '../mock.dart';
 import '../theme.dart';
+import 'story_viewer.dart';
 import 'view_toggle.dart';
 import 'viewer.dart';
 
@@ -295,20 +296,32 @@ class _CalendarScreenState extends State<CalendarScreen> {
   // ---------------------------------------------------------------- selected
   Widget _selectedDayCard() {
     final ds = _doodlesOn(_selected);
+    // 스토리(#8)·개수엔 사라지는 낙서는 제외한다.
+    final story = ds.where((d) => !d.ephemeral).toList();
     final first = ds.isEmpty ? null : ds.first;
     final hasPhoto =
         first != null && (first.asset != null || first.imageUrl != null);
     final preview = first == null
         ? '이 날의 낙서가 없어요'
-        : (first.caption ?? first.text ?? '눌러서 보기');
+        : (first.text ?? '눌러서 보기');
+
+    void open() {
+      if (story.isNotEmpty) {
+        // 인스타 스토리처럼 그 날 낙서를 상단 바 + 탭으로 넘겨본다(#8).
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => StoryViewer(doodles: story)),
+        );
+      } else if (first != null) {
+        // 그 날이 사라지는 낙서뿐이면 단건 뷰어로.
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => ViewerScreen(doodle: first)),
+        );
+      }
+    }
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: first == null
-          ? null
-          : () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => ViewerScreen(doodle: first)),
-              ),
+      onTap: first == null ? null : open,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
@@ -331,9 +344,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    ds.isEmpty
+                    story.isEmpty
                         ? '${_selected.month}월 ${_selected.day}일'
-                        : '${_selected.month}월 ${_selected.day}일 · 낙서 ${ds.length}개',
+                        : '${_selected.month}월 ${_selected.day}일 · 낙서 ${story.length}개',
                     style: sans(13, w: FontWeight.w800),
                   ),
                   const SizedBox(height: 2),

@@ -45,6 +45,8 @@ class Api {
   final String _base;
   String? token;
   String? myUserId;
+  String? deviceUid; // 401 복구 시 기기 uid 로 재등록(#15)
+  void Function()? onAuthLost; // 토큰 무효(401) 감지 콜백 — 세션이 서버에서 사라졌을 때
 
   static String _stripV1(String s) {
     var o = s;
@@ -79,6 +81,9 @@ class Api {
     if (r.statusCode >= 200 && r.statusCode < 300) {
       return r.body.isEmpty ? null : jsonDecode(utf8.decode(r.bodyBytes));
     }
+    // 토큰이 무효(401) — 서버에서 세션이 사라졌다(데이터 리셋 등). 복구를 알린다(#15).
+    // 이 처리가 없으면 매 요청이 조용히 실패해 '전송 실패' 팝업만 반복된다.
+    if (r.statusCode == 401 && token != null) onAuthLost?.call();
     _fail(r);
   }
 
@@ -99,6 +104,7 @@ class Api {
 
   // ---- 인증 · 온보딩 ----
   Future<void> register(String displayName, String deviceUid) async {
+    this.deviceUid = deviceUid;
     final j = await _post('/auth/register',
         {'display_name': displayName, 'device_uid': deviceUid});
     token = j['token'] as String;

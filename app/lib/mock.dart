@@ -3,6 +3,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:home_widget/home_widget.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api.dart';
 import 'realtime.dart';
@@ -93,6 +94,9 @@ class AppMock extends ChangeNotifier {
   // 그룹은 만들었지만 아직 상대가 안 들어옴(#23). 이 동안엔 홈을 해금하지 않고
   // 초대 코드 대기 화면만 보여준다(솔로 해금으로 코드가 꼬이는 것을 막는다).
   bool awaitingPartner = false;
+  // 상대가 막 들어와서 별명을 지어줘야 하는 단계(#2). 생성자·참여자 모두 이 단계를 거친다.
+  // 게이트가 이 플래그를 보고 별명 화면을 띄운다(참여자만 보던 문제를 고침).
+  bool pendingNickname = false;
 
   // ---- 펫
   String petName = '모리';
@@ -113,6 +117,7 @@ class AppMock extends ChangeNotifier {
   String question = '서로 처음 만난 날, 가장 기억에 남는 순간은?';
   bool partnerAnswered = true;
   String? myAnswer;
+  String? partnerAnswer; // 상대 답변 원문 — 내가 답한 뒤 공개(#6). null 이면 아직 못 봄.
 
   // 데모 세계의 '오늘'. 골든 결정성을 위해 실서버가 아닐 땐 고정 날짜를 쓴다
   // (데모 낙서 날짜·주간 스트립이 실행 시각에 따라 달라지지 않게).
@@ -218,6 +223,23 @@ class AppMock extends ChangeNotifier {
       ? storeItems.any((s) => s.category == 'hat' && s.wearing)
       : hats.any((h) => h.wearing);
 
+  /// 해당 카테고리에서 착용 중인 아이템의 이모지(#12). 없으면 null.
+  /// 캐릭터 위에 오버레이해 옷/가구/배경/소품 착용을 눈에 보이게 한다.
+  String? equippedEmoji(String category) {
+    if (!real) {
+      if (category == 'hat') {
+        for (final h in hats) {
+          if (h.wearing) return h.emoji;
+        }
+      }
+      return null;
+    }
+    for (final s in storeItems) {
+      if (s.category == category && s.wearing) return s.emoji;
+    }
+    return null;
+  }
+
   // ---- 월간 레포트 (1f) — 실서버 모드에선 _loadAll 에서 최신 달 값으로 교체.
   int reportPhotos = 12, reportDrawings = 8, reportTexts = 5;
   int reportPokes = 47, reportDoodles = 25, reportAnswers = 30;
@@ -282,13 +304,43 @@ class AppMock extends ChangeNotifier {
   String? petId;
   String? partnerUserId;
   String? bootstrapError;
+  String? _deviceUid; // 401 복구 재등록용(#15)
+  bool _reauthing = false;
   bool get real => api != null;
+
+  /// 토큰 무효(401) 복구(#15) — 서버에서 세션이 사라졌을 때(데이터 리셋 등)
+  /// 기기 uid 로 재등록하고 온보딩으로 되돌린다. '전송 실패' 팝업 반복을 막는다.
+  void _handleAuthLost() {
+    if (_reauthing || !real || _deviceUid == null) return;
+    _reauthing = true;
+    () async {
+      try {
+        groupId = null;
+        petId = null;
+        partnerUserId = null;
+        onboarded = false;
+        awaitingPartner = false;
+        pendingNickname = false;
+        try {
+          rt?.dispose();
+        } catch (_) {}
+        rt = null;
+        await api!.register(myName, _deviceUid!); // 새 토큰(새 유저)
+        notifyListeners(); // 게이트 → 온보딩 이름/그룹 화면
+      } catch (_) {
+      } finally {
+        _reauthing = false;
+      }
+    }();
+  }
 
   /// API_BASE 가 주어지면 실서버로 부팅한다. register → /me → (그룹 있으면 로드).
   Future<void> bootstrapReal(String base, String deviceUid, String name) async {
     final a = Api(base);
     api = a;
     myName = name;
+    _deviceUid = deviceUid;
+    a.onAuthLost = _handleAuthLost; // 401 → 재등록+온보딩 복구(#15)
     try {
       await a.register(name, deviceUid);
       final m = await a.me();
@@ -389,6 +441,7 @@ class AppMock extends ChangeNotifier {
     question = '${q['text']}';
     myAnswer = q['my_answer'] as String?;
     partnerAnswered = q['partner_answered'] == true;
+    partnerAnswer = q['partner_answer'] as String?;
     // 실시간 연결
     rt = Rt(a.host, a.token!)..onEvent = _onRtEvent;
     await rt!.connect();
@@ -516,6 +569,13 @@ class AppMock extends ChangeNotifier {
 
   /// 서버에서 그림 일기를 받아 diary 리스트를 교체한다. (_loadAll · diary:new 공용)
   Future<void> _reloadDiaries() async {
+    if (!_seenLoaded) {
+      try {
+        final p = await SharedPreferences.getInstance();
+        _seenDiaryCount = p.getInt('seen_diary_count') ?? 0;
+      } catch (_) {}
+      _seenLoaded = true;
+    }
     final ds = await api!.diaries(petId!);
     diary
       ..clear()
@@ -528,6 +588,25 @@ class AppMock extends ChangeNotifier {
             imageUrl: _mediaUrl('${ds[i]['image_url'] ?? ''}'),
           ),
       ]);
+    // 새 그림 일기가 생겼으면 팝업 노출 대상으로 표시(#10). 사진첩이 감지해 띄운다.
+    if (diary.isNotEmpty && diary.length > _seenDiaryCount) {
+      pendingDiaryPopup = diary.first;
+    }
+  }
+
+  // ---- 그림 일기 새 알림(#10) ----
+  int _seenDiaryCount = 0;
+  bool _seenLoaded = false;
+  DiaryEntry? pendingDiaryPopup; // null 이 아니면 사진첩이 팝업을 띄운다.
+
+  /// 그림 일기 팝업을 확인 처리 — 다시 뜨지 않게 개수를 기록한다.
+  void ackDiaryPopup() {
+    _seenDiaryCount = diary.length;
+    pendingDiaryPopup = null;
+    SharedPreferences.getInstance()
+        .then((p) => p.setInt('seen_diary_count', _seenDiaryCount))
+        .catchError((Object _) => false);
+    notifyListeners();
   }
 
   static Color _hexRoom(String hex6) {
@@ -572,6 +651,7 @@ class AppMock extends ChangeNotifier {
         final r = await api!.answer(groupId!, v);
         myAnswer = r['my_answer'] as String?;
         partnerAnswered = r['partner_answered'] == true;
+        partnerAnswer = r['partner_answer'] as String?;
         notifyListeners();
       } catch (_) {}
     }
@@ -803,11 +883,13 @@ class AppMock extends ChangeNotifier {
     partnerUserId = null;
     onboarded = false;
     awaitingPartner = false;
+    pendingNickname = false;
     notifyListeners();
   }
 
   /// 온보딩 완료. 실서버면 그룹 생성 또는 참여를 서버에 반영한다.
   Future<void> completeOnboarding({String? name, String? joinCode}) async {
+    bootstrapError = null; // 이전 실패의 잔여 에러가 성공 판정을 오염시키지 않게 초기화
     partnerLeft = false; // 새 그룹을 만들거나 참여하면 이탈 안내를 지운다.
     if (name != null && name.isNotEmpty) myName = name;
     if (real) {
@@ -839,8 +921,10 @@ class AppMock extends ChangeNotifier {
   Future<void> _enterGroupOrWait() async {
     if (hasPartner) {
       awaitingPartner = false;
+      pendingNickname = true; // 참여 직후 별명 짓기 단계로(#2)
       onboarded = true;
       await _loadAllSafe();
+      notifyListeners();
     } else {
       awaitingPartner = true;
       onboarded = false;
@@ -859,9 +943,11 @@ class AppMock extends ChangeNotifier {
         _applyGroup(g);
         if (hasPartner) {
           awaitingPartner = false;
+          pendingNickname = true; // 생성자도 상대 참여 시 별명 짓기 단계로(#2)
           onboarded = true;
           notifyListeners();
           await _loadAllSafe();
+          notifyListeners();
           return;
         }
       } catch (_) {
@@ -874,6 +960,12 @@ class AppMock extends ChangeNotifier {
   Future<void> cancelWaiting() async {
     awaitingPartner = false;
     await logout();
+  }
+
+  /// 별명 짓기 단계 종료(#2) — 게이트가 홈(AppShell)을 드러낸다.
+  void finishNickname() {
+    pendingNickname = false;
+    notifyListeners();
   }
 }
 

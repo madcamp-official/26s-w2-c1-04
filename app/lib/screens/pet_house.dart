@@ -1,12 +1,15 @@
 // 1g — 집 관리 탭 · 펫 꾸미기/스토어. "모리네 집".
 // 디자인: Memory Pager 디자인.dc.html #1g (lines 885-937) 실측값 그대로.
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../mock.dart';
 import '../pet.dart';
 import '../theme.dart';
 import 'diary.dart';
+import 'house_full.dart';
 import 'neighbor.dart';
 
 class PetHouseScreen extends StatefulWidget {
@@ -19,6 +22,24 @@ class PetHouseScreen extends StatefulWidget {
 class _PetHouseScreenState extends State<PetHouseScreen> {
   static const _cats = ['모자', '옷', '가구', '배경', '소품'];
   String _cat = '모자';
+
+  // 펫 말풍선(#11) — 평소 숨김, 탭하면 3초간 노출.
+  bool _bubble = false;
+  Timer? _bubbleTimer;
+
+  void _showBubble() {
+    setState(() => _bubble = true);
+    _bubbleTimer?.cancel();
+    _bubbleTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted) setState(() => _bubble = false);
+    });
+  }
+
+  @override
+  void dispose() {
+    _bubbleTimer?.cancel();
+    super.dispose();
+  }
 
   String _comma(int n) => n
       .toString()
@@ -195,35 +216,39 @@ class _PetHouseScreenState extends State<PetHouseScreen> {
                               ),
                             ),
                           ),
+                          // 착용 아이템까지 그린 펫(#12). 탭하면 말풍선을 잠깐 띄운다(#11).
                           Center(
-                            child: PetFace(
-                              size: 132,
-                              hat: mock.wearingHat,
+                            child: GestureDetector(
+                              onTap: _showBubble,
+                              behavior: HitTestBehavior.opaque,
+                              child: const DecoratedPet(size: 132),
                             ),
                           ),
-                          // 말풍선
-                          Positioned(
-                            top: 0,
-                            right: -14,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(12),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color:
-                                        Colors.black.withValues(alpha: 0.08),
-                                    offset: const Offset(0, 2),
-                                    blurRadius: 8,
-                                  ),
-                                ],
+                          // 말풍선(#11) — 평소엔 숨겨 모자·소품을 가리지 않고,
+                          // 펫을 탭하면 3초간 보였다 사라진다.
+                          if (_bubble)
+                            Positioned(
+                              top: 0,
+                              right: -14,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(12),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color:
+                                          Colors.black.withValues(alpha: 0.08),
+                                      offset: const Offset(0, 2),
+                                      blurRadius: 8,
+                                    ),
+                                  ],
+                                ),
+                                child:
+                                    Text('삐삐!', style: hand(15, c: inkSoft)),
                               ),
-                              child: Text('새 모자 어때?',
-                                  style: hand(15, c: inkSoft)),
                             ),
-                          ),
                         ],
                       ),
                     ),
@@ -232,14 +257,14 @@ class _PetHouseScreenState extends State<PetHouseScreen> {
               ),
             ),
           ),
-          // 확대(전체화면) 버튼 — 이웃 집 방문의 전체화면으로 들어간다(#14).
+          // 확대(전체화면) 버튼 — 우리 집 전체 모습을 풀스크린으로 본다(#13).
           Positioned(
             right: 18,
             bottom: 6,
             child: GestureDetector(
               onTap: () => Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => NeighborScreen()),
+                MaterialPageRoute(builder: (_) => const HouseFullscreenScreen()),
               ),
               child: Container(
                 padding:

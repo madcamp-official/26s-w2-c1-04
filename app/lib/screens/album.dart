@@ -23,9 +23,94 @@ class _AlbumScreenState extends State<AlbumScreen> {
   bool _grid = false; // 상단 겹사진 아이콘: 타임라인 ↔ 격자 갤러리 토글
   DateTime? _selectedDay; // 주간 스트립에서 고른 날(그날 낙서만 표시). null=전체
   String? _album; // AI 큐레이션 앨범(#6). null = 모두
+  bool _diaryDialogUp = false; // 그림 일기 팝업 중복 방지(#10)
 
   static bool _sameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
+
+  // 새 그림 일기 팝업(#10) — 볼 수 있게 된 순간 노출. 닫으면 확인 처리해 다시 안 뜬다.
+  Future<void> _showDiaryDialog(DiaryEntry d) async {
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('${mock.petName}의 새 그림 일기 🎨',
+                  style: sans(15, w: FontWeight.w800)),
+              const SizedBox(height: 4),
+              Text(d.dateLabel, style: sans(12, c: muted)),
+              const SizedBox(height: 14),
+              if (d.imageUrl != null && d.imageUrl!.isNotEmpty)
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: AspectRatio(
+                    aspectRatio: 1,
+                    child: Image.network(d.imageUrl!,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) =>
+                            Container(color: paperCard)),
+                  ),
+                ),
+              if (d.caption.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text(d.caption,
+                    textAlign: TextAlign.center, style: hand(17, c: brown)),
+              ],
+              const SizedBox(height: 18),
+              Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => Navigator.of(ctx).pop(),
+                      child: Container(
+                        height: 46,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: chipBg,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Text('닫기',
+                            style: sans(14, w: FontWeight.w700, c: brown)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () {
+                        Navigator.of(ctx).pop();
+                        Navigator.of(context).push(MaterialPageRoute(
+                            builder: (_) => const DiaryScreen()));
+                      },
+                      child: Container(
+                        height: 46,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: coral,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Text('보러 가기',
+                            style:
+                                sans(14, w: FontWeight.w800, c: Colors.white)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    mock.ackDiaryPopup();
+    if (mounted) _diaryDialogUp = false;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -49,6 +134,15 @@ class _AlbumScreenState extends State<AlbumScreen> {
               if (albumIds != null && !albumIds.contains(d.id)) return false;
               return true;
             }).toList();
+
+            // 새 그림 일기가 있으면 팝업으로 알린다(#10) — 볼 수 있게 된 순간.
+            final pendingDiary = mock.pendingDiaryPopup;
+            if (pendingDiary != null && !_diaryDialogUp) {
+              _diaryDialogUp = true;
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) _showDiaryDialog(pendingDiary);
+              });
+            }
 
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -417,29 +511,8 @@ class _AlbumScreenState extends State<AlbumScreen> {
       borderRadius: BorderRadius.circular(16),
       child: SizedBox(
         height: 140,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            doodleImage(d),
-            if (d.caption != null)
-              Positioned(
-                left: 12,
-                bottom: 8,
-                child: Text(
-                  d.caption!,
-                  style: hand(19, c: Colors.white).copyWith(
-                    shadows: [
-                      Shadow(
-                        offset: const Offset(0, 1),
-                        blurRadius: 4,
-                        color: Colors.black.withValues(alpha: .4),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-          ],
-        ),
+        // 낙서는 원본 그대로 보여준다(#9) — 모리 코멘트(caption)를 위에 얹지 않는다.
+        child: doodleImage(d),
       ),
     );
   }

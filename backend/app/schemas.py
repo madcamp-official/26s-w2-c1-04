@@ -81,8 +81,10 @@ class QuestionOut(BaseModel):
     date: str  # 'YYYY-MM-DD' (KST)
     text: str
     my_answer: str | None
-    # 상대가 오늘 답했는지. 원문은 아직 공개하지 않는다(공개 시점 미확정, API.md 디자인 갭)
+    # 상대가 오늘 답했는지.
     partner_answered: bool
+    # 상대 답변 원문 — 내가 답한 뒤에만 공개된다(#6). 아직이면 null.
+    partner_answer: str | None = None
 
 
 class CreateGroupIn(BaseModel):

@@ -2,6 +2,7 @@
 // + 4c(답장 보내기 · 1d와 동일한 캔버스, paperReply 바탕) 변형.
 // 실제 프리핸드 드로잉: 스트로크(색·굵기·포인트) 기록 → CustomPainter로 라운드캡 페인팅.
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:typed_data';
@@ -46,6 +47,8 @@ class _DrawCanvasScreenState extends State<DrawCanvasScreen> {
   bool _vanish = false;
   bool _showTools = false; // 펜 도구 패널(색·굵기) 표시 여부 — 펜 버튼으로 토글, 그리면 닫힘
   bool _showWheel = false; // 확장 색상환 표시 여부 — 색환 링 탭으로 토글(#3)
+  bool _showBg = false; // 배경색 패널 표시 여부(#3) — 사진 없을 때만
+  Color _bgColor = Colors.black; // 캔버스 배경색(#3) — 기본 검정. 사진이 있으면 무시.
   _Tool _tool = _Tool.pen;
   Color _color = coralHot;
   double _sizeT = .55; // 디자인 슬라이더 thumb left:55%
@@ -53,8 +56,8 @@ class _DrawCanvasScreenState extends State<DrawCanvasScreen> {
 
   bool get _isReply => widget.replyTo != null;
 
-  /// 컨트롤 톤 — 사진 위(또는 잉크 바탕)는 다크, 답장 종이 바탕은 라이트.
-  bool get _dark => _hasPhoto || !_isReply;
+  /// 컨트롤 톤 — 어두운 배경(또는 사진)이면 라이트 컨트롤, 밝은 배경이면 다크 컨트롤.
+  bool get _dark => _hasPhoto || _bgColor.computeLuminance() < 0.5;
 
   double get _penWidth => 2 + _sizeT * 10;
 
@@ -148,15 +151,23 @@ class _DrawCanvasScreenState extends State<DrawCanvasScreen> {
   Future<void> _send() async {
     if (_sending) return;
     if (mock.real) {
-      setState(() => _sending = true);
+      _sending = true;
       final size = MediaQuery.of(context).size;
+      final navigator = Navigator.of(context);
       try {
+        // 래스터화(메모리, 빠름)는 화면이 살아있을 때 미리 끝낸다.
         final png = await _rasterStrokes(size);
-        await mock.sendDrawing(png, _strokeJson(size),
-            ephemeral: _vanish, parentId: widget.replyTo?.id);
-        if (mounted) Navigator.of(context).pop();
+        final json = _strokeJson(size);
+        if (!mounted) return;
+        // 화면을 먼저 넘기고(#4) 업로드는 백그라운드로 — 전송은 금방 끝나고
+        // mock 이 도착한 낙서를 반영한다. 401 등 오류는 mock 이 복구 처리(#15).
+        navigator.pop();
+        unawaited(mock
+            .sendDrawing(png, json,
+                ephemeral: _vanish, parentId: widget.replyTo?.id)
+            .catchError((Object _) {}));
       } catch (_) {
-        // 실패 시 화면을 닫지 않고 알린다(가짜 성공 방지).
+        // 래스터화 실패(드묾) — 화면을 닫지 않고 알린다.
         if (mounted) {
           setState(() => _sending = false);
           ScaffoldMessenger.of(context).showSnackBar(
@@ -206,9 +217,10 @@ class _DrawCanvasScreenState extends State<DrawCanvasScreen> {
     final canvas = Canvas(rec);
     final w = size.width.toInt().clamp(1, 2000);
     final h = size.height.toInt().clamp(1, 2000);
+    // 배경색(#3) — 사진이 없으면 선택한 배경색으로 채워 전송 PNG 에도 반영한다.
     canvas.drawRect(
         Rect.fromLTWH(0, 0, w.toDouble(), h.toDouble()),
-        Paint()..color = Colors.white);
+        Paint()..color = _hasPhoto ? Colors.white : _bgColor);
     // 배경 사진을 먼저 깔아 전송 PNG 에 포함시킨다(cover fit).
     if (_photoImage != null) {
       paintImage(
@@ -220,7 +232,10 @@ class _DrawCanvasScreenState extends State<DrawCanvasScreen> {
     }
     for (final s in _strokes) {
       final paint = Paint()
-        ..color = s.tool == _Tool.eraser ? Colors.white : s.color
+        // 지우개는 배경색으로 덮어 지운 효과를 낸다(사진 위에선 흰색).
+        ..color = s.tool == _Tool.eraser
+            ? (_hasPhoto ? Colors.white : _bgColor)
+            : s.color
         ..strokeWidth = s.width
         ..strokeCap = StrokeCap.round
         ..strokeJoin = StrokeJoin.round
@@ -243,7 +258,7 @@ class _DrawCanvasScreenState extends State<DrawCanvasScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _isReply && !_hasPhoto ? paperReply : ink,
+      backgroundColor: _hasPhoto ? ink : _bgColor,
       body: ListenableBuilder(
         listenable: mock,
         builder: (context, _) {
@@ -351,6 +366,7 @@ class _DrawCanvasScreenState extends State<DrawCanvasScreen> {
                             onTap: () => setState(() {
                               _tool = _Tool.pen;
                               _showTools = !_showTools;
+                              _showBg = false; // 배경 패널과 상호 배타
                             }),
                             child: Container(
                               width: 46,
@@ -382,6 +398,18 @@ class _DrawCanvasScreenState extends State<DrawCanvasScreen> {
                             onTap: () => setState(() => _vanish = !_vanish),
                             child: _vanishToggle(),
                           ),
+                          // 배경색 버튼(#3) — 사진이 없을 때만. 펜 팝업처럼 배경색을 고른다.
+                          if (!_hasPhoto) ...[
+                            const SizedBox(height: 12),
+                            GestureDetector(
+                              onTap: () => setState(() {
+                                _showBg = !_showBg;
+                                _showTools = false;
+                                _showWheel = false;
+                              }),
+                              child: _bgButton(),
+                            ),
+                          ],
                           // 텍스트(T) 보내기 버튼 제거 — 낙서는 손그림으로 통일.
                         ],
                       ),
@@ -425,6 +453,10 @@ class _DrawCanvasScreenState extends State<DrawCanvasScreen> {
                     if (_showTools && _showWheel)
                       Positioned(top: 350, right: 20, child: _colorWheelPanel()),
 
+                    // 배경색 패널(#3) — 배경색 버튼을 눌렀을 때. 사진이 없을 때만.
+                    if (_showBg && !_hasPhoto)
+                      Positioned(top: 190, right: 20, child: _bgPanel()),
+
                     // 답장 모드 — 받은 낙서 썸네일 카드
                     if (_isReply)
                       Positioned(
@@ -453,11 +485,9 @@ class _DrawCanvasScreenState extends State<DrawCanvasScreen> {
                                 child: SizedBox(
                                   height: 76,
                                   width: double.infinity,
-                                  child: Image.asset(
-                                    widget.replyTo!.asset ??
-                                        'assets/photos/photo_field.png',
-                                    fit: BoxFit.cover,
-                                  ),
+                                  // 받은 낙서 실제 이미지(네트워크/데모 자동 선택).
+                                  // 예전엔 데모 사진으로 폴백돼 엉뚱한 사진이 떴다.
+                                  child: doodleImage(widget.replyTo!),
                                 ),
                               ),
                               Padding(
@@ -724,6 +754,105 @@ class _DrawCanvasScreenState extends State<DrawCanvasScreen> {
     );
   }
 
+  // 배경색 버튼(#3) — 현재 배경색 스와치를 보여준다. 사진이 없을 때만 노출.
+  Widget _bgButton() {
+    final Color fg = _dark ? Colors.white : brown;
+    return Container(
+      width: 42,
+      height: 42,
+      decoration: BoxDecoration(
+        color: _dark ? overlay(.45) : Colors.white,
+        shape: BoxShape.circle,
+        boxShadow: _dark
+            ? null
+            : [
+                BoxShadow(
+                  color: const Color(0xFFA05A50).withValues(alpha: .15),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+      ),
+      alignment: Alignment.center,
+      child: Container(
+        width: 20,
+        height: 20,
+        decoration: BoxDecoration(
+          color: _bgColor,
+          shape: BoxShape.circle,
+          border: Border.all(color: fg.withValues(alpha: .7), width: 2),
+        ),
+      ),
+    );
+  }
+
+  // 배경색 패널(#3) — 프리셋 스와치 + 색상환. 펜 팝업과 같은 톤으로 펼쳐진다.
+  Widget _bgPanel() {
+    const presets = <Color>[Colors.black, ink, brown, paperReply, Colors.white];
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.55, end: 1.0),
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOutBack,
+      builder: (_, t, child) => Transform.scale(
+        scale: t,
+        alignment: Alignment.topRight,
+        child: Opacity(opacity: t.clamp(0.0, 1.0), child: child),
+      ),
+      child: Container(
+        width: 196,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(22),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFA05A50).withValues(alpha: .24),
+              blurRadius: 28,
+              offset: const Offset(0, 12),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Align(
+              alignment: Alignment.centerLeft,
+              child:
+                  Text('배경 색', style: sans(12.5, w: FontWeight.w700, c: brown)),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [for (final c in presets) _bgSwatch(c)],
+            ),
+            const SizedBox(height: 12),
+            _ColorWheel(
+              size: 168,
+              color: _bgColor,
+              onChanged: (c) => setState(() => _bgColor = c),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _bgSwatch(Color c) {
+    final sel = _bgColor.toARGB32() == c.toARGB32();
+    return GestureDetector(
+      onTap: () => setState(() => _bgColor = c),
+      child: Container(
+        width: 28,
+        height: 28,
+        decoration: BoxDecoration(
+          color: c,
+          shape: BoxShape.circle,
+          border: Border.all(color: sel ? coral : lineSoft, width: sel ? 2.5 : 1),
+        ),
+      ),
+    );
+  }
+
   Widget _brightnessSlider() {
     final hsv = HSVColor.fromColor(_color);
     return LayoutBuilder(
@@ -784,7 +913,7 @@ class _DrawCanvasScreenState extends State<DrawCanvasScreen> {
     final Color fg = active ? Colors.white : brown;
     final CustomPainter icon = switch (t) {
       _Tool.pen => _PenIconPainter(fg),
-      _Tool.eraser => _QuillIconPainter(fg),
+      _Tool.eraser => _EraserIconPainter(fg),
       _Tool.highlighter => _MarkerIconPainter(fg),
     };
     return Expanded(
@@ -1168,9 +1297,10 @@ class _PenIconPainter extends CustomPainter {
   bool shouldRepaint(covariant _PenIconPainter old) => old.color != color;
 }
 
-/// 지우개(깃펜) 아이콘 — 라인 + 채운 닙.
-class _QuillIconPainter extends CustomPainter {
-  const _QuillIconPainter(this.color);
+/// 지우개 아이콘 — 기울어진 지우개 몸통 + 가운데 밴드 + 바닥 지움선(#5).
+/// 기존 '깃펜' 모양이 지우개로 안 보인다는 피드백으로 교체.
+class _EraserIconPainter extends CustomPainter {
+  const _EraserIconPainter(this.color);
 
   final Color color;
 
@@ -1180,22 +1310,27 @@ class _QuillIconPainter extends CustomPainter {
     final st = Paint()
       ..color = color
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.2 * s
+      ..strokeWidth = 2 * s
+      ..strokeJoin = StrokeJoin.round
       ..strokeCap = StrokeCap.round;
-    canvas.drawLine(Offset(18 * s, 4 * s), Offset(11 * s, 12 * s), st);
-    final fill = Paint()..color = color;
-    canvas.drawPath(
-      Path()
-        ..moveTo(11 * s, 12 * s)
-        ..cubicTo(8 * s, 13 * s, 7 * s, 16 * s, 5.5 * s, 19.5 * s)
-        ..cubicTo(9.5 * s, 18.5 * s, 12 * s, 17.5 * s, 13.5 * s, 14.5 * s)
-        ..close(),
-      fill,
+    // 지우개 몸통 — 살짝 기울인 라운드 사각형
+    canvas.save();
+    canvas.translate(11.5 * s, 11 * s);
+    canvas.rotate(-0.62); // 약 -35°
+    final body = RRect.fromRectAndRadius(
+      Rect.fromCenter(center: Offset.zero, width: 16 * s, height: 9.5 * s),
+      Radius.circular(2.5 * s),
     );
+    canvas.drawRRect(body, st);
+    // 가운데 밴드(지우개 팁과 홀더 경계)
+    canvas.drawLine(Offset(-1.5 * s, -4.75 * s), Offset(-1.5 * s, 4.75 * s), st);
+    canvas.restore();
+    // 바닥 지움선
+    canvas.drawLine(Offset(4.5 * s, 20 * s), Offset(19.5 * s, 20 * s), st);
   }
 
   @override
-  bool shouldRepaint(covariant _QuillIconPainter old) => old.color != color;
+  bool shouldRepaint(covariant _EraserIconPainter old) => old.color != color;
 }
 
 /// 형광펜 아이콘 — 두꺼운 사선 + 밑줄 2개.

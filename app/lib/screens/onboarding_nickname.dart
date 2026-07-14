@@ -33,12 +33,21 @@ class _NicknameScreenState extends State<NicknameScreen> {
     if (v.isNotEmpty) mock.setPartnerNick(v);
     // 실서버 흐름은 그룹 화면에서 이미 온보딩을 마쳤다(중복 생성 방지).
     if (!mock.onboarded) await mock.completeOnboarding(name: widget.myName);
-    if (mounted) Navigator.of(context).popUntil((r) => r.isFirst);
+    _leave();
   }
 
   Future<void> _skip() async {
     if (!mock.onboarded) await mock.completeOnboarding(name: widget.myName);
-    if (mounted) Navigator.of(context).popUntil((r) => r.isFirst);
+    _leave();
+  }
+
+  // 별명 단계 종료 후 홈으로. 실서버는 게이트가 이 화면을 띄우므로 플래그만 내리면 되고(#2),
+  // 데모는 이 화면이 push 로 올라와 있으므로 스택을 걷어낸다.
+  void _leave() {
+    mock.finishNickname();
+    if (mounted && Navigator.of(context).canPop()) {
+      Navigator.of(context).popUntil((r) => r.isFirst);
+    }
   }
 
   @override

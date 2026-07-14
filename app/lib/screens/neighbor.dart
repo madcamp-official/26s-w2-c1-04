@@ -21,6 +21,53 @@ class _NeighborScreenState extends State<NeighborScreen> {
 
   // 실서버에서 매칭된 이웃(#15). null 이면 데모 방(별이네)을 보여준다.
   Map<String, dynamic>? _neighbor;
+  // 방문 히스토리(#14) — < > 로 이전/다음 집 이동. 끝에서 > 면 새 랜덤 이웃.
+  final List<Map<String, dynamic>> _history = [];
+  int _idx = -1;
+
+  void _pushNeighbor(Map<String, dynamic> n) {
+    setState(() {
+      _neighbor = n;
+      _likes = (n['likes'] as num?)?.toInt() ?? 0;
+      _history.add(n);
+      _idx = _history.length - 1;
+    });
+  }
+
+  void _goPrev() {
+    if (_idx <= 0) return;
+    setState(() {
+      _idx--;
+      _neighbor = _history[_idx];
+      _likes = (_neighbor!['likes'] as num?)?.toInt() ?? 0;
+    });
+  }
+
+  Future<void> _goNext() async {
+    if (_idx < _history.length - 1) {
+      setState(() {
+        _idx++;
+        _neighbor = _history[_idx];
+        _likes = (_neighbor!['likes'] as num?)?.toInt() ?? 0;
+      });
+      return;
+    }
+    if (!mock.real) {
+      _toast('데모에선 다음 집이 없어요');
+      return;
+    }
+    try {
+      final n = await mock.api!.randomNeighbor();
+      if (!mounted) return;
+      if (n == null) {
+        _toast('더 놀러갈 집이 없어요');
+        return;
+      }
+      _pushNeighbor(n);
+    } catch (_) {
+      if (mounted) _toast('다음 집을 불러오지 못했어요');
+    }
+  }
 
   @override
   void initState() {
@@ -32,10 +79,9 @@ class _NeighborScreenState extends State<NeighborScreen> {
     try {
       final n = await mock.api!.randomNeighbor();
       if (!mounted) return;
-      setState(() {
-        _neighbor = n; // null 이면 이웃이 아직 없음 → 데모 방 유지
-        if (n != null) _likes = (n['likes'] as num?)?.toInt() ?? 0;
-      });
+      if (n != null) {
+        _pushNeighbor(n); // 히스토리에 넣어 < > 이동 가능(#14)
+      }
     } catch (_) {
       // 실패해도 데모 방으로 보여준다(방문 자체가 부가 기능).
     }
@@ -81,9 +127,8 @@ class _NeighborScreenState extends State<NeighborScreen> {
         _toast('그런 집이 없어요');
         return;
       }
+      _pushNeighbor(n); // 히스토리에 추가(#14)
       setState(() {
-        _neighbor = n;
-        _likes = (n['likes'] as num?)?.toInt() ?? 0;
         _showSearch = false;
         _code.clear();
       });
@@ -114,6 +159,37 @@ class _NeighborScreenState extends State<NeighborScreen> {
         behavior: SnackBarBehavior.floating,
         content: Text(msg, style: sans(13, c: Colors.white)),
       ));
+  }
+
+  // < > 다른 집 이동 버튼(#14). onTap 이 null 이면 흐리게 비활성.
+  Widget _navButton({required bool forward, VoidCallback? onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Opacity(
+        opacity: onTap == null ? .4 : 1,
+        child: Container(
+          width: 46,
+          height: 46,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF785AA0).withValues(alpha: 0.2),
+                offset: const Offset(0, 6),
+                blurRadius: 16,
+              ),
+            ],
+          ),
+          child: Center(
+            child: CustomPaint(
+              size: const Size(16, 16),
+              painter: _ChevronPainter(color: lilacInk, forward: forward),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -428,39 +504,48 @@ class _NeighborScreenState extends State<NeighborScreen> {
             ),
           ),
 
-          // ---- 하단: 좋아요 필
+          // ---- 하단: < 좋아요 > (좋아요 양옆으로 다른 집 이동 #14)
           Positioned(
             left: 0,
             right: 0,
             bottom: 32,
             child: Center(
-              child: GestureDetector(
-                onTap: _like,
-                child: Container(
-                  height: 52,
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(99),
-                    boxShadow: [
-                      BoxShadow(
-                        color:
-                            const Color(0xFF785AA0).withValues(alpha: 0.2),
-                        offset: const Offset(0, 8),
-                        blurRadius: 20,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _navButton(forward: false, onTap: _idx > 0 ? _goPrev : null),
+                  const SizedBox(width: 16),
+                  GestureDetector(
+                    onTap: _like,
+                    child: Container(
+                      height: 52,
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(99),
+                        boxShadow: [
+                          BoxShadow(
+                            color:
+                                const Color(0xFF785AA0).withValues(alpha: 0.2),
+                            offset: const Offset(0, 8),
+                            blurRadius: 20,
+                          ),
+                        ],
                       ),
-                    ],
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text('♥', style: sans(18, c: coral)),
+                          const SizedBox(width: 8),
+                          Text('$_likes',
+                              style: sans(15, w: FontWeight.w800, c: coral)),
+                        ],
+                      ),
+                    ),
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('♥', style: sans(18, c: coral)),
-                      const SizedBox(width: 8),
-                      Text('$_likes',
-                          style: sans(15, w: FontWeight.w800, c: coral)),
-                    ],
-                  ),
-                ),
+                  const SizedBox(width: 16),
+                  _navButton(forward: true, onTap: _goNext),
+                ],
               ),
             ),
           ),

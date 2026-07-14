@@ -37,21 +37,18 @@ class _OnboardingGroupScreenState extends State<OnboardingGroupScreen> {
     await mock.completeOnboarding(name: widget.myName, joinCode: joinCode);
     if (!mounted) return;
     setState(() => _busy = false);
-    if (joinCode != null && joinCode.isNotEmpty && mock.onboarded) {
-      // 참여자(상대가 이미 있음)는 별명 짓기 단계로.
-      Navigator.of(context).push(MaterialPageRoute(
-          builder: (_) => NicknameScreen(myName: widget.myName)));
-    } else if (mock.awaitingPartner || mock.onboarded) {
-      // 생성자는 초대 코드 대기 화면으로(#23). 온보딩 스택을 걷어내 루트 게이트를 드러낸다.
-      Navigator.of(context).popUntil((r) => r.isFirst);
-    } else if (mock.bootstrapError != null) {
+    if (mock.bootstrapError != null) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(
           joinCode != null ? '코드를 확인해 주세요' : '그룹을 만들지 못했어요',
           style: sans(13),
         ),
       ));
+      return;
     }
+    // 온보딩 스택을 걷어내 루트 게이트를 드러낸다.
+    // 게이트가 상태에 따라 대기(#23)·별명 짓기(#2)·홈을 결정한다(생성자/참여자 공통).
+    Navigator.of(context).popUntil((r) => r.isFirst);
   }
 
   @override
@@ -142,7 +139,11 @@ class _OnboardingGroupScreenState extends State<OnboardingGroupScreen> {
 
   // ---------------------------------------------------- 카드 1 · 그룹 만들기
   Widget _createCard() {
-    return Container(
+    // 카드 자체도 탭하면 그룹이 만들어진다(#1) — 예전엔 하단 버튼만 동작해 카드 탭이 무반응이었다.
+    return GestureDetector(
+      onTap: _busy ? null : () => _finish(),
+      behavior: HitTestBehavior.opaque,
+      child: Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 24),
       decoration: BoxDecoration(
@@ -197,6 +198,7 @@ class _OnboardingGroupScreenState extends State<OnboardingGroupScreen> {
             ),
           ),
         ],
+      ),
       ),
     );
   }

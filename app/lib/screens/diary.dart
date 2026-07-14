@@ -101,7 +101,7 @@ class DiaryScreen extends StatelessWidget {
             Text('아직 그린 일기가 없어요',
                 style: sans(15, w: FontWeight.w700, c: muted)),
             const SizedBox(height: 8),
-            Text('$petName가 너희 낙서를 보고 그림을 그리면\n여기에 하나씩 쌓여요',
+            Text('$petName가 우리 낙서를 보고 그림을 그려요',
                 textAlign: TextAlign.center, style: hand(15, c: goldText)),
           ],
         ),

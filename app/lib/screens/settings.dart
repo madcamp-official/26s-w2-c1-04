@@ -142,24 +142,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         _toggleRow('연락 유도 알림', _contactNotif,
                             (v) => setState(() => _contactNotif = v)),
                       ]),
-                      const SizedBox(height: 16),
-                      // ---- 로그아웃
-                      GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: () async {
-                          await mock.logout();
-                          if (context.mounted) {
-                            Navigator.of(context).popUntil((r) => r.isFirst);
-                          }
-                        },
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 4),
-                          child: Text(
-                            '로그아웃 · 커플 연결 끊기',
-                            style: sans(13, w: FontWeight.w600, c: muted),
-                          ),
-                        ),
-                      ),
+                      // 로그아웃 · 커플 연결 끊기 버튼 제거(#16). 로그인/로그아웃 개념을
+                      // 기능에서 빼둔다(DB 스키마·mock.logout 은 남겨둠 — 401 복구가 사용).
                     ],
                   ),
                 ),
