@@ -37,14 +37,13 @@ class _OnboardingGroupScreenState extends State<OnboardingGroupScreen> {
     await mock.completeOnboarding(name: widget.myName, joinCode: joinCode);
     if (!mounted) return;
     setState(() => _busy = false);
-    if (mock.onboarded) {
-      // 참여자(상대가 이미 있음)는 별명 짓기 단계로. 생성자는 바로 홈으로.
-      if (joinCode != null && joinCode.isNotEmpty) {
-        Navigator.of(context).push(MaterialPageRoute(
-            builder: (_) => NicknameScreen(myName: widget.myName)));
-      } else {
-        Navigator.of(context).popUntil((r) => r.isFirst);
-      }
+    if (joinCode != null && joinCode.isNotEmpty && mock.onboarded) {
+      // 참여자(상대가 이미 있음)는 별명 짓기 단계로.
+      Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => NicknameScreen(myName: widget.myName)));
+    } else if (mock.awaitingPartner || mock.onboarded) {
+      // 생성자는 초대 코드 대기 화면으로(#23). 온보딩 스택을 걷어내 루트 게이트를 드러낸다.
+      Navigator.of(context).popUntil((r) => r.isFirst);
     } else if (mock.bootstrapError != null) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(

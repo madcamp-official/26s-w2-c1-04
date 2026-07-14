@@ -86,6 +86,9 @@ class AppMock extends ChangeNotifier {
   int dDay = 412;
   bool onboarded = true; // 데모는 온보딩 완료 상태로 부팅. 설정의 로그아웃으로 리셋.
   bool partnerLeft = false; // 상대가 커플을 나감(#24) — 온보딩에서 안내 문구 노출용.
+  // 그룹은 만들었지만 아직 상대가 안 들어옴(#23). 이 동안엔 홈을 해금하지 않고
+  // 초대 코드 대기 화면만 보여준다(솔로 해금으로 코드가 꼬이는 것을 막는다).
+  bool awaitingPartner = false;
 
   // ---- 펫
   String petName = '모리';
@@ -264,10 +267,9 @@ class AppMock extends ChangeNotifier {
       if (g != null) {
         final gid = '${(g as Map)['id']}';
         groupId = gid;
-        onboarded = true;
         // /me 의 group 은 {id,name}뿐이라 상세(초대코드·상대·D-day)를 따로 복원한다.
         _applyGroup(await a.group(gid));
-        await _loadAllSafe();
+        await _enterGroupOrWait(); // 상대가 있으면 홈, 없으면 초대 대기(#23)
       } else {
         onboarded = false; // 온보딩으로
       }
@@ -700,6 +702,7 @@ class AppMock extends ChangeNotifier {
     petId = null;
     partnerUserId = null;
     onboarded = false;
+    awaitingPartner = false;
     notifyListeners();
   }
 
@@ -717,12 +720,10 @@ class AppMock extends ChangeNotifier {
             ? await api!.joinGroup(joinCode)
             : await api!.createGroup(newGroupName, petName);
         _applyGroup(res['group'] as Map);
-        // 그룹이 서버에 생성/참여됐다. 이후 로드가 실패해도 onboarded 를 되돌리지
-        // 않는다 — 온보딩으로 튕기면 재시도 시 서버가 409(already_in_group)를 던지고,
-        // 사용자는 이미 그룹이 있으므로 홈이 맞다. _loadAllSafe 로 부분 상태를 줄이고,
-        // 끝내 실패하면 bootstrapError 만 남긴다(다음 부팅의 /me 로 완전 복구).
-        onboarded = true;
-        await _loadAllSafe();
+        // 그룹이 서버에 생성/참여됐다. 참여(상대 있음)면 홈, 생성(솔로)이면 초대 대기(#23).
+        // 이후 로드가 실패해도 상태를 되돌리지 않는다 — 재시도 시 서버가 409를 던지고,
+        // 사용자는 이미 그룹이 있으므로 여기가 맞다. 끝내 실패하면 bootstrapError 만 남는다.
+        await _enterGroupOrWait();
         return;
       } catch (e) {
         bootstrapError = '$e';
@@ -732,6 +733,47 @@ class AppMock extends ChangeNotifier {
     }
     onboarded = true;
     notifyListeners();
+  }
+
+  /// 그룹 적용 후: 상대가 있으면 홈을 해금하고, 없으면 초대 코드 대기로 둔다(#23).
+  Future<void> _enterGroupOrWait() async {
+    if (hasPartner) {
+      awaitingPartner = false;
+      onboarded = true;
+      await _loadAllSafe();
+    } else {
+      awaitingPartner = true;
+      onboarded = false;
+      notifyListeners();
+      _pollForPartner(); // 상대 참여를 폴링(백그라운드) — await 하지 않는다.
+    }
+  }
+
+  /// 초대 대기 중 상대 참여를 폴링한다(#23). 들어오면 홈으로 전환한다.
+  Future<void> _pollForPartner() async {
+    while (awaitingPartner && real && groupId != null) {
+      await Future.delayed(const Duration(seconds: 3));
+      if (!awaitingPartner || !real || groupId == null) return;
+      try {
+        final g = await api!.group(groupId!);
+        _applyGroup(g);
+        if (hasPartner) {
+          awaitingPartner = false;
+          onboarded = true;
+          notifyListeners();
+          await _loadAllSafe();
+          return;
+        }
+      } catch (_) {
+        // 일시적 네트워크 오류는 무시하고 다음 폴링에서 재시도.
+      }
+    }
+  }
+
+  /// 초대 대기 취소(#23) — 만든 그룹을 나가고 온보딩으로 되돌린다.
+  Future<void> cancelWaiting() async {
+    awaitingPartner = false;
+    await logout();
   }
 }
 

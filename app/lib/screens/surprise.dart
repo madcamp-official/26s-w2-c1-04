@@ -17,6 +17,15 @@ class SurpriseScreen extends StatelessWidget {
     return ListenableBuilder(
       listenable: mock,
       builder: (context, _) {
+        // 실서버에서 모리가 실제로 그린 그림(일기 이미지)이 있는지.
+        // 없으면 커플 그림을 지어내지 않고, 배우는 중임을 정직하게 안내한다(#18).
+        final realArt = mock.real
+            ? mock.diary
+                .where((d) => d.imageUrl != null && d.imageUrl!.isNotEmpty)
+                .toList()
+            : const <DiaryEntry>[];
+        final DiaryEntry? latest = realArt.isNotEmpty ? realArt.first : null;
+        final learning = mock.real && latest == null; // 실서버인데 아직 그림 없음
         return Scaffold(
           backgroundColor: mock.roomColor,
           body: SafeArea(
@@ -31,12 +40,19 @@ class SurpriseScreen extends StatelessWidget {
                   right: 0,
                   child: Column(
                     children: [
-                      Text('삐삐- 깜짝 선물!', style: hand(17, c: coral, ls: 2)),
+                      Text(learning ? '삐삐- 조금만 기다려줘' : '삐삐- 깜짝 선물!',
+                          style: hand(17, c: coral, ls: 2)),
                       const SizedBox(height: 4),
-                      Text('${mock.petName}가 그림을 그렸어요',
+                      Text(
+                          learning
+                              ? '${mock.petName}가 그림을 배우는 중이에요'
+                              : '${mock.petName}가 그림을 그렸어요',
                           style: sans(22, w: FontWeight.w800)),
                       const SizedBox(height: 4),
-                      Text('두 사람의 그림체를 배워서 그렸대요',
+                      Text(
+                          learning
+                              ? '낙서를 주고받을수록 그림 실력이 늘어요'
+                              : '두 사람의 그림체를 배워서 그렸대요',
                           style: sans(12.5, c: brownWarm)),
                     ],
                   ),
@@ -72,10 +88,25 @@ class SurpriseScreen extends StatelessWidget {
                               color: paperDiary,
                               borderRadius: BorderRadius.circular(18),
                             ),
-                            child: const SizedBox(
+                            child: SizedBox(
                               height: 150,
                               width: double.infinity,
-                              child: CustomPaint(painter: _ScenePainter()),
+                              child: learning
+                                  ? _LearningCard(petName: mock.petName)
+                                  : latest != null
+                                      ? ClipRRect(
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                          child: Image.network(
+                                            latest.imageUrl!,
+                                            fit: BoxFit.cover,
+                                            errorBuilder: (_, _, _) =>
+                                                const CustomPaint(
+                                                    painter: _ScenePainter()),
+                                          ),
+                                        )
+                                      : const CustomPaint(
+                                          painter: _ScenePainter()),
                             ),
                           ),
                           Padding(
@@ -83,22 +114,28 @@ class SurpriseScreen extends StatelessWidget {
                             child: Row(
                               children: [
                                 Expanded(
-                                  child: Text('억새밭에서 손잡은 우리',
+                                  child: Text(
+                                      learning
+                                          ? '둘의 낙서를 모으는 중'
+                                          : (latest?.caption.isNotEmpty ?? false)
+                                              ? latest!.caption
+                                              : '억새밭에서 손잡은 우리',
                                       style: hand(18, c: brown)),
                                 ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      vertical: 5, horizontal: 10),
-                                  decoration: BoxDecoration(
-                                    color: goldBg,
-                                    borderRadius: BorderRadius.circular(99),
+                                if (!learning)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 5, horizontal: 10),
+                                    decoration: BoxDecoration(
+                                      color: goldBg,
+                                      borderRadius: BorderRadius.circular(99),
+                                    ),
+                                    child: Text(
+                                      '일기장에 자동 저장',
+                                      style: sans(11.5,
+                                          w: FontWeight.w800, c: goldText),
+                                    ),
                                   ),
-                                  child: Text(
-                                    '일기장에 자동 저장',
-                                    style: sans(11.5,
-                                        w: FontWeight.w800, c: goldText),
-                                  ),
-                                ),
                               ],
                             ),
                           ),
@@ -109,6 +146,8 @@ class SurpriseScreen extends StatelessWidget {
                 ),
 
                 // ---- 상대 화면 동시 팝업 안내 필 (design bottom:150)
+                // 실제 모리 그림이 떴을 때만 안내한다(배우는 중엔 동시 이벤트가 없다).
+                if (!learning)
                 Positioned(
                   bottom: 150,
                   left: 0,
@@ -220,6 +259,38 @@ class SurpriseScreen extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+/// 아직 모리가 그림을 못 그린 초기 상태(#18) — 커플 그림을 지어내지 않고,
+/// 낙서가 쌓이면 그림을 그리기 시작한다고 정직하게 안내한다.
+class _LearningCard extends StatelessWidget {
+  const _LearningCard({required this.petName});
+
+  final String petName;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text('🎨', style: sans(34)),
+        const SizedBox(height: 10),
+        Text(
+          '아직 그릴 만큼 배우지 못했어요',
+          style: sans(13.5, w: FontWeight.w700, c: brown),
+        ),
+        const SizedBox(height: 6),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Text(
+            '둘이 손그림 낙서를 주고받으면\n$petName가 그림체를 배워 그리기 시작해요',
+            textAlign: TextAlign.center,
+            style: sans(11.5, c: brownWarm, h: 1.5),
+          ),
+        ),
+      ],
     );
   }
 }

@@ -12,6 +12,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'mock.dart';
 import 'push.dart';
 import 'screens/onboarding_name.dart';
+import 'screens/onboarding_wait.dart';
 import 'shell.dart';
 import 'theme.dart';
 
@@ -100,8 +101,13 @@ class _RootState extends State<_Root> {
 
   Widget _gate() => ListenableBuilder(
         listenable: mock,
-        builder: (context, _) =>
-            mock.onboarded ? const AppShell() : const OnboardingNameScreen(),
+        builder: (context, _) {
+          // 초대 코드 대기(#23) — 그룹은 만들었지만 상대가 아직 안 들어온 상태.
+          if (mock.awaitingPartner) return const OnboardingWaitScreen();
+          return mock.onboarded
+              ? const AppShell()
+              : const OnboardingNameScreen();
+        },
       );
 }
 
