@@ -35,6 +35,7 @@ class Rt {
       'diary:new',
       'member:left', // 상대 이탈(#24) → 온보딩 복귀
       'question:answered', // 오늘의 질문 상대 답변(#6) → 질문 재수신
+      'group:updated', // 그룹 설정(배경색 등) 변경 → 파트너 즉시 반영(BUG-3)
     ]) {
       s.on(e, (data) {
         final map = data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};

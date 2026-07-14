@@ -387,6 +387,12 @@ class AppMock extends ChangeNotifier {
       await _reloadQuestion();
       changed = true;
     } catch (_) {}
+    // 스토어(소유·착용) 상태도 갱신한다 — 상대가 산/입힌 꾸미기가 공유 펫에 반영되게(BUG-2).
+    // 스토어만 startup 1회 로드하던 탓에 파트너 기기가 재시작 전엔 못 보던 문제.
+    try {
+      await _loadStore();
+      changed = true;
+    } catch (_) {}
     if (changed) notifyListeners();
   }
 
@@ -663,6 +669,15 @@ class AppMock extends ChangeNotifier {
             notifyListeners();
           } catch (_) {}
         }
+      case 'group:updated':
+        // 상대(또는 나)가 그룹 설정을 바꿨다 — 공유 배경색을 즉시 반영한다(BUG-3).
+        // 폴링에서 그룹을 재조회하지 않으므로(방금 바꾼 색 보호) 이 이벤트로 메운다.
+        // 페이로드가 곧 서버의 최신값이라 클로버링 걱정이 없다.
+        final bg = data['background_color'];
+        if (bg is String && bg.isNotEmpty) roomColor = _hexRoom(bg);
+        final gname = data['name'];
+        if (gname is String && gname.isNotEmpty) groupName = gname;
+        notifyListeners();
       case '__reconnect':
         // 백그라운드 등으로 끊겼다가 소켓이 다시 붙었다 — 놓친 이벤트를 메운다(#2).
         await _resync();
@@ -1275,4 +1290,13 @@ Widget doodleImage(Doodle d, {BoxFit fit = BoxFit.cover}) {
   }
   if (d.asset != null) return Image.asset(d.asset!, fit: fit);
   return Container(color: paperCard);
+}
+
+/// 낙서 이미지의 ImageProvider — precache(미리 디코드)용. 이미지가 없으면 null.
+/// 사라지는 낙서에서 카운트다운 시작 전에 이 이미지를 미리 받아둔다(BUG-1).
+ImageProvider? doodleImageProvider(Doodle d) {
+  final url = d.imageUrl;
+  if (url != null) return NetworkImage(url);
+  if (d.asset != null) return AssetImage(d.asset!);
+  return null;
 }

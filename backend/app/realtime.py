@@ -178,6 +178,17 @@ async def emit_poke(group_id: int, from_user_id: int, at: str) -> None:
     await _emit(group_id, "poke", {"from_user_id": str(from_user_id), "at": at})
 
 
+async def emit_group_updated(group_id: int, *, name: str, background_color: str) -> None:
+    """그룹 설정(이름·배경색)이 바뀌었음을 알린다. 배경색은 공유 값이라 파트너도 같이
+    봐야 하는데, 앱은 폴링에서 그룹을 일부러 재조회하지 않으므로(방금 바꾼 색 보호),
+    이 이벤트가 없으면 파트너는 재시작 전까지 못 본다(BUG-3)."""
+    await _emit(
+        group_id,
+        "group:updated",
+        {"name": name, "background_color": background_color},
+    )
+
+
 async def emit_pet_activity(
     group_id: int, pet_id: int, activity: str, utterance: str
 ) -> None:

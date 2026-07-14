@@ -49,18 +49,36 @@ class _ViewerScreenState extends State<ViewerScreen>
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         await mock.markViewed(widget.doodle);
         // 사라지는 낙서는 열람 전 서버가 url·text 를 null 로 잠가 내려준다 → 그대로 열면
-        // 빈 화면(#1). 열람 처리 뒤 잠금 해제된 본문을 다시 받아 채운다.
+        // 빈 화면(#1). 열람 처리 뒤 잠금 해제된 본문을 다시 받아 채우고, 이미지를 미리
+        // 디코드한 다음에야 카운트다운을 시작한다(BUG-1). 예전엔 markViewed 직후 바로
+        // 카운트다운이 돌아, 이미지가 뜨기(재조회+네트워크 fetch+디코드 ~3-4초)도 전에
+        // 5초가 다 흘러 사실상 빈 화면만 보였다(사용자 '빈 화면' 신고의 실제 원인).
         if (widget.doodle.ephemeral && mock.real) {
           try {
             final full = await mock.api!.getDoodle(widget.doodle.id);
-            if (mounted) setState(() => _d = full);
+            if (!mounted) return;
+            setState(() => _d = full);
+            final prov = doodleImageProvider(full);
+            if (prov != null && mounted) {
+              // 이미지 바이트를 미리 받아 캐시에 넣는다. 이후 서버가 파일을 지워도
+              // (view+5s) 캐시된 바이트로 계속 그려진다.
+              try {
+                await precacheImage(prov, context);
+              } catch (_) {
+                // 디코드 실패(만료 등)여도 카운트다운은 진행한다.
+              }
+            }
           } catch (_) {
             // 이미 만료됐거나 조회 실패면 기존(잠긴) 낙서 그대로 둔다.
           }
         }
+        // 이미지가 화면에 실제로 뜬 뒤에 5초를 센다.
+        if (mounted && _showCountdown) _tick();
       });
+    } else if (_showCountdown) {
+      // markViewed 경로를 타지 않는 경우엔(희귀) 곧바로 시작.
+      _tick();
     }
-    if (_showCountdown) _tick();
   }
 
   void _tick() {

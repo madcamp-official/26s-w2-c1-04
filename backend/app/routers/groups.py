@@ -257,6 +257,10 @@ async def update_group(
 
     await session.commit()
     await session.refresh(group)
+    # 배경색·이름은 공유 값 → 파트너 기기도 즉시 반영되게 알린다(BUG-3).
+    await realtime.emit_group_updated(
+        group_id, name=group.name, background_color=group.background_color
+    )
     return await _group_out(session, group)
 
 
