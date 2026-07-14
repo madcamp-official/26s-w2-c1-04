@@ -3,7 +3,6 @@
 // 그러면 test/goldens/*.png 가 생성된다. 사람이/에이전트가 눈으로 디자인과 대조.
 
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
