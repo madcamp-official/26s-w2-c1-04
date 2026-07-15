@@ -228,31 +228,42 @@ class _DrawCanvasScreenState extends State<DrawCanvasScreen> {
     final canvas = Canvas(rec);
     final w = size.width.toInt().clamp(1, 2000);
     final h = size.height.toInt().clamp(1, 2000);
+    final full = Rect.fromLTWH(0, 0, w.toDouble(), h.toDouble());
     // 배경색(#3) — 사진이 없으면 선택한 배경색으로 채워 전송 PNG 에도 반영한다.
-    canvas.drawRect(
-        Rect.fromLTWH(0, 0, w.toDouble(), h.toDouble()),
-        Paint()..color = _hasPhoto ? Colors.white : _bgColor);
+    canvas.drawRect(full, Paint()..color = _hasPhoto ? Colors.white : _bgColor);
     // 배경 사진을 먼저 깔아 전송 PNG 에 포함시킨다(cover fit).
     if (_photoImage != null) {
       paintImage(
         canvas: canvas,
-        rect: Rect.fromLTWH(0, 0, w.toDouble(), h.toDouble()),
+        rect: full,
         image: _photoImage!,
         fit: BoxFit.cover,
       );
     }
+    // 스트로크는 별도 레이어에 그린다 — 지우개(BlendMode.clear)가 스트로크만
+    // 지워 뒤의 사진/배경이 드러나게(화면 표시 _DoodlePainter 와 동일 동작).
+    // 예전엔 지우개를 흰색으로 덮어 사진 위에 흰 자국이 남았다.
+    canvas.saveLayer(full, Paint());
     for (final s in _strokes) {
       final paint = Paint()
-        // 지우개는 배경색으로 덮어 지운 효과를 낸다(사진 위에선 흰색).
-        ..color = s.tool == _Tool.eraser
-            ? (_hasPhoto ? Colors.white : _bgColor)
-            : s.color
         ..strokeWidth = s.width
         ..strokeCap = StrokeCap.round
         ..strokeJoin = StrokeJoin.round
         ..style = PaintingStyle.stroke;
+      switch (s.tool) {
+        case _Tool.pen:
+          paint.color = s.color;
+        case _Tool.highlighter:
+          paint.color = s.color.withValues(alpha: .45);
+        case _Tool.eraser:
+          paint.color = Colors.white;
+          paint.blendMode = BlendMode.clear;
+      }
       if (s.points.length == 1) {
-        canvas.drawPoints(ui.PointMode.points, s.points, paint);
+        final dot = Paint()
+          ..color = paint.color
+          ..blendMode = paint.blendMode;
+        canvas.drawCircle(s.points.first, s.width / 2, dot);
       } else {
         final path = Path()..moveTo(s.points.first.dx, s.points.first.dy);
         for (final p in s.points.skip(1)) {
@@ -261,6 +272,7 @@ class _DrawCanvasScreenState extends State<DrawCanvasScreen> {
         canvas.drawPath(path, paint);
       }
     }
+    canvas.restore();
     final img = await rec.endRecording().toImage(w, h);
     final bytes = await img.toByteData(format: ui.ImageByteFormat.png);
     return bytes!.buffer.asUint8List();

@@ -65,27 +65,9 @@ class DiaryScreen extends StatelessWidget {
                           ),
                   ),
                 ),
-                // ---- 하단 페이지 도트
-                Padding(
-                  padding: const EdgeInsets.only(top: 14, bottom: 30),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Container(
-                        width: 18,
-                        height: 6,
-                        decoration: BoxDecoration(
-                          color: coral,
-                          borderRadius: BorderRadius.circular(99),
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      _dot(),
-                      const SizedBox(width: 6),
-                      _dot(),
-                    ],
-                  ),
-                ),
+                // 하단 페이지 도트 제거(#4) — 세로 스크롤 리스트라 가로 페이징을
+                // 암시하는 도트가 '다음 탭' 처럼 오해를 줬다. 스크롤로 충분.
+                const SizedBox(height: 16),
               ],
             );
           },
@@ -104,15 +86,6 @@ class DiaryScreen extends StatelessWidget {
             Text('$petName가 우리 낙서를 보고 그림을 그려요',
                 textAlign: TextAlign.center, style: hand(15, c: goldText)),
           ],
-        ),
-      );
-
-  Widget _dot() => Container(
-        width: 6,
-        height: 6,
-        decoration: const BoxDecoration(
-          color: goldDash,
-          shape: BoxShape.circle,
         ),
       );
 }
