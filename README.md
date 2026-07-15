@@ -224,9 +224,6 @@ python -m http.server 4173 --directory demo
 
 ## 회고 문서
 
-> [KPT 방법론 참고](https://velog.io/@habwa/%EB%8B%A8%EA%B8%B0-%ED%94%84%EB%A1%9C%EC%A0%9D%ED%8A%B8-%ED%9A%8C%EA%B3%A0-KPT-%EB%B0%A9%EB%B2%95%EB%A1%A0)
-
-> 아래 Keep/Problem/Try는 실제 진행 이력을 바탕으로 한 초안입니다. 팀 회고 후 다듬어 주세요.
 
 ### Keep — 잘 된 점, 다음에도 유지할 것
 
