@@ -1182,6 +1182,55 @@ class AppMock extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ---- 데모 계정 전환 (시연용) ---------------------------------------------
+  /// 시연 중 한 기기로 여러 커플을 보여주기 위한 프리셋. 각 값은 서버에 미리
+  /// 프로비저닝된 커플 계정의 device_uid. 전환 = prefs uid 교체 후 콜드부트 재실행.
+  static const Map<String, String> demoAccounts = {
+    '경수 ♥ 수민 (성숙 커플)': 'demo-g6-kyungsoo',
+    '수민 시점으로 보기': 'demo-g6-sumin',
+  };
+
+  bool switching = false; // 전환 중 게이트가 스플래시를 그리도록
+
+  /// device_uid 를 [uid] 로 바꾸고 앱의 콜드부트 경로(bootstrapReal)를 다시 탄다.
+  /// 소켓·세션을 명시적으로 정리해 이전 커플의 데이터/소켓이 새 세션에 새지 않게 한다.
+  /// 최초 전환 때 현재(원래) uid 를 prefs('home_device_uid')에 저장해 복귀에 쓴다.
+  Future<void> switchAccount(String uid) async {
+    if (!real || api == null) return;
+    final base = api!.host;
+    switching = true;
+    bootstrapError = null;
+    notifyListeners(); // 게이트 → _Splash
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getString('home_device_uid') == null) {
+      final cur = prefs.getString('device_uid') ?? _deviceUid;
+      if (cur != null) await prefs.setString('home_device_uid', cur);
+    }
+    await prefs.setString('device_uid', uid);
+    // teardown — logout() 미러(단, 그룹은 나가지 않는다).
+    _stopPolling();
+    try {
+      rt?.dispose();
+    } catch (_) {}
+    rt = null;
+    groupId = null;
+    petId = null;
+    partnerUserId = null;
+    onboarded = false;
+    awaitingPartner = false;
+    pendingNickname = false;
+    await bootstrapReal(base, uid, '나');
+    switching = false;
+    notifyListeners();
+  }
+
+  /// '우리 커플로 돌아가기' — 최초 전환 때 저장한 원래 uid 로 복귀.
+  Future<void> switchToHome() async {
+    final prefs = await SharedPreferences.getInstance();
+    final home = prefs.getString('home_device_uid') ?? _deviceUid;
+    if (home != null) await switchAccount(home);
+  }
+
   /// 온보딩 완료. 실서버면 그룹 생성 또는 참여를 서버에 반영한다.
   Future<void> completeOnboarding({String? name, String? joinCode}) async {
     bootstrapError = null; // 이전 실패의 잔여 에러가 성공 판정을 오염시키지 않게 초기화

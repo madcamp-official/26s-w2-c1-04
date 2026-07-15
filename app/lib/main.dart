@@ -122,6 +122,7 @@ class _RootState extends State<_Root> with WidgetsBindingObserver {
   Widget _gate() => ListenableBuilder(
         listenable: mock,
         builder: (context, _) {
+          if (mock.switching) return const _Splash(); // 데모 계정 전환 중
           // 초대 코드 대기(#23) — 그룹은 만들었지만 상대가 아직 안 들어온 상태.
           if (mock.awaitingPartner) return const OnboardingWaitScreen();
           // 상대가 들어옴 — 별명 짓기 단계(#2). 생성자·참여자 모두 여기서 별명을 짓는다.

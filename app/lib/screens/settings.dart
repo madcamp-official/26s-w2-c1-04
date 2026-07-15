@@ -142,6 +142,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         _toggleRow('연락 유도 알림', _contactNotif,
                             (v) => setState(() => _contactNotif = v)),
                       ]),
+                      const SizedBox(height: 16),
+                      // ---- 데모 계정 전환 (시연용) — 한 기기로 여러 커플 보여주기
+                      _section('데모 계정 전환', [
+                        for (var i = 0;
+                            i < AppMock.demoAccounts.length;
+                            i++) ...[
+                          if (i > 0) _divider(),
+                          _navRow(
+                            AppMock.demoAccounts.keys.elementAt(i),
+                            '전환',
+                            () => _switchTo(
+                                AppMock.demoAccounts.values.elementAt(i)),
+                          ),
+                        ],
+                        _divider(),
+                        _navRow('우리 커플로 돌아가기', '복귀', _switchHome),
+                      ]),
                       // 로그아웃 · 커플 연결 끊기 버튼 제거(#16). 로그인/로그아웃 개념을
                       // 기능에서 빼둔다(DB 스키마·mock.logout 은 남겨둠 — 401 복구가 사용).
                     ],
@@ -337,5 +354,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
           duration: const Duration(milliseconds: 1200),
         ),
       );
+  }
+
+  // 설정을 먼저 닫아 아래 게이트가 스플래시를 그리게 한 뒤 전환한다(context 미사용).
+  Future<void> _switchTo(String uid) async {
+    Navigator.of(context).maybePop();
+    await mock.switchAccount(uid);
+  }
+
+  Future<void> _switchHome() async {
+    Navigator.of(context).maybePop();
+    await mock.switchToHome();
   }
 }
