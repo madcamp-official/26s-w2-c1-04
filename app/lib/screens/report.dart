@@ -235,42 +235,15 @@ class ReportScreen extends StatelessWidget {
             child: SizedBox(
               height: 150,
               width: double.infinity,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  // 실서버: best_doodle 이미지(있으면). 텍스트 낙서만 이긴 경우엔 이미지가
-                  // 없으니 배경을 어둡게 두고 문구만 보여준다. 데모는 억새밭 샘플.
-                  if (!mock.real)
-                    Image.asset('assets/photos/photo_field.png', fit: BoxFit.cover)
-                  else if (mock.reportBestImage != null)
-                    Image.network(mock.reportBestImage!,
-                        fit: BoxFit.cover,
-                        errorBuilder: (c, e, s) => Container(color: brown))
-                  else
-                    Container(color: brown),
-                  Positioned(
-                    left: 12,
-                    bottom: 10,
-                    right: 12,
-                    child: Text(
-                      mock.real
-                          ? (mock.reportBestText?.isNotEmpty ?? false
-                              ? mock.reportBestText!
-                              : '이번 달 가장 사랑받은 낙서 ♥')
-                          : '오늘 억새밭!! ♥',
-                      style: hand(24, c: Colors.white).copyWith(
-                        shadows: [
-                          Shadow(
-                            offset: const Offset(0, 2),
-                            blurRadius: 6,
-                            color: Colors.black.withValues(alpha: 0.4),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+              // 낙서 이미지는 원본 그대로 — 위에 문구를 얹지 않는다(사진첩과 통일).
+              // 텍스트 낙서만 이긴 경우엔 이미지가 없으니 배경만 어둡게. 데모는 억새밭 샘플.
+              child: !mock.real
+                  ? Image.asset('assets/photos/photo_field.png', fit: BoxFit.cover)
+                  : mock.reportBestImage != null
+                      ? Image.network(mock.reportBestImage!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (c, e, s) => Container(color: brown))
+                      : Container(color: brown),
             ),
           ),
           const SizedBox(height: 12),
