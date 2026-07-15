@@ -106,7 +106,9 @@ class AppMock extends ChangeNotifier {
   int coins = 1240;
   double get growthPct => (petLevel * 20).clamp(0, 100) / 100;
   String get levelLabel => 'Lv.$petLevel';
-  double get petSize => 96 + petLevel * 12; // 디자인 props: 96+level*12
+  // 레벨이 오를수록 커지되 상한(≈180)에 수렴한다. 원래 96+level*12 는 고레벨(Lv50=696)
+  // 에서 펫이 화면을 꽉 채워버렸다(실기기 확인). 포화 곡선으로 성장은 보이되 헤더를 넘지 않게.
+  double get petSize => 100 + 80 * petLevel / (petLevel + 12);
 
   // ---- roomColor (설정 4g 스와치)
   Color roomColor = roomColors[0];
@@ -220,12 +222,27 @@ class AppMock extends ChangeNotifier {
   List<DiaryEntry> get diary =>
       _patDiaries.isEmpty ? _diaryFeed : [..._patDiaries, ..._diaryFeed];
 
-  /// 아직 쓰다듬기로 꺼낼 그림 일기가 남아 있는지(시연용).
-  bool get hasPatSurprise => _patQueue.isNotEmpty;
+  int _patRevealed = 0; // 실서버: 쓰다듬기로 이미 꺼내 보여준 실제 일기 수
 
-  /// 쓰다듬을 때 큐에서 그림 일기를 하나 꺼낸다. 비어 있으면 null 을 돌려주고
-  /// 홈은 예전처럼 학습 상태에 맞는 반응만 한다. 꺼낸 일기는 일기장에도 남는다.
+  /// 아직 쓰다듬기로 꺼낼 그림 일기가 남아 있는지(시연용).
+  /// 실서버: 모리가 실제로 그린 일기(이미지) 중 아직 안 꺼낸 게 있으면 true.
+  /// 데모(목): 하드코딩 벡터 큐가 남아 있으면 true.
+  bool get hasPatSurprise => real
+      ? _patRevealed < _diaryFeed.where((d) => d.isRemote).length
+      : _patQueue.isNotEmpty;
+
+  /// 쓰다듬을 때 그림 일기를 하나 꺼낸다. 비어 있으면 null 을 돌려주고
+  /// 홈은 예전처럼 학습 상태에 맞는 반응만 한다.
+  /// 실서버: 모리가 그린 '실제' 일기 이미지를 최신순으로 하나씩(중복 없이) 꺼낸다 —
+  ///   벡터 더미 장면 대신 진짜 우리 그림체 일기가 뜬다. 이미 일기장에 있으므로
+  ///   _patDiaries 에 또 넣지 않는다(일기장 중복 방지).
+  /// 데모(목): 하드코딩 벡터 큐에서 꺼내 _patDiaries 로 옮긴다(골든/오프라인용).
   DiaryEntry? popPatSurprise() {
+    if (real) {
+      final remote = _diaryFeed.where((d) => d.isRemote).toList();
+      if (_patRevealed >= remote.length) return null;
+      return remote[_patRevealed++]; // 최신순, 이미 일기장에 존재
+    }
     if (_patQueue.isEmpty) return null;
     final e = _patQueue.removeAt(0);
     _patDiaries.insert(0, e);
