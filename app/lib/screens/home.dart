@@ -545,7 +545,9 @@ class _HomeScreenState extends State<HomeScreen>
         child: Stack(
           fit: StackFit.expand,
           children: [
-            if (d.type == DoodleType.text)
+            if (d.type == DoodleType.text &&
+                d.imageUrl == null &&
+                d.asset == null)
               Container(
                 color: blushSoft,
                 alignment: Alignment.center,

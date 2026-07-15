@@ -145,8 +145,8 @@ class _ViewerScreenState extends State<ViewerScreen>
             fit: StackFit.expand,
             children: [
               // ---- 배경: 사진/그림(asset 또는 network) 또는 텍스트 낙서
-              if (d.type != DoodleType.text &&
-                  (d.asset != null || d.imageUrl != null))
+              // 손글씨 등 이미지가 있는 낙서는 타입과 무관하게 이미지를 그린다.
+              if (d.asset != null || d.imageUrl != null)
                 doodleImage(d)
               else
                 Container(
