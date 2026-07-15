@@ -10,22 +10,28 @@ import '../theme.dart';
 const double _deg = 0.017453292519943295; // pi/180
 
 class SurpriseScreen extends StatelessWidget {
-  const SurpriseScreen({super.key});
+  const SurpriseScreen({super.key, this.entry});
+
+  /// 쓰다듬기로 방금 꺼낸 그림 일기(시연 큐). 주어지면 이 그림을 그대로 보여준다.
+  /// null 이면 예전 동작(실서버 최신 일기 or 배우는 중 안내)으로 떨어진다.
+  final DiaryEntry? entry;
 
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
       listenable: mock,
       builder: (context, _) {
-        // 실서버에서 모리가 실제로 그린 그림(일기 이미지)이 있는지.
-        // 없으면 커플 그림을 지어내지 않고, 배우는 중임을 정직하게 안내한다(#18).
+        // 보여줄 그림 우선순위: 쓰다듬기 큐에서 온 일기 → 실서버에서 모리가 실제로
+        // 그린 일기 이미지. 둘 다 없고 실서버면 지어내지 않고 배우는 중임을 안내한다(#18).
         final realArt = mock.real
             ? mock.diary
                 .where((d) => d.imageUrl != null && d.imageUrl!.isNotEmpty)
                 .toList()
             : const <DiaryEntry>[];
-        final DiaryEntry? latest = realArt.isNotEmpty ? realArt.first : null;
-        final learning = mock.real && latest == null; // 실서버인데 아직 그림 없음
+        final DiaryEntry? shown =
+            entry ?? (realArt.isNotEmpty ? realArt.first : null);
+        // 큐/서버 어느 쪽도 그림이 없고 실서버면 '배우는 중'. 큐 그림이 있으면 항상 보여준다.
+        final learning = shown == null && mock.real;
         return Scaffold(
           backgroundColor: mock.roomColor,
           body: SafeArea(
@@ -93,20 +99,22 @@ class SurpriseScreen extends StatelessWidget {
                               width: double.infinity,
                               child: learning
                                   ? _LearningCard(petName: mock.petName)
-                                  : latest != null
+                                  : (shown != null && shown.isRemote)
                                       ? ClipRRect(
                                           borderRadius:
                                               BorderRadius.circular(12),
                                           child: Image.network(
-                                            latest.imageUrl!,
+                                            shown.imageUrl!,
                                             fit: BoxFit.cover,
                                             errorBuilder: (_, _, _) =>
-                                                const CustomPaint(
-                                                    painter: _ScenePainter()),
+                                                CustomPaint(
+                                                    painter:
+                                                        _sceneFor(shown.scene)),
                                           ),
                                         )
-                                      : const CustomPaint(
-                                          painter: _ScenePainter()),
+                                      : CustomPaint(
+                                          painter:
+                                              _sceneFor(shown?.scene ?? 0)),
                             ),
                           ),
                           Padding(
@@ -117,8 +125,8 @@ class SurpriseScreen extends StatelessWidget {
                                   child: Text(
                                       learning
                                           ? '둘의 낙서를 모으는 중'
-                                          : (latest?.caption.isNotEmpty ?? false)
-                                              ? latest!.caption
+                                          : (shown?.caption.isNotEmpty ?? false)
+                                              ? shown!.caption
                                               : '억새밭에서 손잡은 우리',
                                       style: hand(18, c: brown)),
                                 ),
@@ -358,4 +366,151 @@ class _ScenePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _ScenePainter oldDelegate) => false;
+}
+
+/// 그림 일기 장면 번호 → 손그림 CustomPainter.
+/// 0 손잡은 우리 · 1 떡볶이 나눠먹기 · 2 별밤. (쓰다듬기 큐가 이 번호를 준다.)
+CustomPainter _sceneFor(int scene) {
+  switch (scene) {
+    case 1:
+      return const _TteokScene();
+    case 2:
+      return const _StarScene();
+    default:
+      return const _ScenePainter();
+  }
+}
+
+/// 장면 1 — 떡볶이 두 접시(코랄·블루) + 김 + 젓가락 + 하트. viewBox 200x150.
+class _TteokScene extends CustomPainter {
+  const _TteokScene();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final sx = size.width / 200, sy = size.height / 150;
+    Offset p(double x, double y) => Offset(x * sx, y * sy);
+    Paint stroke(Color c, double w) => Paint()
+      ..color = c
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = w * sy
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    final me = stroke(coral, 3);
+    final you = stroke(partnerBlue, 3);
+    final steam = stroke(muted, 2.5);
+    final sticks = stroke(goldText, 2.5);
+
+    // 하트 (위 가운데)
+    final heart = Path()
+      ..moveTo(100 * sx, 34 * sy)
+      ..cubicTo(96 * sx, 26 * sy, 86 * sx, 27 * sy, 86 * sx, 35 * sy)
+      ..cubicTo(86 * sx, 41 * sy, 100 * sx, 50 * sy, 100 * sx, 50 * sy)
+      ..cubicTo(100 * sx, 50 * sy, 114 * sx, 41 * sy, 114 * sx, 35 * sy)
+      ..cubicTo(114 * sx, 27 * sy, 104 * sx, 26 * sy, 100 * sx, 34 * sy)
+      ..close();
+    canvas.drawPath(heart, Paint()..color = coral);
+
+    // 내 접시 (코랄): 사다리꼴 + 타원 테
+    final myPlate = Path()
+      ..moveTo(34 * sx, 92 * sy)
+      ..lineTo(92 * sx, 92 * sy)
+      ..lineTo(85 * sx, 122 * sy)
+      ..lineTo(41 * sx, 122 * sy)
+      ..close();
+    canvas.drawPath(myPlate, me);
+    canvas.drawOval(
+      Rect.fromCenter(center: p(63, 92), width: 58 * sx, height: 14 * sy),
+      me,
+    );
+
+    // 김
+    canvas.drawPath(
+      Path()
+        ..moveTo(52 * sx, 80 * sy)
+        ..quadraticBezierTo(56 * sx, 70 * sy, 52 * sx, 60 * sy),
+      steam,
+    );
+    canvas.drawPath(
+      Path()
+        ..moveTo(68 * sx, 80 * sy)
+        ..quadraticBezierTo(72 * sx, 70 * sy, 68 * sx, 60 * sy),
+      steam,
+    );
+
+    // 상대 접시 (블루)
+    final yourPlate = Path()
+      ..moveTo(112 * sx, 98 * sy)
+      ..lineTo(162 * sx, 98 * sy)
+      ..lineTo(156 * sx, 124 * sy)
+      ..lineTo(118 * sx, 124 * sy)
+      ..close();
+    canvas.drawPath(yourPlate, you);
+    canvas.drawOval(
+      Rect.fromCenter(center: p(137, 98), width: 50 * sx, height: 12 * sy),
+      you,
+    );
+
+    // 젓가락
+    canvas.drawLine(p(150, 90), p(176, 64), sticks);
+    canvas.drawLine(p(156, 94), p(182, 68), sticks);
+  }
+
+  @override
+  bool shouldRepaint(covariant _TteokScene oldDelegate) => false;
+}
+
+/// 장면 2 — 별밤에 나란히 앉은 두 사람(코랄·블루) + 별 + 달. viewBox 200x150.
+class _StarScene extends CustomPainter {
+  const _StarScene();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final sx = size.width / 200, sy = size.height / 150;
+    Offset p(double x, double y) => Offset(x * sx, y * sy);
+    Paint stroke(Color c, double w) => Paint()
+      ..color = c
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = w * sy
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    // 달 (오른쪽 위)
+    canvas.drawCircle(p(168, 34), 13 * sx, Paint()..color = goldCoin);
+
+    // 별 반짝이(십자)
+    void star(double x, double y, double r, Color c) {
+      final s = stroke(c, 2);
+      canvas.drawLine(p(x - r, y), p(x + r, y), s);
+      canvas.drawLine(p(x, y - r), p(x, y + r), s);
+    }
+
+    star(40, 30, 6, coral);
+    star(70, 20, 5, goldText);
+    star(112, 26, 6, coral);
+    star(96, 50, 4, goldText);
+    star(134, 44, 5, goldText);
+
+    // 땅선
+    canvas.drawLine(p(24, 128), p(176, 128), stroke(goldText, 2.5));
+
+    // 나 (코랄) 앉은 모습
+    final me = stroke(coral, 3);
+    canvas.drawCircle(p(80, 88), 13 * sx, me);
+    canvas.drawLine(p(80, 101), p(80, 120), me); // 몸통
+    canvas.drawLine(p(80, 120), p(68, 128), me); // 접은 다리
+    canvas.drawLine(p(80, 120), p(92, 128), me);
+    canvas.drawLine(p(80, 108), p(98, 113), me); // 가운데로 뻗은 팔
+
+    // 상대 (블루)
+    final you = stroke(partnerBlue, 3);
+    canvas.drawCircle(p(120, 88), 13 * sx, you);
+    canvas.drawLine(p(120, 101), p(120, 120), you);
+    canvas.drawLine(p(120, 120), p(108, 128), you);
+    canvas.drawLine(p(120, 120), p(132, 128), you);
+    canvas.drawLine(p(120, 108), p(102, 113), you); // 팔이 가운데서 맞닿음
+  }
+
+  @override
+  bool shouldRepaint(covariant _StarScene oldDelegate) => false;
 }

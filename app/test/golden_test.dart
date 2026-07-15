@@ -82,6 +82,37 @@ void main() {
   testWidgets('13 neighbor', (t) => _shoot(t, const NeighborScreen(), '13_neighbor'));
   testWidgets('14 settings', (t) => _shoot(t, const SettingsScreen(), '14_settings'));
   testWidgets('15 surprise', (t) => _shoot(t, const SurpriseScreen(), '15_surprise'));
+  // 쓰다듬기 큐 그림 일기 — 장면별 손그림 시각 검증(시연용 팝업).
+  testWidgets(
+      '15b surprise scene0',
+      (t) => _shoot(
+          t,
+          const SurpriseScreen(
+              entry: DiaryEntry(
+                  dateLabel: '7월 15일 맑음',
+                  caption: '오늘은 둘이 한강을 걸었대. 나도 그 바람 같이 맞고 싶다.',
+                  scene: 0)),
+          '15b_surprise_scene0'));
+  testWidgets(
+      '15c surprise scene1',
+      (t) => _shoot(
+          t,
+          const SurpriseScreen(
+              entry: DiaryEntry(
+                  dateLabel: '7월 14일 흐림',
+                  caption: '또 떡볶이 얘기! 매콤한 게 그렇게 좋을까. 나도 한 입만…',
+                  scene: 1)),
+          '15c_surprise_scene1'));
+  testWidgets(
+      '15d surprise scene2',
+      (t) => _shoot(
+          t,
+          const SurpriseScreen(
+              entry: DiaryEntry(
+                  dateLabel: '7월 13일 별밤',
+                  caption: '밤에 나란히 앉아 별을 셌대. 다음엔 나도 꼭 끼워줘.',
+                  scene: 2)),
+          '15d_surprise_scene2'));
 }
 
 // 390x844 논리 픽셀, dpr 2 로 고정.

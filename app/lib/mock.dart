@@ -174,20 +174,64 @@ class AppMock extends ChangeNotifier {
     return null;
   }
 
-  // ---- 그림 일기장 (4f) — 실서버 모드에선 _loadAll 에서 교체된다.
-  final List<DiaryEntry> diary = [
+  // ---- 그림 일기장 (4f) — 실서버 모드에선 _reloadDiaries 에서 _diaryFeed 를 교체한다.
+  // 화면에 보여줄 목록은 아래 getter `diary`(쓰다듬기로 받은 일기 + 서버/데모 일기)다.
+  final List<DiaryEntry> _diaryFeed = [
     const DiaryEntry(
       dateLabel: '7월 13일 맑음',
       caption: '오늘은 둘이 억새밭 얘기를 했다. 나도 데려가 줬으면…',
       isNew: true,
       scene: 0,
     ),
-    DiaryEntry(
+    const DiaryEntry(
       dateLabel: '7월 11일 흐림',
       caption: '떡볶이가 뭐길래 이렇게 자주 나올까. 나도 먹어보고 싶다.',
       scene: 1,
     ),
   ];
+
+  // 쓰다듬을 때 하나씩 선물하는 '우리 그림체' 그림 일기 큐(시연용). 원래는 손그림
+  // 20장이 쌓여 자정(KST) 배치로 그리던 일기를, 시연에선 쓰다듬기로 꺼내 보여준다.
+  // 다 떨어지면 더 나오지 않는다. 꺼낸 일기는 _patDiaries 로 옮겨 일기장에 남기며,
+  // 실서버 리싱크(_reloadDiaries)는 _diaryFeed 만 교체하므로 여기서 받은 일기는 유지된다.
+  final List<DiaryEntry> _patQueue = [
+    const DiaryEntry(
+      dateLabel: '7월 15일 맑음',
+      caption: '오늘은 둘이 한강을 걸었대. 나도 그 바람 같이 맞고 싶다.',
+      isNew: true,
+      scene: 0,
+    ),
+    const DiaryEntry(
+      dateLabel: '7월 14일 흐림',
+      caption: '또 떡볶이 얘기! 매콤한 게 그렇게 좋을까. 나도 한 입만…',
+      isNew: true,
+      scene: 1,
+    ),
+    const DiaryEntry(
+      dateLabel: '7월 13일 별밤',
+      caption: '밤에 나란히 앉아 별을 셌대. 다음엔 나도 꼭 끼워줘.',
+      isNew: true,
+      scene: 2,
+    ),
+  ];
+  final List<DiaryEntry> _patDiaries = [];
+
+  /// 일기장에 보여줄 목록 = 쓰다듬기로 받은 일기(최신) + 서버/데모 일기.
+  List<DiaryEntry> get diary =>
+      _patDiaries.isEmpty ? _diaryFeed : [..._patDiaries, ..._diaryFeed];
+
+  /// 아직 쓰다듬기로 꺼낼 그림 일기가 남아 있는지(시연용).
+  bool get hasPatSurprise => _patQueue.isNotEmpty;
+
+  /// 쓰다듬을 때 큐에서 그림 일기를 하나 꺼낸다. 비어 있으면 null 을 돌려주고
+  /// 홈은 예전처럼 학습 상태에 맞는 반응만 한다. 꺼낸 일기는 일기장에도 남는다.
+  DiaryEntry? popPatSurprise() {
+    if (_patQueue.isEmpty) return null;
+    final e = _patQueue.removeAt(0);
+    _patDiaries.insert(0, e);
+    notifyListeners();
+    return e;
+  }
 
   // ---- 스토어 (1g 모자 탭)
   final List<StoreItem> hats = [
@@ -721,7 +765,7 @@ class AppMock extends ChangeNotifier {
       _seenLoaded = true;
     }
     final ds = await api!.diaries(petId!);
-    diary
+    _diaryFeed
       ..clear()
       ..addAll([
         for (var i = 0; i < ds.length; i++)
@@ -733,8 +777,9 @@ class AppMock extends ChangeNotifier {
           ),
       ]);
     // 새 그림 일기가 생겼으면 팝업 노출 대상으로 표시(#10). 사진첩이 감지해 띄운다.
-    if (diary.isNotEmpty && diary.length > _seenDiaryCount) {
-      pendingDiaryPopup = diary.first;
+    // 쓰다듬기로 받은 일기(_patDiaries)와 무관하게 서버 피드 기준으로만 판단한다.
+    if (_diaryFeed.isNotEmpty && _diaryFeed.length > _seenDiaryCount) {
+      pendingDiaryPopup = _diaryFeed.first;
     }
   }
 
@@ -745,7 +790,7 @@ class AppMock extends ChangeNotifier {
 
   /// 그림 일기 팝업을 확인 처리 — 다시 뜨지 않게 개수를 기록한다.
   void ackDiaryPopup() {
-    _seenDiaryCount = diary.length;
+    _seenDiaryCount = _diaryFeed.length;
     pendingDiaryPopup = null;
     SharedPreferences.getInstance()
         .then((p) => p.setInt('seen_diary_count', _seenDiaryCount))

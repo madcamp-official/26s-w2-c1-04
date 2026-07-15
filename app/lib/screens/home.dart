@@ -26,6 +26,7 @@ class _HomeScreenState extends State<HomeScreen>
     with SingleTickerProviderStateMixin {
   int _pats = 0;
   bool _giftUp = false; // 그림 선물 팝업 중복 방지
+  bool _shownQueueGift = false; // 쓰다듬기 큐에서 그림 일기를 한 번이라도 선물했는지
   late final AnimationController _petBounce = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 340),
@@ -41,13 +42,29 @@ class _HomeScreenState extends State<HomeScreen>
     mock.pat();
     _petBounce.forward(from: 0); // 쓰다듬으면 살짝 통통 튀는 반응(imp4)
     _pats += 1;
-    if (!mock.petLearned) {
-      // 아직 우리 그림체를 못 배웠으면 '어린이 그림' 기본 낙서를 선물한다(#9).
-      if (_pats == 1 || _pats % 3 == 0) _showPetGift();
-    } else if (_pats % 5 == 0) {
+    // 1) 쓰다듬으면 큐에 쌓아둔 '우리 그림체' 그림 일기를 하나씩 선물한다(시연용).
+    //    원래 손그림 20장+자정(KST) 배치로 그리던 일기를, 여기선 쓰다듬기로 꺼내 보여준다.
+    final surprise = mock.popPatSurprise();
+    if (surprise != null) {
+      _shownQueueGift = true;
       Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => const SurpriseScreen()),
+        MaterialPageRoute(builder: (_) => SurpriseScreen(entry: surprise)),
       );
+      return;
+    }
+    // 2) 큐가 비었어도 실서버가 실제로 그린 일기가 있으면 가끔 최신 일기를 다시 보여준다.
+    if (mock.diary.any((d) => d.isRemote)) {
+      if (_pats % 5 == 0) {
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const SurpriseScreen()),
+        );
+      }
+      return;
+    }
+    // 3) 그림 일기를 아직 한 번도 못 보여줬고 학습 전이면 '어린이 그림' 기본 낙서를 선물한다(#9).
+    //    큐 그림을 이미 보여줬다면 '배우는 중' 반응으로 돌아가 방금 그림과 모순되지 않게 한다.
+    if (!_shownQueueGift && !mock.petLearned) {
+      if (_pats == 1 || _pats % 3 == 0) _showPetGift();
     }
   }
 
