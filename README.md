@@ -18,7 +18,7 @@
 
 ---
 
-## 프로젝트 현황(2026-07-13)
+## 프로젝트 현황(2026-07-15)
 
 **한 줄 소개:** 두 사람만의 커플 낙서 호출기 — 낙서·사진·짧은 글을 주고받고, 그 활동이 펫의 대사와 그림 일기로 쌓인다.
 
@@ -61,8 +61,8 @@
 
 | 이름 | 학교 | GitHub | 역할 |
 |---|---|---|---|
-| 이종혁 | DGIST |  | 앱 (Flutter, 캔버스, 홈 위젯, FCM) |
-| 안종화 | KAIST |  | 서버 · GPU (FastAPI, Socket.IO, MySQL, vLLM, SD) |
+| 이종혁 | DGIST | [@jonghklee](https://github.com/jonghklee) | 앱 (Flutter, 캔버스, 홈 위젯, FCM) |
+| 안종화 | KAIST | [@anjonghwa0](https://github.com/anjonghwa0) | 서버 · GPU (FastAPI, Socket.IO, MySQL, vLLM, SD) |
 
 ---
 
@@ -127,17 +127,63 @@ Android 앱은 Cloudflare Tunnel을 통해 앱 VM의 FastAPI REST·Socket.IO에 
 
 ### 화면 / 인터페이스 설계
 
-<!-- Figma 링크, 화면 이미지, CLI 사용 예시, 앱 화면 등 -->
+실기기(갤럭시 S24 Ultra) 캡처. 성숙 커플 `경수 ♥ 수민`(D+45, 낙서 48개) 상태. 발표 흐름·대본은 [docs/notion_page.md](docs/notion_page.md).
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/screens/02_home.png" width="200"><br><sub>홈 — 모리·낙서 보내기·오늘의 질문</sub></td>
+    <td align="center"><img src="docs/screens/03_report.png" width="200"><br><sub>월간 레포트 — 성장·유형 분포</sub></td>
+    <td align="center"><img src="docs/screens/04_settings.png" width="200"><br><sub>환경설정 — 이름·색상·초대 코드</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screens/05_draw_pen.png" width="200"><br><sub>낙서 보내기 — 펜/색상/굵기</sub></td>
+    <td align="center"><img src="docs/screens/06_gallery.png" width="200"><br><sub>사진 낙서 — 카메라/갤러리</sub></td>
+    <td align="center"><img src="docs/screens/07a_album_list.png" width="200"><br><sub>낙서 사진첩 — 목록·AI 큐레이션</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screens/07b_album_calendar.png" width="200"><br><sub>낙서 사진첩 — 달력</sub></td>
+    <td align="center"><img src="docs/screens/08_pethouse.png" width="200"><br><sub>모리네 집 — 성장·꾸미기</sub></td>
+    <td align="center"><img src="docs/screens/09_diary.png" width="200"><br><sub>그림 일기장 — 학습된 그림체</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screens/10_neighbor.png" width="200"><br><sub>이웃집 놀러가기</sub></td>
+    <td></td>
+    <td></td>
+  </tr>
+</table>
 
 ### 데이터 구조
 
-<!-- DB 스키마, JSON 구조, 파일 저장 방식 등 -->
+MySQL 8(`utf8mb4_0900_ai_ci`). 전체 스키마·관계는 [docs/ERD.md](docs/ERD.md) 참조. 핵심 테이블:
+
+| 영역 | 테이블 | 요지 |
+|---|---|---|
+| 사용자·인증 | `users`, `auth_identities`, `devices` | 유저 1명 = 인증수단 N(현재 `device`) + FCM 토큰. 익명 토큰 `mp_{user_id}_{secret}` |
+| 그룹 | `groups`, `group_members` | 그룹 = 커플 공간. **정원 2명**(트리거로 강제), 유저당 1그룹 |
+| 낙서 | `doodles`, `doodle_receipts` | 사진/손그림/텍스트 3종, 답장, 확인 기록. 사라지기 모드는 soft-delete |
+| 실시간·펫 | `pokes`, `pets`, `pet_likes`, `pet_activities` | 찌르기·좋아요·펫 성장/하루 활동 |
+| AI | `pet_diaries`, `style_models` | 학습 그림체(`style_models`)로 그린 그림 일기 |
+| 꾸미기·집계 | `items`, `pet_items`, `monthly_reports` | 아이템 카탈로그·보유/장착·월간 레포트 |
 
 ### API / 외부 서비스 연동
 
-| Method / 방식 | Endpoint / 서비스 | 설명 | 요청 | 응답 | 비고 |
-|---|---|---|---|---|---|
-|  |  |  |  |  |  |
+전체 계약은 [docs/API.md](docs/API.md). Base URL `https://anjonghwa.madcamp-kaist.org/v1`, Socket.IO `wss://…/socket.io/`(ns `/rt`). 인증은 `Authorization: Bearer <token>`(등록·헬스 제외). ⭐ = 실시간 옵션 증명 엔드포인트.
+
+| Method | Endpoint | 설명 | 비고 |
+|---|---|---|---|
+| POST | `/auth/register` | 최초 실행 시 유저 생성, 토큰 발급 | 인증 불필요 |
+| POST | `/groups` · `/groups/join` | 그룹 생성 / 초대 코드 가입 | 정원 2명 강제 |
+| POST | `/doodles` | 낙서 전송(사진·손그림·텍스트, 사라지기) | ⭐ |
+| GET | `/groups/{id}/doodles` | 낙서 목록(커서 페이지네이션) | 재연결 시 진실의 원본 |
+| POST | `/doodles/{id}/view` | 확인 → 사라지기 5초 만료 트리거 | ⭐ 룸 브로드캐스트 |
+| POST | `/groups/{id}/pokes` | 콕 찌르기 | ⭐ 룸 + FCM |
+| POST | `/pets/{id}/pat` | 모리 쓰다듬기(성장) | ⭐ |
+| GET | `/pets/{id}/diaries` | 그림 일기 목록 | LLM 캡션 + SD 그림 |
+| GET | `/groups/{id}/reports/{YYYY-MM}` | 월간 레포트 | 유형 분포·최고의 낙서 |
+| GET | `/widget/{group_id}` | 홈 위젯 갱신 페이로드 | Android 위젯 계약 |
+| 외부 | Cloudflare Tunnel | 앱 → 앱 VM 도메인 연결 | 443만 개방 |
+| 외부 | Firebase Cloud Messaging | data-only 푸시 | 위젯·알림 |
+| 내부 | vLLM `:8100` · SD worker `:8200` | 펫 대사·그림 일기 추론 | GPU VM 사설망 |
 
 ---
 
@@ -146,7 +192,7 @@ Android 앱은 Cloudflare Tunnel을 통해 앱 VM의 FastAPI REST·Socket.IO에 
 - **산출물 설명:** Android 앱 + FastAPI 실시간 백엔드 + MySQL + 자체 GPU 추론 worker
 - **실행 환경:** Ubuntu 22.04 앱 VM, Ubuntu 22.04 RTX 3090 GPU VM, Android(Galaxy)
 - **실행 방법:** 아래 백엔드 실행 또는 [backend/README.md](backend/README.md) 참고
-- **시연 영상 / 이미지:** (선택)
+- **시연 영상 / 이미지:** 화면 캡처는 [docs/screens/](docs/screens/), 발표 흐름·대본은 [docs/notion_page.md](docs/notion_page.md)
 
 ### 실행 방법
 
@@ -180,25 +226,29 @@ python -m http.server 4173 --directory demo
 
 > [KPT 방법론 참고](https://velog.io/@habwa/%EB%8B%A8%EA%B8%B0-%ED%94%84%EB%A1%9C%EC%A0%9D%ED%8A%B8-%ED%9A%8C%EA%B3%A0-KPT-%EB%B0%A9%EB%B2%95%EB%A1%A0)
 
+> 아래 Keep/Problem/Try는 실제 진행 이력을 바탕으로 한 초안입니다. 팀 회고 후 다듬어 주세요.
+
 ### Keep — 잘 된 점, 다음에도 유지할 것
 
--
--
--
+- **문서를 계약으로.** [API.md](docs/API.md)를 앱↔서버의 단일 계약으로 고정해, 앱은 목 서버로·서버는 실제 구현으로 **병렬 개발**할 수 있었다.
+- **실시간 3종을 한 방식으로.** 낙서·찌르기·사라지기 만료를 Socket.IO 룸 브로드캐스트로 일관되게 처리하고, "소켓은 유실될 수 있으니 REST가 진실의 원본"이라는 규칙을 지켰다.
+- **추론을 자체 GPU로.** 펫 대사(vLLM)와 그림 일기(SD 1.5)를 우리 GPU 서버에 서빙해 외부 API 비용 없이 LLM/이미지 기능을 넣었다.
 
 ### Problem — 아쉬웠던 점, 개선이 필요한 것
 
--
--
--
+- **브랜치 분기로 "로컬 ≠ 배포".** 배포본은 `front-remake`인데 작업이 다른 브랜치에서도 진행돼, 코드 감사에서 배포본과 어긋난 오탐이 나왔다.
+- **동시성·안정화 이슈.** 동시 등록 시 갭 락 데드락(500)을 막판에야 잡았고, LoRA 그림체 학습 파이프라인도 RTX 3090에서야 안정화됐다.
+- **범위 관리.** 이웃 꾸밈 노출 등 일부(P2)가 미구현인 채 데모가 임박했다.
 
 ### Try — 다음번에 시도해볼 것
 
--
--
--
+- **배포 = `main` 단일화** + PR 기반 흐름으로 "로컬 ≠ 배포" 혼선 제거.
+- **데모 데이터 시드·스냅샷 자동화**로 재현 가능한 시연 환경 구성.
+- **실기기 QA를 체크리스트/자동화**로 승격해 회귀를 조기에 잡기.
 
 ### 팀원별 소감
+
+<!-- 각자 직접 작성해 주세요. -->
 
 **이종혁:**
 
